@@ -6,8 +6,10 @@ __pycache__
 *.pyc
 
 # Build output
+# NOTE: src/frontend/out is NOT ignored — it is committed so the single
+# service can serve the frontend without building it on Render (the Python
+# runtime has no Node.js). Rebuild locally and commit when the frontend changes.
 .next
-out
 dist
 .wrangler
 .turbo
