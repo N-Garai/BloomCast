@@ -34,8 +34,9 @@ COPY tests/ tests/
 COPY pyproject.toml .
 COPY turbo.json .
 
-RUN cd src/frontend && npm run build \
-    && cd src/backend && pip install -r requirements.txt
+RUN cd /app/src/frontend && npm run build
+
+RUN pip install -r /app/src/backend/requirements.txt
 
 ENV SEED_DIR=../data/seed \
     WATERBODY_FILE=../data/waterbodies.geojson \
@@ -46,4 +47,4 @@ ENV SEED_DIR=../data/seed \
 
 EXPOSE 10000
 
-CMD ["sh", "-c", "cd src/backend && uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-10000}"]
+CMD ["sh", "-c", "cd /app/src/backend && uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-10000}"]
