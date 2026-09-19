@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 
-const API = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+const API = process.env.NEXT_PUBLIC_API_BASE ?? "/v1";
 
 const COLORS = ["clear", "green", "brown", "blue-green", "red", "other"];
 const ODORS = ["none", "earthy", "musty", "rotten-egg", "other"];

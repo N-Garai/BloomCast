@@ -1,8 +1,10 @@
 # Render blueprint — BloomCast v2 (fully free tier, no credit card).
 #
-# Two services, both free:
-#   1. bloomcast-api   — FastAPI web service (free; spins down after 15 min idle)
-#   2. bloomcast-web   — Next.js static export (free static site; never sleeps)
+# ONE service. The FastAPI backend serves the Next.js static export from the
+# same process, so there is no separate static site to host.
+#
+#   1. bloomcast — FastAPI web service (free; spins down after 15 min idle)
+#      serves /v1/* API + the frontend at /
 #
 # The nightly ML pipeline is NOT scheduled on Render (Cron Jobs are a paid
 # feature). It runs on GitHub Actions cron instead — see
@@ -11,7 +13,7 @@
 # Deploy: connect this repo to Render and use this render.yaml as a blueprint.
 services:
   - type: web
-    name: bloomcast-api
+    name: bloomcast
     env: python
     plan: free
     region: oregon
@@ -35,21 +37,3 @@ services:
         value: ../data/replay_events.json
       - key: CORS_ORIGINS
         value: "*"
-
-  - type: web
-    name: bloomcast-web
-    env: static
-    plan: free
-    region: oregon
-    buildCommand: cd src/frontend && npm install --legacy-peer-deps && npm run build
-    staticPublishPath: src/frontend/out
-    pullRequestPreviewsEnabled: false
-    autoDeploy: true
-    envVars:
-      # Point this at the deployed API URL before the first successful build.
-      - key: NEXT_PUBLIC_API_BASE
-        value: https://bloomcast-api.onrender.com
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html

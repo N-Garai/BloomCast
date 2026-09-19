@@ -1,15 +1,24 @@
 """BloomCast FastAPI application — deployed on Render free tier."""
 from datetime import datetime, timezone
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 __version__ = "2.0.0"
 from shared.config import ALLOWED_ORIGIN
 from api import seed
 from api.db import insert_observation, list_observations, subscribe, record_influence
 from api.fhir import build_alert_bundle
+
+# Next.js static export lives next to the backend in the repo. Resolved from
+# this file's location so it works whether the service is started from the
+# repo root (Render) or from src/backend (local dev).
+_FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent.parent / "src" / "frontend" / "out"
+if not _FRONTEND_DIR.exists():
+    _FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "out"
 
 app = FastAPI(
     title="BloomCast API",
@@ -19,6 +28,50 @@ app = FastAPI(
     docs_url="/v1/docs",
     redoc_url="/v1/redoc",
 )
+
+# Serve the Next.js static export from the same process. The export is flat
+# HTML (output: "export"), so StaticFiles handles it directly — no SPA router
+# config needed. Registered LAST so /v1/* routes win over the catch-all.
+# (The mount is re-asserted at the bottom of the file after every route is
+# defined, since FastAPI matches in registration order.)
+
+# NOTE: this middleware must be added BEFORE CORSMiddleware. FastAPI's
+# add_middleware inserts at the front of the stack, so later calls wrap
+# earlier ones — a redirect middleware added after CORS is never reached,
+# because CORS short-circuits the request before it arrives.
+class _HtmlRedirectMiddleware:
+    """Redirect clean URLs to the Next.js static export's `.html` files.
+
+    `next.config.js` uses `output: "export"`, which emits both `dashboard.html`
+    and a `dashboard/` directory. StaticFiles serves the `.html` files but
+    returns 404 for the bare directory paths, so a browser visiting `/dashboard`
+    lands on a 404 page instead of the dashboard. This rewrites the request
+    before it reaches the mount.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        path = scope["path"]
+        # Never touch API/docs/static asset paths.
+        if path.startswith("/v1/") or path.startswith("/_next") or path in ("/", "/404.html"):
+            await self.app(scope, receive, send)
+            return
+        # Already has an extension — let StaticFiles handle it.
+        if "." in path.rsplit("/", 1)[-1]:
+            await self.app(scope, receive, send)
+            return
+        # Clean URL for a route page → append .html.
+        scope = dict(scope)
+        scope["path"] = path + ".html"
+        await self.app(scope, receive, send)
+
+
+app.add_middleware(_HtmlRedirectMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -233,3 +286,40 @@ async def create_fhir_bundle(request: Request):
 @app.get("/")
 async def root():
     return {"name": "BloomCast API", "version": __version__, "docs": "/docs"}
+
+
+class _HtmlRedirectMiddleware:
+    """Redirect clean URLs to the Next.js static export's `.html` files.
+
+    `next.config.js` uses `output: "export"`, which emits both `dashboard.html`
+    and a `dashboard/` directory. StaticFiles serves the `.html` files but
+    returns 404 for the bare directory paths, so a browser visiting `/dashboard`
+    lands on a 404 page instead of the dashboard. This rewrites the request
+    before it reaches the mount.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        path = scope["path"]
+        # Never touch API/docs/static asset paths.
+        if path.startswith("/v1/") or path.startswith("/_next") or path in ("/", "/404.html"):
+            await self.app(scope, receive, send)
+            return
+        # Already has an extension — let StaticFiles handle it.
+        if "." in path.rsplit("/", 1)[-1]:
+            await self.app(scope, receive, send)
+            return
+        # Clean URL for a route page → append .html.
+        scope = dict(scope)
+        scope["path"] = path + ".html"
+        await self.app(scope, receive, send)
+
+
+# Registered LAST so every /v1/* route and the docs endpoints are served before
+# the static catch-all. Without this, the mount would shadow the API.
+app.mount("/", StaticFiles(directory=str(_FRONTEND_DIR), html=True), name="frontend")
