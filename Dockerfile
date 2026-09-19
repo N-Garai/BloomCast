@@ -34,7 +34,7 @@ COPY tests/ tests/
 COPY pyproject.toml .
 COPY turbo.json .
 
-RUN rm -rf /app/src/frontend/out \
+RUN rm -rf /app/src/frontend/out /app/src/frontend/.next \
     && cd /app/src/frontend && npm run build
 
 RUN pip install -r /app/src/backend/requirements.txt
