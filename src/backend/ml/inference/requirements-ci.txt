@@ -1,0 +1,9 @@
+# Lightweight CI dependency set for the nightly GitHub Actions pipeline.
+# Kept separate from the backend's runtime requirements.txt so the runner
+# stays small — the API does not need pandas/lightgbm to serve static JSON.
+numpy>=1.26,<3
+pandas>=2.0,<3
+scipy>=1.11
+scikit-learn>=1.4
+lightgbm>=4.0,<5
+httpx>=0.27

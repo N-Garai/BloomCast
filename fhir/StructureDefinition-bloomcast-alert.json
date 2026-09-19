@@ -1,0 +1,107 @@
+{
+  "resourceType": "StructureDefinition",
+  "id": "bloomcast-alert",
+  "url": "https://bloomcast-api.onrender.com/fhir/StructureDefinition/bloomcast-alert",
+  "name": "BloomcastAlert",
+  "title": "BloomCast Alert Communication",
+  "status": "active",
+  "date": "2026-09-18",
+  "publisher": "BloomCast Early Warning System",
+  "description": "A cyanobacteria bloom-risk alert communicated by BloomCast, with model provenance, lead time, and confidence extensions.",
+  "purpose": "Allows a public-health information system to ingest BloomCast bloom-risk alerts as standard FHIR R4 Communication resources, with the forecast evidence attached as an Observation and the waterbody as a Location.",
+  "kind": "resource",
+  "abstract": false,
+  "type": "Communication",
+  "baseDefinition": "http://hl7.org/fhir/StructureDefinition/Communication",
+  "derivation": "constraint",
+  "differential": {
+    "element": [
+      {
+        "id": "Communication",
+        "path": "Communication",
+        "mustSupport": true
+      },
+      {
+        "id": "Communication.status",
+        "path": "Communication.status",
+        "mustSupport": true
+      },
+      {
+        "id": "Communication.subject",
+        "path": "Communication.subject",
+        "type": [
+          { "code": "Reference", "targetProfile": ["http://hl7.org/fhir/StructureDefinition/Location"] }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Communication.sent",
+        "path": "Communication.sent",
+        "mustSupport": true
+      },
+      {
+        "id": "Communication.payload",
+        "path": "Communication.payload",
+        "slicing": {
+          "discriminator": [{ "type": "type", "path": "$this" }],
+          "rules": "open"
+        },
+        "mustSupport": true
+      },
+      {
+        "id": "Communication.extension:model-version",
+        "path": "Communication.extension",
+        "sliceName": "model-version",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": ["https://bloomcast-api.onrender.com/fhir/extensions/model-version"]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Communication.extension:lead-time-days",
+        "path": "Communication.extension",
+        "sliceName": "lead-time-days",
+        "min": 1,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": ["https://bloomcast-api.onrender.com/fhir/extensions/lead-time-days"]
+          }
+        ],
+        "mustSupport": true
+      },
+      {
+        "id": "Communication.extension:confidence-low",
+        "path": "Communication.extension",
+        "sliceName": "confidence-low",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": ["https://bloomcast-api.onrender.com/fhir/extensions/confidence-low"]
+          }
+        ]
+      },
+      {
+        "id": "Communication.extension:confidence-high",
+        "path": "Communication.extension",
+        "sliceName": "confidence-high",
+        "min": 0,
+        "max": "1",
+        "type": [
+          {
+            "code": "Extension",
+            "profile": ["https://bloomcast-api.onrender.com/fhir/extensions/confidence-high"]
+          }
+        ]
+      }
+    ]
+  }
+}
