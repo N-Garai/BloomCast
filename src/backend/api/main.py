@@ -1,11 +1,11 @@
 """BloomCast FastAPI application — deployed on Render free tier."""
 from datetime import datetime, timezone
 from pathlib import Path
-
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse, Response, FileResponse
 from fastapi.staticfiles import StaticFiles
+import mimetypes
 
 __version__ = "2.0.0"
 from shared.config import ALLOWED_ORIGIN
@@ -91,6 +91,23 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type"],
 )
+
+
+@app.get("/_next/static/{path:path}")
+async def serve_next_static(path: str):
+    file_path = _FRONTEND_DIR / "_next" / "static" / path
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Not found")
+    mime = mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
+    return FileResponse(file_path, media_type=mime)
+
+
+@app.get("/favicon.ico")
+async def serve_favicon():
+    file_path = _FRONTEND_DIR / "favicon.svg"
+    if file_path.is_file():
+        return FileResponse(file_path, media_type="image/svg+xml")
+    raise HTTPException(status_code=404, detail="Not found")
 
 
 @app.get("/v1/health")
