@@ -1,0 +1,65 @@
+{
+  "model_version": "v2.0.0-synthetic-seed",
+  "horizon_days": 5,
+  "sample_size": 4000,
+  "brier": 0.08487916522337463,
+  "auc": 0.9889181023662917,
+  "hit_rate": 0.9539147670961348,
+  "false_alarm_rate": 0.0615539858728557,
+  "reliability_diagram": {
+    "prob_true": [
+      0.0,
+      0.001310615989515072,
+      0.026455026455026454,
+      0.22254335260115607,
+      0.739010989010989,
+      0.956661316211878,
+      1.0,
+      1.0
+    ],
+    "prob_pred": [
+      0.08871681033129007,
+      0.186521235827018,
+      0.3074868378755733,
+      0.43115372501617366,
+      0.5644054013818943,
+      0.6918795155160177,
+      0.8131227804780757,
+      0.9100542160955232
+    ]
+  },
+  "baselines": {
+    "climatology": {
+      "auc": 0.9826494696070383,
+      "brier": 0.04980416666666667,
+      "hit_rate": 0.981169474727453,
+      "false_alarm_rate": 0.16599394550958627
+    },
+    "persistence": {
+      "auc": 0.6133794337341325,
+      "brier": 0.2880551517009735,
+      "hit_rate": 0.5758176412289395,
+      "false_alarm_rate": 0.42330978809283554
+    },
+    "weather_only": {
+      "auc": 0.6764885455721914,
+      "brier": 0.2262105643749237,
+      "hit_rate": 0.6352824578790882,
+      "false_alarm_rate": 0.37235116044399597
+    }
+  },
+  "delta_vs_climatology": {
+    "brier": 0.03507499855670796,
+    "auc": 0.00626863275925349
+  },
+  "delta_vs_persistence": {
+    "brier": -0.20317598647759888,
+    "auc": 0.37553866863215923
+  },
+  "delta_vs_weather_only": {
+    "brier": -0.14133139915154908,
+    "auc": 0.31242955679410034
+  },
+  "calibration_method": "Isotonic regression on out-of-fold predictions, refit on full data",
+  "limitations": "BloomCast's verification uses a held-out test set of 5 EU lakes never seen during training. Sample size is small (n=4000 bloom events). Metrics should be interpreted as preliminary until additional seasons of data are collected. The Scorecard is updated nightly as new observations arrive."
+}

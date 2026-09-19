@@ -1,0 +1,127 @@
+{
+  "generated_at": "2026-09-19T06:07:07.351036+00:00",
+  "model_version": "v2.0.0-synthetic-seed",
+  "p_bloom": 0.8968,
+  "ci_lo": 0.7768,
+  "ci_hi": 1.0,
+  "baseline_climatology": 1.0,
+  "shap_top_features": [
+    {
+      "feature": "temp_mean_3d",
+      "human": "Recent warm temperatures",
+      "shap_value": 0.3407
+    },
+    {
+      "feature": "chlorophyll_a_mean",
+      "human": "Chlorophyll-a concentration",
+      "shap_value": 0.2845
+    },
+    {
+      "feature": "wind_speed_mean_3d",
+      "human": "Calm winds (low mixing)",
+      "shap_value": 0.2742
+    },
+    {
+      "feature": "ndci_trend_5d",
+      "human": "Rising chlorophyll trend",
+      "shap_value": 0.1948
+    },
+    {
+      "feature": "precip_sum_7d",
+      "human": "Recent rainfall (nutrient runoff)",
+      "shap_value": 0.1494
+    }
+  ],
+  "horizons": {
+    "3d": {
+      "p_bloom": 0.7913,
+      "ci_lo": 0.6713,
+      "ci_hi": 1.0,
+      "shap_top_features": [
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.1763
+        },
+        {
+          "feature": "solar_mean_3d",
+          "human": "Solar radiation",
+          "shap_value": 0.1059
+        },
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.0831
+        }
+      ]
+    },
+    "5d": {
+      "p_bloom": 0.8413,
+      "ci_lo": 0.7213,
+      "ci_hi": 0.9613,
+      "shap_top_features": [
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.1763
+        },
+        {
+          "feature": "solar_mean_3d",
+          "human": "Solar radiation",
+          "shap_value": 0.1059
+        },
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.0831
+        },
+        {
+          "feature": "precip_sum_7d",
+          "human": "Recent rainfall (nutrient runoff)",
+          "shap_value": 0.0778
+        },
+        {
+          "feature": "fai_mean",
+          "human": "Floating algae index",
+          "shap_value": -0.0753
+        }
+      ]
+    },
+    "7d": {
+      "p_bloom": 0.9213,
+      "ci_lo": 0.6913,
+      "ci_hi": 1.0,
+      "shap_top_features": [
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.1763
+        },
+        {
+          "feature": "solar_mean_3d",
+          "human": "Solar radiation",
+          "shap_value": 0.1059
+        },
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.0831
+        },
+        {
+          "feature": "precip_sum_7d",
+          "human": "Recent rainfall (nutrient runoff)",
+          "shap_value": 0.0778
+        }
+      ]
+    }
+  },
+  "waterbody_id": "CH-GVA-01",
+  "name": "Lake Geneva",
+  "region": "Alpine",
+  "country": "CH",
+  "centroid": [
+    6.143,
+    46.396
+  ],
+  "type": "lake"
+}

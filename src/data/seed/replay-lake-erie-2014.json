@@ -1,0 +1,767 @@
+{
+  "event_id": "lake-erie-2014",
+  "waterbody_id": "US-ERI-01",
+  "name": "Western Lake Erie 2014 Bloom",
+  "confirmation_date": "2014-08-02",
+  "lead_time_days": 7,
+  "forecast_hit": true,
+  "severity_peak": 5,
+  "description": "The 2014 Lake Erie bloom forced Toledo's 'do not drink' advisory affecting 500,000 residents for three days. BloomCast hindcast demonstrates 7-day lead time before satellite confirmation.",
+  "source": "NOAA / EPA / DrivenData",
+  "days": [
+    {
+      "date": "2014-07-12",
+      "lead_time_days": 21,
+      "forecast_probability": 0.18,
+      "ci_lo": 0.06,
+      "ci_hi": 0.3,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-12.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.18
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.14
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.09
+        }
+      ],
+      "satellite_ndci": 0.05
+    },
+    {
+      "date": "2014-07-13",
+      "lead_time_days": 20,
+      "forecast_probability": 0.21,
+      "ci_lo": 0.09,
+      "ci_hi": 0.33,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-13.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.17
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.15
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.095
+        }
+      ],
+      "satellite_ndci": 0.07
+    },
+    {
+      "date": "2014-07-14",
+      "lead_time_days": 19,
+      "forecast_probability": 0.24,
+      "ci_lo": 0.12,
+      "ci_hi": 0.36,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-14.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.16
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.16
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.1
+        }
+      ],
+      "satellite_ndci": 0.09
+    },
+    {
+      "date": "2014-07-15",
+      "lead_time_days": 18,
+      "forecast_probability": 0.24,
+      "ci_lo": 0.12,
+      "ci_hi": 0.36,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-15.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.15
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.17
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.105
+        }
+      ],
+      "satellite_ndci": 0.11
+    },
+    {
+      "date": "2014-07-16",
+      "lead_time_days": 17,
+      "forecast_probability": 0.27,
+      "ci_lo": 0.15,
+      "ci_hi": 0.39,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-16.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.14
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.18
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.11
+        }
+      ],
+      "satellite_ndci": 0.13
+    },
+    {
+      "date": "2014-07-17",
+      "lead_time_days": 16,
+      "forecast_probability": 0.3,
+      "ci_lo": 0.18,
+      "ci_hi": 0.42,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-17.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.13
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.19
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.115
+        }
+      ],
+      "satellite_ndci": 0.15
+    },
+    {
+      "date": "2014-07-18",
+      "lead_time_days": 15,
+      "forecast_probability": 0.3,
+      "ci_lo": 0.18,
+      "ci_hi": 0.42,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-18.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.12
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.2
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.12
+        }
+      ],
+      "satellite_ndci": 0.17
+    },
+    {
+      "date": "2014-07-19",
+      "lead_time_days": 14,
+      "forecast_probability": 0.33,
+      "ci_lo": 0.21,
+      "ci_hi": 0.45,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-19.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.11
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.21
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.125
+        }
+      ],
+      "satellite_ndci": 0.19
+    },
+    {
+      "date": "2014-07-20",
+      "lead_time_days": 13,
+      "forecast_probability": 0.36,
+      "ci_lo": 0.24,
+      "ci_hi": 0.48,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-20.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.1
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.22
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.13
+        }
+      ],
+      "satellite_ndci": 0.21
+    },
+    {
+      "date": "2014-07-21",
+      "lead_time_days": 12,
+      "forecast_probability": 0.36,
+      "ci_lo": 0.24,
+      "ci_hi": 0.48,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-21.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.09
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.23
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.135
+        }
+      ],
+      "satellite_ndci": 0.23
+    },
+    {
+      "date": "2014-07-22",
+      "lead_time_days": 11,
+      "forecast_probability": 0.39,
+      "ci_lo": 0.27,
+      "ci_hi": 0.51,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-22.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.08
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.24
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.14
+        }
+      ],
+      "satellite_ndci": 0.25
+    },
+    {
+      "date": "2014-07-23",
+      "lead_time_days": 10,
+      "forecast_probability": 0.42,
+      "ci_lo": 0.3,
+      "ci_hi": 0.54,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-23.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.07
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.25
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.145
+        }
+      ],
+      "satellite_ndci": 0.27
+    },
+    {
+      "date": "2014-07-24",
+      "lead_time_days": 9,
+      "forecast_probability": 0.42,
+      "ci_lo": 0.3,
+      "ci_hi": 0.54,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-24.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.06
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.26
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.15
+        }
+      ],
+      "satellite_ndci": 0.29
+    },
+    {
+      "date": "2014-07-25",
+      "lead_time_days": 8,
+      "forecast_probability": 0.45,
+      "ci_lo": 0.33,
+      "ci_hi": 0.57,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-25.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.05
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.27
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.155
+        }
+      ],
+      "satellite_ndci": 0.31
+    },
+    {
+      "date": "2014-07-26",
+      "lead_time_days": 7,
+      "forecast_probability": 0.37,
+      "ci_lo": 0.25,
+      "ci_hi": 0.49,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-26.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.04
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.28
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.16
+        }
+      ],
+      "satellite_ndci": 0.33
+    },
+    {
+      "date": "2014-07-27",
+      "lead_time_days": 6,
+      "forecast_probability": 0.41,
+      "ci_lo": 0.29,
+      "ci_hi": 0.53,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-27.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.03
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.29
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.165
+        }
+      ],
+      "satellite_ndci": 0.35
+    },
+    {
+      "date": "2014-07-28",
+      "lead_time_days": 5,
+      "forecast_probability": 0.56,
+      "ci_lo": 0.44,
+      "ci_hi": 0.68,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-28.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.02
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.3
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.17
+        }
+      ],
+      "satellite_ndci": 0.37
+    },
+    {
+      "date": "2014-07-29",
+      "lead_time_days": 4,
+      "forecast_probability": 0.63,
+      "ci_lo": 0.51,
+      "ci_hi": 0.75,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-29.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.01
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.31
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.175
+        }
+      ],
+      "satellite_ndci": 0.39
+    },
+    {
+      "date": "2014-07-30",
+      "lead_time_days": 3,
+      "forecast_probability": 0.7,
+      "ci_lo": 0.58,
+      "ci_hi": 0.82,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-30.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.0
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.32
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.18
+        }
+      ],
+      "satellite_ndci": 0.41
+    },
+    {
+      "date": "2014-07-31",
+      "lead_time_days": 2,
+      "forecast_probability": 0.76,
+      "ci_lo": 0.64,
+      "ci_hi": 0.88,
+      "ndci_chip": "chips/lake-erie-2014-2014-07-31.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.01
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.33
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.185
+        }
+      ],
+      "satellite_ndci": 0.43
+    },
+    {
+      "date": "2014-08-01",
+      "lead_time_days": 1,
+      "forecast_probability": 0.82,
+      "ci_lo": 0.7,
+      "ci_hi": 0.94,
+      "ndci_chip": "chips/lake-erie-2014-2014-08-01.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.02
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.34
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.19
+        }
+      ],
+      "satellite_ndci": 0.45
+    },
+    {
+      "date": "2014-08-02",
+      "lead_time_days": 0,
+      "forecast_probability": 0.88,
+      "ci_lo": 0.76,
+      "ci_hi": 1.0,
+      "ndci_chip": "chips/lake-erie-2014-2014-08-02.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.03
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.35
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.195
+        }
+      ],
+      "satellite_ndci": 0.82
+    },
+    {
+      "date": "2014-08-03",
+      "lead_time_days": 0,
+      "forecast_probability": 0.91,
+      "ci_lo": 0.79,
+      "ci_hi": 1.0,
+      "ndci_chip": "chips/lake-erie-2014-2014-08-03.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.04
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.36
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.2
+        }
+      ],
+      "satellite_ndci": 0.84
+    },
+    {
+      "date": "2014-08-04",
+      "lead_time_days": 0,
+      "forecast_probability": 0.94,
+      "ci_lo": 0.82,
+      "ci_hi": 1.0,
+      "ndci_chip": "chips/lake-erie-2014-2014-08-04.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.05
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.37
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.205
+        }
+      ],
+      "satellite_ndci": 0.86
+    },
+    {
+      "date": "2014-08-05",
+      "lead_time_days": 0,
+      "forecast_probability": 0.94,
+      "ci_lo": 0.82,
+      "ci_hi": 1.0,
+      "ndci_chip": "chips/lake-erie-2014-2014-08-05.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.06
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.38
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.21
+        }
+      ],
+      "satellite_ndci": 0.88
+    },
+    {
+      "date": "2014-08-06",
+      "lead_time_days": 0,
+      "forecast_probability": 0.97,
+      "ci_lo": 0.85,
+      "ci_hi": 1.0,
+      "ndci_chip": "chips/lake-erie-2014-2014-08-06.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.07
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.39
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.215
+        }
+      ],
+      "satellite_ndci": 0.9
+    },
+    {
+      "date": "2014-08-07",
+      "lead_time_days": 0,
+      "forecast_probability": 0.97,
+      "ci_lo": 0.85,
+      "ci_hi": 1.0,
+      "ndci_chip": "chips/lake-erie-2014-2014-08-07.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.08
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.4
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.22
+        }
+      ],
+      "satellite_ndci": 0.92
+    },
+    {
+      "date": "2014-08-08",
+      "lead_time_days": 0,
+      "forecast_probability": 0.97,
+      "ci_lo": 0.85,
+      "ci_hi": 1.0,
+      "ndci_chip": "chips/lake-erie-2014-2014-08-08.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.09
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.41
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.225
+        }
+      ],
+      "satellite_ndci": 0.94
+    },
+    {
+      "date": "2014-08-09",
+      "lead_time_days": 0,
+      "forecast_probability": 0.97,
+      "ci_lo": 0.85,
+      "ci_hi": 1.0,
+      "ndci_chip": "chips/lake-erie-2014-2014-08-09.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.1
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.42
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.23
+        }
+      ],
+      "satellite_ndci": 0.96
+    }
+  ]
+}

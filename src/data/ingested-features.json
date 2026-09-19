@@ -1,0 +1,822 @@
+{
+  "waterbodies": [
+    {
+      "waterbody_id": "CH-ZUR-01",
+      "name": "Lake Zurich",
+      "region": "Alpine",
+      "country": "CH",
+      "centroid": [
+        8.541,
+        47.327
+      ],
+      "type": "Feature",
+      "ndci": 0.0551,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": 0.0103,
+      "forecast": {
+        "temp_mean_3d": 17.6,
+        "temp_mean_7d": 17.6,
+        "temp_anomaly_7d": -1.6,
+        "wind_speed_mean_3d": 1.05,
+        "wind_speed_max_3d": 3.31,
+        "wind_dir_variance_3d": 0.3,
+        "precip_sum_7d": 0.0,
+        "precip_sum_3d": 0.0,
+        "dry_days_7d": 3.4,
+        "solar_mean_3d": 182.5,
+        "cloud_cover_mean_3d": 40.3,
+        "dewpoint_mean_3d": 9.8,
+        "pressure_trend_3d": 0.35,
+        "growing_degree_days": 365.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "CH-GVA-01",
+      "name": "Lake Geneva",
+      "region": "Alpine",
+      "country": "CH",
+      "centroid": [
+        6.143,
+        46.396
+      ],
+      "type": "Feature",
+      "ndci": 0.056,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": -0.0139,
+      "forecast": {
+        "temp_mean_3d": 18.86,
+        "temp_mean_7d": 18.86,
+        "temp_anomaly_7d": -0.59,
+        "wind_speed_mean_3d": 1.56,
+        "wind_speed_max_3d": 5.38,
+        "wind_dir_variance_3d": 0.12,
+        "precip_sum_7d": 0.0,
+        "precip_sum_3d": 0.0,
+        "dry_days_7d": 0.5,
+        "solar_mean_3d": 194.8,
+        "cloud_cover_mean_3d": 25.8,
+        "dewpoint_mean_3d": 7.8,
+        "pressure_trend_3d": 0.69,
+        "growing_degree_days": 302.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "IT-MAG-01",
+      "name": "Lake Maggiore",
+      "region": "Alpine",
+      "country": "IT",
+      "centroid": [
+        8.721,
+        46.078
+      ],
+      "type": "Feature",
+      "ndci": 0.0487,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": -0.011,
+      "forecast": {
+        "temp_mean_3d": 20.12,
+        "temp_mean_7d": 20.12,
+        "temp_anomaly_7d": -2.51,
+        "wind_speed_mean_3d": 1.23,
+        "wind_speed_max_3d": 3.61,
+        "wind_dir_variance_3d": 0.8,
+        "precip_sum_7d": 0.3,
+        "precip_sum_3d": 0.3,
+        "dry_days_7d": 1.6,
+        "solar_mean_3d": 188.6,
+        "cloud_cover_mean_3d": 52.2,
+        "dewpoint_mean_3d": 14.4,
+        "pressure_trend_3d": 2.0,
+        "growing_degree_days": 180.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "DE-CON-01",
+      "name": "Lake Constance",
+      "region": "Alpine",
+      "country": "DE",
+      "centroid": [
+        9.456,
+        47.683
+      ],
+      "type": "Feature",
+      "ndci": 0.0565,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": 0.0227,
+      "forecast": {
+        "temp_mean_3d": 16.03,
+        "temp_mean_7d": 16.03,
+        "temp_anomaly_7d": -2.89,
+        "wind_speed_mean_3d": 1.57,
+        "wind_speed_max_3d": 4.75,
+        "wind_dir_variance_3d": 0.54,
+        "precip_sum_7d": 0.3,
+        "precip_sum_3d": 0.3,
+        "dry_days_7d": 5.0,
+        "solar_mean_3d": 180.1,
+        "cloud_cover_mean_3d": 34.6,
+        "dewpoint_mean_3d": 8.7,
+        "pressure_trend_3d": -1.41,
+        "growing_degree_days": 354.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "IT-GAR-01",
+      "name": "Lake Garda",
+      "region": "Alpine",
+      "country": "IT",
+      "centroid": [
+        10.789,
+        45.624
+      ],
+      "type": "Feature",
+      "ndci": 0.0628,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": -0.0014,
+      "forecast": {
+        "temp_mean_3d": 14.14,
+        "temp_mean_7d": 14.14,
+        "temp_anomaly_7d": -3.23,
+        "wind_speed_mean_3d": 1.27,
+        "wind_speed_max_3d": 3.89,
+        "wind_dir_variance_3d": 0.12,
+        "precip_sum_7d": 0.3,
+        "precip_sum_3d": 0.3,
+        "dry_days_7d": 6.9,
+        "solar_mean_3d": 175.9,
+        "cloud_cover_mean_3d": 39.7,
+        "dewpoint_mean_3d": 9.2,
+        "pressure_trend_3d": 1.13,
+        "growing_degree_days": 267.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "IT-COM-01",
+      "name": "Lake Como",
+      "region": "Alpine",
+      "country": "IT",
+      "centroid": [
+        9.25,
+        46.017
+      ],
+      "type": "Feature",
+      "ndci": 0.0591,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": -0.0112,
+      "forecast": {
+        "temp_mean_3d": 20.49,
+        "temp_mean_7d": 20.49,
+        "temp_anomaly_7d": -2.73,
+        "wind_speed_mean_3d": 1.16,
+        "wind_speed_max_3d": 3.3,
+        "wind_dir_variance_3d": 0.32,
+        "precip_sum_7d": 0.76,
+        "precip_sum_3d": 0.76,
+        "dry_days_7d": 5.3,
+        "solar_mean_3d": 186.9,
+        "cloud_cover_mean_3d": 50.1,
+        "dewpoint_mean_3d": 14.9,
+        "pressure_trend_3d": -1.27,
+        "growing_degree_days": 321.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "PT-ALQ-01",
+      "name": "Alqueva Reservoir",
+      "region": "Iberian",
+      "country": "PT",
+      "centroid": [
+        -7.423,
+        38.235
+      ],
+      "type": "Feature",
+      "ndci": 0.0542,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": -0.0104,
+      "forecast": {
+        "temp_mean_3d": 25.27,
+        "temp_mean_7d": 25.27,
+        "temp_anomaly_7d": 0.13,
+        "wind_speed_mean_3d": 1.69,
+        "wind_speed_max_3d": 6.65,
+        "wind_dir_variance_3d": 0.17,
+        "precip_sum_7d": 1.8,
+        "precip_sum_3d": 1.8,
+        "dry_days_7d": 5.1,
+        "solar_mean_3d": 213.1,
+        "cloud_cover_mean_3d": 36.0,
+        "dewpoint_mean_3d": 13.4,
+        "pressure_trend_3d": -0.16,
+        "growing_degree_days": 313.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "ES-SNB-01",
+      "name": "Lake Sanabria",
+      "region": "Iberian",
+      "country": "ES",
+      "centroid": [
+        -6.793,
+        42.121
+      ],
+      "type": "Feature",
+      "ndci": 0.0528,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": 0.0123,
+      "forecast": {
+        "temp_mean_3d": 15.24,
+        "temp_mean_7d": 15.24,
+        "temp_anomaly_7d": 1.22,
+        "wind_speed_mean_3d": 2.42,
+        "wind_speed_max_3d": 6.63,
+        "wind_dir_variance_3d": 0.85,
+        "precip_sum_7d": 3.0,
+        "precip_sum_3d": 3.0,
+        "dry_days_7d": 0.6,
+        "solar_mean_3d": 204.9,
+        "cloud_cover_mean_3d": 43.0,
+        "dewpoint_mean_3d": 5.7,
+        "pressure_trend_3d": 1.53,
+        "growing_degree_days": 205.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "PT-TAG-01",
+      "name": "Tagus Estuary",
+      "region": "Iberian",
+      "country": "PT",
+      "centroid": [
+        -9.061,
+        38.717
+      ],
+      "type": "Feature",
+      "ndci": 0.0452,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": -0.0069,
+      "forecast": {
+        "temp_mean_3d": 22.52,
+        "temp_mean_7d": 22.52,
+        "temp_anomaly_7d": -1.18,
+        "wind_speed_mean_3d": 1.93,
+        "wind_speed_max_3d": 6.11,
+        "wind_dir_variance_3d": 0.74,
+        "precip_sum_7d": 1.2,
+        "precip_sum_3d": 1.2,
+        "dry_days_7d": 0.1,
+        "solar_mean_3d": 216.3,
+        "cloud_cover_mean_3d": 32.7,
+        "dewpoint_mean_3d": 13.9,
+        "pressure_trend_3d": 0.39,
+        "growing_degree_days": 146.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "US-ERI-01",
+      "name": "Western Lake Erie",
+      "region": "Great Lakes",
+      "country": "US",
+      "centroid": [
+        -82.7,
+        41.7
+      ],
+      "type": "Feature",
+      "ndci": 0.0674,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": 0.0221,
+      "forecast": {
+        "temp_mean_3d": 16.9,
+        "temp_mean_7d": 16.9,
+        "temp_anomaly_7d": -4.63,
+        "wind_speed_mean_3d": 7.54,
+        "wind_speed_max_3d": 14.14,
+        "wind_dir_variance_3d": 0.42,
+        "precip_sum_7d": 42.66,
+        "precip_sum_3d": 42.66,
+        "dry_days_7d": 3.0,
+        "solar_mean_3d": 138.2,
+        "cloud_cover_mean_3d": 63.1,
+        "dewpoint_mean_3d": 12.2,
+        "pressure_trend_3d": -1.01,
+        "growing_degree_days": 220.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "US-SBW-01",
+      "name": "Saginaw Bay",
+      "region": "Great Lakes",
+      "country": "US",
+      "centroid": [
+        -83.8,
+        43.9
+      ],
+      "type": "Feature",
+      "ndci": 0.0294,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": 0.0385,
+      "forecast": {
+        "temp_mean_3d": 15.0,
+        "temp_mean_7d": 15.0,
+        "temp_anomaly_7d": -4.0,
+        "wind_speed_mean_3d": 5.03,
+        "wind_speed_max_3d": 9.51,
+        "wind_dir_variance_3d": 0.1,
+        "precip_sum_7d": 21.5,
+        "precip_sum_3d": 21.5,
+        "dry_days_7d": 5.1,
+        "solar_mean_3d": 136.1,
+        "cloud_cover_mean_3d": 69.9,
+        "dewpoint_mean_3d": 9.6,
+        "pressure_trend_3d": -1.78,
+        "growing_degree_days": 146.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "US-GBY-01",
+      "name": "Green Bay",
+      "region": "Great Lakes",
+      "country": "US",
+      "centroid": [
+        -87.9,
+        44.5
+      ],
+      "type": "Feature",
+      "ndci": 0.0466,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": -0.0111,
+      "forecast": {
+        "temp_mean_3d": 13.73,
+        "temp_mean_7d": 13.73,
+        "temp_anomaly_7d": -6.35,
+        "wind_speed_mean_3d": 4.15,
+        "wind_speed_max_3d": 8.28,
+        "wind_dir_variance_3d": 0.64,
+        "precip_sum_7d": 32.7,
+        "precip_sum_3d": 32.7,
+        "dry_days_7d": 4.8,
+        "solar_mean_3d": 155.6,
+        "cloud_cover_mean_3d": 63.7,
+        "dewpoint_mean_3d": 9.3,
+        "pressure_trend_3d": 1.05,
+        "growing_degree_days": 397.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "US-LCH-01",
+      "name": "Lake Champlain",
+      "region": "Great Lakes",
+      "country": "US",
+      "centroid": [
+        -73.3,
+        44.5
+      ],
+      "type": "Feature",
+      "ndci": 0.0484,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": -0.0157,
+      "forecast": {
+        "temp_mean_3d": 13.3,
+        "temp_mean_7d": 13.3,
+        "temp_anomaly_7d": -6.05,
+        "wind_speed_mean_3d": 3.46,
+        "wind_speed_max_3d": 10.1,
+        "wind_dir_variance_3d": 0.37,
+        "precip_sum_7d": 22.21,
+        "precip_sum_3d": 22.21,
+        "dry_days_7d": 3.0,
+        "solar_mean_3d": 147.7,
+        "cloud_cover_mean_3d": 70.9,
+        "dewpoint_mean_3d": 7.4,
+        "pressure_trend_3d": 1.86,
+        "growing_degree_days": 301.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "IN-VEM-01",
+      "name": "Lake Vembanad",
+      "region": "Global South",
+      "country": "IN",
+      "centroid": [
+        76.3,
+        9.9
+      ],
+      "type": "Feature",
+      "ndci": 0.0543,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": 0.0381,
+      "forecast": {
+        "temp_mean_3d": 26.98,
+        "temp_mean_7d": 26.98,
+        "temp_anomaly_7d": -0.56,
+        "wind_speed_mean_3d": 1.85,
+        "wind_speed_max_3d": 5.46,
+        "wind_dir_variance_3d": 0.93,
+        "precip_sum_7d": 58.9,
+        "precip_sum_3d": 58.9,
+        "dry_days_7d": 6.3,
+        "solar_mean_3d": 251.2,
+        "cloud_cover_mean_3d": 74.9,
+        "dewpoint_mean_3d": 24.2,
+        "pressure_trend_3d": -1.1,
+        "growing_degree_days": 385.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "UG-VIC-01",
+      "name": "Lake Victoria",
+      "region": "Global South",
+      "country": "UG",
+      "centroid": [
+        32.5,
+        1.0
+      ],
+      "type": "Feature",
+      "ndci": 0.0527,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": -0.0123,
+      "forecast": {
+        "temp_mean_3d": 22.88,
+        "temp_mean_7d": 22.88,
+        "temp_anomaly_7d": -0.57,
+        "wind_speed_mean_3d": 1.38,
+        "wind_speed_max_3d": 4.86,
+        "wind_dir_variance_3d": 0.83,
+        "precip_sum_7d": 78.5,
+        "precip_sum_3d": 78.5,
+        "dry_days_7d": 0.0,
+        "solar_mean_3d": 260.4,
+        "cloud_cover_mean_3d": 70.5,
+        "dewpoint_mean_3d": 19.5,
+        "pressure_trend_3d": 1.93,
+        "growing_degree_days": 220.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "KE-NIV-01",
+      "name": "Lake Naivasha",
+      "region": "Global South",
+      "country": "KE",
+      "centroid": [
+        36.4,
+        -0.72
+      ],
+      "type": "Feature",
+      "ndci": 0.0663,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": -0.0158,
+      "forecast": {
+        "temp_mean_3d": 20.33,
+        "temp_mean_7d": 20.33,
+        "temp_anomaly_7d": 1.53,
+        "wind_speed_mean_3d": 3.03,
+        "wind_speed_max_3d": 7.11,
+        "wind_dir_variance_3d": 0.14,
+        "precip_sum_7d": 16.5,
+        "precip_sum_3d": 16.5,
+        "dry_days_7d": 3.7,
+        "solar_mean_3d": 297.4,
+        "cloud_cover_mean_3d": 51.1,
+        "dewpoint_mean_3d": 11.6,
+        "pressure_trend_3d": 1.52,
+        "growing_degree_days": 192.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "ET-TAN-01",
+      "name": "Lake Tana",
+      "region": "Global South",
+      "country": "ET",
+      "centroid": [
+        37.3,
+        12.0
+      ],
+      "type": "Feature",
+      "ndci": 0.0477,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": 0.0236,
+      "forecast": {
+        "temp_mean_3d": 10.99,
+        "temp_mean_7d": 10.99,
+        "temp_anomaly_7d": 1.49,
+        "wind_speed_mean_3d": 2.94,
+        "wind_speed_max_3d": 7.41,
+        "wind_dir_variance_3d": 0.4,
+        "precip_sum_7d": 24.9,
+        "precip_sum_3d": 24.9,
+        "dry_days_7d": 3.7,
+        "solar_mean_3d": 291.8,
+        "cloud_cover_mean_3d": 28.4,
+        "dewpoint_mean_3d": 4.1,
+        "pressure_trend_3d": 1.49,
+        "growing_degree_days": 254.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "PH-LGB-01",
+      "name": "Laguna de Bay",
+      "region": "Global South",
+      "country": "PH",
+      "centroid": [
+        121.2,
+        14.3
+      ],
+      "type": "Feature",
+      "ndci": 0.0285,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": -0.016,
+      "forecast": {
+        "temp_mean_3d": 28.04,
+        "temp_mean_7d": 28.04,
+        "temp_anomaly_7d": -0.06,
+        "wind_speed_mean_3d": 2.07,
+        "wind_speed_max_3d": 5.65,
+        "wind_dir_variance_3d": 0.99,
+        "precip_sum_7d": 115.3,
+        "precip_sum_3d": 115.3,
+        "dry_days_7d": 0.7,
+        "solar_mean_3d": 253.8,
+        "cloud_cover_mean_3d": 62.3,
+        "dewpoint_mean_3d": 24.6,
+        "pressure_trend_3d": 0.72,
+        "growing_degree_days": 153.0,
+        "heat_wave_flag": 1
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    },
+    {
+      "waterbody_id": "CN-TAI-01",
+      "name": "Lake Taihu",
+      "region": "Global South",
+      "country": "CN",
+      "centroid": [
+        120.1,
+        31.0
+      ],
+      "type": "Feature",
+      "ndci": 0.0602,
+      "chlorophyll_a": 13.2,
+      "ndvi": 0.1,
+      "fai": 0.05,
+      "ndci_trend_5d": 0.016,
+      "forecast": {
+        "temp_mean_3d": 25.07,
+        "temp_mean_7d": 25.07,
+        "temp_anomaly_7d": -1.24,
+        "wind_speed_mean_3d": 2.8,
+        "wind_speed_max_3d": 6.85,
+        "wind_dir_variance_3d": 0.9,
+        "precip_sum_7d": 19.2,
+        "precip_sum_3d": 19.2,
+        "dry_days_7d": 6.9,
+        "solar_mean_3d": 185.5,
+        "cloud_cover_mean_3d": 52.7,
+        "dewpoint_mean_3d": 21.1,
+        "pressure_trend_3d": 1.12,
+        "growing_degree_days": 380.0,
+        "heat_wave_flag": 0
+      },
+      "citizen": {
+        "citizen_reports_7d": 0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0
+      }
+    }
+  ],
+  "streamflush": [
+    {
+      "segment_id": "AT-VIE-WIEN-001",
+      "name": "Wienfluss at Stadtpark",
+      "city": "Vienna",
+      "country": "AT",
+      "risk_score": 0.0803,
+      "risk_level": "low",
+      "rainfall_48h_mm": 0.0,
+      "dry_days_antecedent": 0.38,
+      "impervious_proxy": 0.78
+    },
+    {
+      "segment_id": "PT-LIS-SEIX-001",
+      "name": "Seixal Stream",
+      "city": "Lisbon",
+      "country": "PT",
+      "risk_score": 0.088,
+      "risk_level": "low",
+      "rainfall_48h_mm": 0.0,
+      "dry_days_antecedent": 2.0,
+      "impervious_proxy": 0.84
+    },
+    {
+      "segment_id": "PT-POR-LECA-001",
+      "name": "Le\u00e7a Stream",
+      "city": "Porto",
+      "country": "PT",
+      "risk_score": 0.0875,
+      "risk_level": "low",
+      "rainfall_48h_mm": 0.0,
+      "dry_days_antecedent": 2.0,
+      "impervious_proxy": 0.71
+    },
+    {
+      "segment_id": "BG-SOF-PERL-001",
+      "name": "Perlovska Stream",
+      "city": "Sofia",
+      "country": "BG",
+      "risk_score": 0.0877,
+      "risk_level": "low",
+      "rainfall_48h_mm": 0.1,
+      "dry_days_antecedent": 2.0,
+      "impervious_proxy": 0.69
+    },
+    {
+      "segment_id": "AT-VIE-OTTA-001",
+      "name": "Ottakringer Bach",
+      "city": "Vienna",
+      "country": "AT",
+      "risk_score": 0.0797,
+      "risk_level": "low",
+      "rainfall_48h_mm": 0.0,
+      "dry_days_antecedent": 0.38,
+      "impervious_proxy": 0.62
+    }
+  ],
+  "generated_at": "2026-09-19T06:03:27.795561+00:00"
+}

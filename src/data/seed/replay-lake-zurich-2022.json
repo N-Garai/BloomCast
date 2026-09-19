@@ -1,0 +1,741 @@
+{
+  "event_id": "lake-zurich-2022",
+  "waterbody_id": "CH-ZUR-01",
+  "name": "Lake Zurich 2022 Bloom",
+  "confirmation_date": "2022-07-28",
+  "lead_time_days": 5,
+  "forecast_hit": true,
+  "severity_peak": 4,
+  "description": "Severe cyanobacteria bloom on Lake Zurich triggered beach closures. BloomCast hindcast shows 5-day predictive lead time.",
+  "source": "Amt f\u00fcr Abfall Wasser Energie und Luft (AWEL) Kanton Z\u00fcrich",
+  "days": [
+    {
+      "date": "2022-07-08",
+      "lead_time_days": 20,
+      "forecast_probability": 0.18,
+      "ci_lo": 0.06,
+      "ci_hi": 0.3,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-08.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.18
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.14
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.09
+        }
+      ],
+      "satellite_ndci": 0.05
+    },
+    {
+      "date": "2022-07-09",
+      "lead_time_days": 19,
+      "forecast_probability": 0.21,
+      "ci_lo": 0.09,
+      "ci_hi": 0.33,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-09.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.17
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.15
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.095
+        }
+      ],
+      "satellite_ndci": 0.07
+    },
+    {
+      "date": "2022-07-10",
+      "lead_time_days": 18,
+      "forecast_probability": 0.24,
+      "ci_lo": 0.12,
+      "ci_hi": 0.36,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-10.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.16
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.16
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.1
+        }
+      ],
+      "satellite_ndci": 0.09
+    },
+    {
+      "date": "2022-07-11",
+      "lead_time_days": 17,
+      "forecast_probability": 0.24,
+      "ci_lo": 0.12,
+      "ci_hi": 0.36,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-11.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.15
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.17
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.105
+        }
+      ],
+      "satellite_ndci": 0.11
+    },
+    {
+      "date": "2022-07-12",
+      "lead_time_days": 16,
+      "forecast_probability": 0.27,
+      "ci_lo": 0.15,
+      "ci_hi": 0.39,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-12.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.14
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.18
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.11
+        }
+      ],
+      "satellite_ndci": 0.13
+    },
+    {
+      "date": "2022-07-13",
+      "lead_time_days": 15,
+      "forecast_probability": 0.3,
+      "ci_lo": 0.18,
+      "ci_hi": 0.42,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-13.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.13
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.19
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.115
+        }
+      ],
+      "satellite_ndci": 0.15
+    },
+    {
+      "date": "2022-07-14",
+      "lead_time_days": 14,
+      "forecast_probability": 0.3,
+      "ci_lo": 0.18,
+      "ci_hi": 0.42,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-14.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.12
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.2
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.12
+        }
+      ],
+      "satellite_ndci": 0.17
+    },
+    {
+      "date": "2022-07-15",
+      "lead_time_days": 13,
+      "forecast_probability": 0.33,
+      "ci_lo": 0.21,
+      "ci_hi": 0.45,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-15.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.11
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.21
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.125
+        }
+      ],
+      "satellite_ndci": 0.19
+    },
+    {
+      "date": "2022-07-16",
+      "lead_time_days": 12,
+      "forecast_probability": 0.36,
+      "ci_lo": 0.24,
+      "ci_hi": 0.48,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-16.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.1
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.22
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.13
+        }
+      ],
+      "satellite_ndci": 0.21
+    },
+    {
+      "date": "2022-07-17",
+      "lead_time_days": 11,
+      "forecast_probability": 0.36,
+      "ci_lo": 0.24,
+      "ci_hi": 0.48,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-17.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.09
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.23
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.135
+        }
+      ],
+      "satellite_ndci": 0.23
+    },
+    {
+      "date": "2022-07-18",
+      "lead_time_days": 10,
+      "forecast_probability": 0.39,
+      "ci_lo": 0.27,
+      "ci_hi": 0.51,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-18.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.08
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.24
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.14
+        }
+      ],
+      "satellite_ndci": 0.25
+    },
+    {
+      "date": "2022-07-19",
+      "lead_time_days": 9,
+      "forecast_probability": 0.42,
+      "ci_lo": 0.3,
+      "ci_hi": 0.54,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-19.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.07
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.25
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.145
+        }
+      ],
+      "satellite_ndci": 0.27
+    },
+    {
+      "date": "2022-07-20",
+      "lead_time_days": 8,
+      "forecast_probability": 0.42,
+      "ci_lo": 0.3,
+      "ci_hi": 0.54,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-20.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.06
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.26
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.15
+        }
+      ],
+      "satellite_ndci": 0.29
+    },
+    {
+      "date": "2022-07-21",
+      "lead_time_days": 7,
+      "forecast_probability": 0.36,
+      "ci_lo": 0.24,
+      "ci_hi": 0.48,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-21.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.05
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.27
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.155
+        }
+      ],
+      "satellite_ndci": 0.31
+    },
+    {
+      "date": "2022-07-22",
+      "lead_time_days": 6,
+      "forecast_probability": 0.43,
+      "ci_lo": 0.31,
+      "ci_hi": 0.55,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-22.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.04
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.28
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.16
+        }
+      ],
+      "satellite_ndci": 0.33
+    },
+    {
+      "date": "2022-07-23",
+      "lead_time_days": 5,
+      "forecast_probability": 0.55,
+      "ci_lo": 0.43,
+      "ci_hi": 0.67,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-23.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.03
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.29
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.165
+        }
+      ],
+      "satellite_ndci": 0.35
+    },
+    {
+      "date": "2022-07-24",
+      "lead_time_days": 4,
+      "forecast_probability": 0.62,
+      "ci_lo": 0.5,
+      "ci_hi": 0.74,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-24.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.02
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.3
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.17
+        }
+      ],
+      "satellite_ndci": 0.37
+    },
+    {
+      "date": "2022-07-25",
+      "lead_time_days": 3,
+      "forecast_probability": 0.72,
+      "ci_lo": 0.6,
+      "ci_hi": 0.84,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-25.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.01
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.31
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.175
+        }
+      ],
+      "satellite_ndci": 0.39
+    },
+    {
+      "date": "2022-07-26",
+      "lead_time_days": 2,
+      "forecast_probability": 0.75,
+      "ci_lo": 0.63,
+      "ci_hi": 0.87,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-26.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": 0.0
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.32
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.18
+        }
+      ],
+      "satellite_ndci": 0.41
+    },
+    {
+      "date": "2022-07-27",
+      "lead_time_days": 1,
+      "forecast_probability": 0.81,
+      "ci_lo": 0.69,
+      "ci_hi": 0.93,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-27.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.01
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.33
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.185
+        }
+      ],
+      "satellite_ndci": 0.43
+    },
+    {
+      "date": "2022-07-28",
+      "lead_time_days": 0,
+      "forecast_probability": 0.9,
+      "ci_lo": 0.78,
+      "ci_hi": 1.0,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-28.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.02
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.34
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.19
+        }
+      ],
+      "satellite_ndci": 0.8
+    },
+    {
+      "date": "2022-07-29",
+      "lead_time_days": 0,
+      "forecast_probability": 0.9,
+      "ci_lo": 0.78,
+      "ci_hi": 1.0,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-29.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.03
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.35
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.195
+        }
+      ],
+      "satellite_ndci": 0.82
+    },
+    {
+      "date": "2022-07-30",
+      "lead_time_days": 0,
+      "forecast_probability": 0.93,
+      "ci_lo": 0.81,
+      "ci_hi": 1.0,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-30.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.04
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.36
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.2
+        }
+      ],
+      "satellite_ndci": 0.84
+    },
+    {
+      "date": "2022-07-31",
+      "lead_time_days": 0,
+      "forecast_probability": 0.96,
+      "ci_lo": 0.84,
+      "ci_hi": 1.0,
+      "ndci_chip": "chips/lake-zurich-2022-2022-07-31.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.05
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.37
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.205
+        }
+      ],
+      "satellite_ndci": 0.86
+    },
+    {
+      "date": "2022-08-01",
+      "lead_time_days": 0,
+      "forecast_probability": 0.96,
+      "ci_lo": 0.84,
+      "ci_hi": 1.0,
+      "ndci_chip": "chips/lake-zurich-2022-2022-08-01.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.06
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.38
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.21
+        }
+      ],
+      "satellite_ndci": 0.88
+    },
+    {
+      "date": "2022-08-02",
+      "lead_time_days": 0,
+      "forecast_probability": 0.97,
+      "ci_lo": 0.85,
+      "ci_hi": 1.0,
+      "ndci_chip": "chips/lake-zurich-2022-2022-08-02.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.07
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.39
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.215
+        }
+      ],
+      "satellite_ndci": 0.9
+    },
+    {
+      "date": "2022-08-03",
+      "lead_time_days": 0,
+      "forecast_probability": 0.97,
+      "ci_lo": 0.85,
+      "ci_hi": 1.0,
+      "ndci_chip": "chips/lake-zurich-2022-2022-08-03.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.08
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.4
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.22
+        }
+      ],
+      "satellite_ndci": 0.92
+    },
+    {
+      "date": "2022-08-04",
+      "lead_time_days": 0,
+      "forecast_probability": 0.97,
+      "ci_lo": 0.85,
+      "ci_hi": 1.0,
+      "ndci_chip": "chips/lake-zurich-2022-2022-08-04.webp",
+      "shap_top_features": [
+        {
+          "feature": "wind_speed_mean_3d",
+          "human": "Calm winds (low mixing)",
+          "shap_value": -0.09
+        },
+        {
+          "feature": "ndci_trend_5d",
+          "human": "Rising chlorophyll trend",
+          "shap_value": 0.41
+        },
+        {
+          "feature": "temp_anomaly_7d",
+          "human": "Surface temperature anomaly",
+          "shap_value": 0.225
+        }
+      ],
+      "satellite_ndci": 0.94
+    }
+  ]
+}
