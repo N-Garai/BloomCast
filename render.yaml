@@ -19,7 +19,7 @@ services:
     region: oregon
     # Build the Next.js static export so FastAPI can serve it from
     # src/frontend/out/ at runtime. Requires Node.js in the Python build image.
-    buildCommand: npm install --prefix src/frontend --legacy-peer-deps && cd src/frontend && npm run build && cd src/backend && pip install -r requirements.txt
+    buildCommand: npm install --prefix src/frontend && cd src/frontend && npm run build && cd src/backend && pip install -r requirements.txt
     startCommand: cd src/backend && uvicorn api.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /v1/health
     autoDeploy: true

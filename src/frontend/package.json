@@ -10,8 +10,8 @@
   },
   "dependencies": {
     "next": "^16.0",
-    "react": "^19.3",
-    "react-dom": "^19.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
     "three": "^0.167",
     "@react-three/fiber": "^9.7",
     "@react-three/drei": "^9.114",
