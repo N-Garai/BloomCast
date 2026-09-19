@@ -1,0 +1,82 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-abyss: #02060f;
+  --bg-deep: #04111f;
+  --bg-surface: #082236;
+  --bg-elevated: #0d3050;
+  --bg-overlay: #1a4a6e;
+  --fg-primary: #e8f4f8;
+  --fg-secondary: #9fb8c7;
+  --fg-muted: #5a7888;
+  --fg-faint: #3d5666;
+  --glow-cyan: #00f0d4;
+  --glow-green: #00ff88;
+  --glow-yellow: #ffcc00;
+  --glow-orange: #ff8800;
+  --glow-red: #ff3355;
+  --glow-magenta: #ff00aa;
+  --border-subtle: rgba(0, 240, 212, 0.12);
+  --border-faint: rgba(0, 240, 212, 0.05);
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html, body {
+  background: radial-gradient(ellipse at 50% 0%, #041a2e 0%, #02060f 60%);
+  color: var(--fg-primary);
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-display), ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.font-mono {
+  font-family: var(--font-mono), ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--bg-overlay); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--glow-cyan); opacity: 0.5; }
+
+/* Glassmorphism utility */
+.glass {
+  background: rgba(8, 34, 54, 0.72);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--border-subtle);
+}
+
+/* Glow text */
+.text-glow-cyan {
+  text-shadow: 0 0 12px rgba(0, 240, 212, 0.5);
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* NDCI chip canvas */
+.ndci-chip {
+  image-rendering: pixelated;
+}
