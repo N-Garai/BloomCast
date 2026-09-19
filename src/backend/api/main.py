@@ -13,12 +13,23 @@ from api import seed
 from api.db import insert_observation, list_observations, subscribe, record_influence
 from api.fhir import build_alert_bundle
 
-# Next.js static export lives next to the backend in the repo. Resolved from
-# this file's location so it works whether the service is started from the
-# repo root (Render) or from src/backend (local dev).
-_FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent.parent / "src" / "frontend" / "out"
-if not _FRONTEND_DIR.exists():
-    _FRONTEND_DIR = Path(__file__).resolve().parent.parent.parent / "frontend" / "out"
+# Next.js static export. Resolved by walking up from this file until a
+# `frontend/out` directory is found, so it works regardless of how deeply the
+# repo is nested in the deployment root — Render checks the project out one
+# level deeper than local dev, which broke the old fixed-depth path.
+_FRONTEND_DIR = None
+_candidate = Path(__file__).resolve().parent
+for _ in range(8):
+    _probe = _candidate / "frontend" / "out"
+    if _probe.is_dir():
+        _FRONTEND_DIR = _probe
+        break
+    _candidate = _candidate.parent
+if _FRONTEND_DIR is None:
+    raise RuntimeError(
+        "Could not find frontend/out directory — build the frontend first "
+        "(npm run build in src/frontend) or check the deployment layout."
+    )
 
 app = FastAPI(
     title="BloomCast API",
