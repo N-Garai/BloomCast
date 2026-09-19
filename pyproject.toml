@@ -1,0 +1,24 @@
+# BloomCast monorepo root.
+#
+# Layout (git root = this directory):
+#   src/backend    FastAPI app (api/) + ML pipeline (ml/, features/, ingestion/, shared/)
+#   src/frontend   Next.js static export (app/, components/)
+#   src/data       waterbodies / streams / replay events + generated seed
+#
+# Python deps: uv workspace, single member (src/backend owns the ML namespace).
+# Frontend deps: npm workspaces (src/frontend).
+# The two dependency graphs are deliberately separate — no tool spans both.
+
+[tool.uv]
+workspace = { members = ["src/backend"] }
+
+[tool.uv.sources]
+bloomcast-backend = { workspace = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

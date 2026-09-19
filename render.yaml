@@ -1,0 +1,55 @@
+# Render blueprint — BloomCast v2 (fully free tier, no credit card).
+#
+# Two services, both free:
+#   1. bloomcast-api   — FastAPI web service (free; spins down after 15 min idle)
+#   2. bloomcast-web   — Next.js static export (free static site; never sleeps)
+#
+# The nightly ML pipeline is NOT scheduled on Render (Cron Jobs are a paid
+# feature). It runs on GitHub Actions cron instead — see
+# .github/workflows/pipeline.yml
+#
+# Deploy: connect this repo to Render and use this render.yaml as a blueprint.
+services:
+  - type: web
+    name: bloomcast-api
+    env: python
+    plan: free
+    region: oregon
+    # uv reads the workspace member in src/backend.
+    buildCommand: cd src/backend && pip install -r requirements.txt
+    startCommand: cd src/backend && uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /v1/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.16"
+      # Seed data is committed to the repo, so the free instance needs no
+      # external database and no persistent disk.
+      - key: SEED_DIR
+        value: ../data/seed
+      - key: WATERBODY_FILE
+        value: ../data/waterbodies.geojson
+      - key: STREAM_FILE
+        value: ../data/stream_segments.geojson
+      - key: REPLAY_FILE
+        value: ../data/replay_events.json
+      - key: CORS_ORIGINS
+        value: "*"
+
+  - type: web
+    name: bloomcast-web
+    env: static
+    plan: free
+    region: oregon
+    buildCommand: cd src/frontend && npm install --legacy-peer-deps && npm run build
+    staticPublishPath: src/frontend/out
+    pullRequestPreviewsEnabled: false
+    autoDeploy: true
+    envVars:
+      # Point this at the deployed API URL before the first successful build.
+      - key: NEXT_PUBLIC_API_BASE
+        value: https://bloomcast-api.onrender.com
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

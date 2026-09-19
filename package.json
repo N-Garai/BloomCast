@@ -1,0 +1,23 @@
+{
+  "name": "bloomcast",
+  "private": true,
+  "version": "2.0.0",
+  "description": "Algal bloom early warning — 3-7 day forecasts, counterfactual planning, FHIR alerts",
+  "license": "Apache-2.0",
+  "scripts": {
+    "dev:web": "npm --workspace src/frontend run dev",
+    "dev:api": "cd src/backend && uvicorn api.main:app --reload --port 8000",
+    "build:web": "npm --workspace src/frontend run build",
+    "build:api": "cd src/backend && pip install -r requirements.txt",
+    "seed": "python scripts/generate_seed.py",
+    "verify-no-card": "bash scripts/verify-no-card.sh",
+    "test": "python -m pytest tests -q"
+  },
+  "workspaces": [
+    "src/frontend"
+  ],
+  "devDependencies": {
+    "typescript": "^5.5",
+    "@types/node": "^22"
+  }
+}

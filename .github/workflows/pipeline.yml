@@ -1,0 +1,53 @@
+name: BloomCast nightly pipeline
+
+on:
+  schedule:
+    # 02:00 UTC every night — free for public repos.
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: "Why this manual run"
+        required: false
+        default: "manual"
+
+# Render's free tier cannot run Cron Jobs (paid feature), so the nightly
+# Sentinel-2 + Open-Meteo refresh runs here instead. Render only serves.
+permissions:
+  contents: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install pipeline deps
+        run: |
+          pip install --upgrade pip
+          pip install -r src/backend/ml/inference/requirements-ci.txt
+
+      - name: Refresh features + regenerate forecasts
+        env:
+          COPERNICUS_USERNAME: ${{ secrets.COPERNICUS_USERNAME }}
+          COPERNICUS_PASSWORD: ${{ secrets.COPERNICUS_PASSWORD }}
+          OPEN_METEO_BASE: https://api.open-meteo.com
+        run: |
+          cd src/backend
+          python -m ml.inference.pipeline_nightly \
+            --src "$GITHUB_WORKSPACE" \
+            --out "$GITHUB_WORKSPACE/src/data/seed"
+
+      - name: Commit refreshed seed
+        run: |
+          git config user.name "bloomcast-bot"
+          git config user.email "bot@bloomcast.local"
+          git add src/data/seed || true
+          git commit -m "chore(seed): nightly forecast refresh [skip ci]" || echo "nothing changed"
+          git push

@@ -1,0 +1,36 @@
+# Dependencies
+node_modules
+.venv
+venv
+__pycache__
+*.pyc
+
+# Build output
+.next
+out
+dist
+.wrangler
+.turbo
+
+# Data artifacts
+*.parquet
+*.webp
+*.joblib
+*.onnx
+
+# Local runtime state
+*.db
+*.db-journal
+.env
+.env.local
+.DS_Store
+# backend local sqlite + satellite tile cache
+bloomcast.db
+src/backend/bloomcast.db
+
+# real ingestion output (regenerated nightly)
+src/data/ingested/
+
+# other
+roadmap/
+.kilo/

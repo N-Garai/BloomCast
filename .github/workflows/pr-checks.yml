@@ -1,0 +1,46 @@
+name: pr-checks
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+# Cheap gates on every PR: typecheck the frontend, import-check the backend,
+# run the data-integrity suite, and re-verify the free-tier invariant.
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend deps
+        run: |
+          pip install --upgrade pip
+          pip install -r src/backend/requirements.txt pytest
+      - name: Import check (module wiring)
+        run: |
+          python -c "import sys; sys.path.insert(0, 'src/backend'); import api; from api.main import app; print('routes:', len(app.routes))"
+      - name: Test suite
+        run: python -m pytest tests -q
+      - name: Free-tier audit
+        run: bash scripts/verify-no-card.sh
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install deps
+        run: cd src/frontend && npm install --legacy-peer-deps
+      - name: Build (static export)
+        run: cd src/frontend && npm run build
