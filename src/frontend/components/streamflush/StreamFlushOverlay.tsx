@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
-const API = process.env.NEXT_PUBLIC_API_BASE ?? "https://bloomcast-api.onrender.com";
+const API = process.env.NEXT_PUBLIC_API_BASE ?? "/v1";
 
 interface Segment {
   segment_id: string;

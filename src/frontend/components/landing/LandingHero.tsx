@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { motion, useScroll, useTransform } from "framer-motion";
+import { motion } from "framer-motion";
 import { Navbar } from "@/components/brand/Navbar";
 
 const STATS = [
@@ -13,15 +13,17 @@ const STATS = [
 
 export function LandingHero() {
   const ref = useRef<HTMLElement>(null);
-  const { scrollYProgress } = useScroll({ target: ref });
-  const opacity = useTransform(scrollYProgress, [0, 0.5], [1, 0]);
-  const y = useTransform(scrollYProgress, [0, 0.5], [0, 60]);
 
   return (
     <section ref={ref} className="relative min-h-screen flex flex-col">
       <Navbar />
       <div className="flex-1 flex flex-col items-center justify-center text-center px-6 pt-24 pb-16">
-        <motion.div style={{ opacity, y }} className="max-w-4xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+          className="max-w-4xl mx-auto"
+        >
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
