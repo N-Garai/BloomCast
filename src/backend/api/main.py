@@ -294,9 +294,10 @@ async def create_fhir_bundle(request: Request):
     return bundle
 
 
-@app.get("/")
-async def root():
-    return {"name": "BloomCast API", "version": __version__, "docs": "/docs"}
+# NOTE: no @app.get("/") route here. The StaticFiles mount at the bottom of
+# this file serves the frontend's index.html for "/", and FastAPI matches in
+# registration order — a route registered before the mount would shadow it
+# and return the JSON API banner instead of the site.
 
 
 class _HtmlRedirectMiddleware:
