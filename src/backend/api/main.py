@@ -98,8 +98,17 @@ async def serve_next_static(path: str):
     file_path = _FRONTEND_DIR / "_next" / "static" / path
     if not file_path.is_file():
         raise HTTPException(status_code=404, detail="Not found")
-    mime = mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
-    return FileResponse(file_path, media_type=mime)
+    if path.endswith(".css"):
+        media_type = "text/css"
+    elif path.endswith(".js"):
+        media_type = "application/javascript"
+    elif path.endswith(".svg"):
+        media_type = "image/svg+xml"
+    elif path.endswith(".html"):
+        media_type = "text/html"
+    else:
+        media_type = mimetypes.guess_type(str(file_path))[0] or "application/octet-stream"
+    return FileResponse(file_path, media_type=media_type)
 
 
 @app.get("/favicon.ico")
@@ -349,6 +358,14 @@ class _HtmlRedirectMiddleware:
         await self.app(scope, receive, send)
 
 
-# Registered LAST so every /v1/* route and the docs endpoints are served before
-# the static catch-all. Without this, the mount would shadow the API.
-app.mount("/", StaticFiles(directory=str(_FRONTEND_DIR), html=True), name="frontend")
+# Catch-all for frontend pages and static assets. Registered LAST so /v1/*
+# routes win. The _HtmlRedirectMiddleware rewrites clean URLs to .html before
+# this route sees the request.
+@app.get("/{full_path:path}")
+async def serve_frontend(request: Request, full_path: str):
+    if full_path.startswith("v1/") or full_path.startswith("_next/") or full_path.startswith("docs/"):
+        raise HTTPException(status_code=404, detail="Not found")
+    file_path = _FRONTEND_DIR / full_path
+    if full_path and file_path.is_file():
+        return FileResponse(file_path)
+    return FileResponse(_FRONTEND_DIR / "index.html")
