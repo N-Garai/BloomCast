@@ -396,9 +396,12 @@ async def alert_subscribe(request: Request):
         body = await request.json()
     except Exception:
         return JSONResponse({"error": "Invalid JSON"}, status_code=400)
-    if "email" not in body or "waterbody_id" not in body:
-        return JSONResponse({"error": "email and waterbody_id required"}, status_code=400)
-    token = subscribe(body)
+    if "waterbody_id" not in body:
+        return JSONResponse({"error": "waterbody_id required"}, status_code=400)
+    try:
+        token = subscribe(body)
+    except ValueError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=400)
     return JSONResponse({"status": "subscribed", "unsubscribe_token": token}, status_code=201)
 
 
@@ -414,14 +417,18 @@ async def alert_unsubscribe(request: Request):
 
 
 @app.get("/v1/alerts/check")
-async def alert_check(email: str):
+async def alert_check(email: str | None = None, subscriber_key: str | None = None):
     """Evaluate a subscriber's thresholds against current forecasts.
 
     Free-tier dispatch: instead of an email service, subscribers (and the
-    nightly job) read which thresholds are crossed right now.
+    nightly job) read which thresholds are crossed right now. The identity
+    key is anonymous (device ID); a legacy email works the same way.
     """
+    identity = subscriber_key or email
+    if not identity:
+        raise HTTPException(status_code=422, detail="subscriber_key required")
     out = []
-    for sub in subscriptions_for_email(email):
+    for sub in subscriptions_for_email(identity):
         fc = seed.get_forecast(sub["waterbody_id"]) or {}
         horizon = (fc.get("horizons") or {}).get(f"{sub['horizon_days']}d", {})
         p = horizon.get("p_bloom", fc.get("p_bloom"))
@@ -434,7 +441,7 @@ async def alert_check(email: str):
             "current_probability": p,
             "crossed": bool(p >= sub["threshold"]),
         })
-    return {"email": email, "alerts": out}
+    return {"subscriber": identity, "email": identity, "alerts": out}
 
 
 @app.post("/v1/fhir/bundle")

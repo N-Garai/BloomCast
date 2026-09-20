@@ -247,7 +247,8 @@ def per_waterbody_forecasts(lgbm=None, calibrator=None, ci_half: float = 0.12) -
     return out
 
 
-def train_and_predict():
+def _fit_all():
+    """Train everything in-process (real labels if present, else synthetic)."""
     frame = _load_training_frame()
     X, y, doy, wb_ids = frame["X"], frame["y"], frame["doy"], frame["wb_ids"]
     source = frame["source"]
@@ -306,14 +307,82 @@ def train_and_predict():
     sandbox = precompute_sandbox_sweeps(predict_fn, base.reshape(1, -1), "placeholder")
 
     return {
+        "lgbm": lgbm, "calibrator": calibrator, "cnn": cnn, "ens": ens,
+        "frame": frame, "oof": oof, "ci_half": ci_half,
+        "oof_auc": oof_auc, "oof_brier": oof_brier, "version": version,
+        "scorecard": scorecard, "sandbox": sandbox, "base": base, "clim": clim,
+        "p_bloom": p_bloom, "ci_lo": ci_lo, "ci_hi": ci_hi,
+        "top_features": top_features,
+    }
+
+
+def _load_bundle():
+    """Artifact-first bundle: Kaggle-exported model when valid, else None.
+
+    The nightly/CI job then becomes pure inference — no training, no labels,
+    no weather join. Falls back to _fit_all() on any problem.
+    """
+    from ml.training.artifacts import default_dir, load_artifacts
+
+    art = load_artifacts(default_dir(), FEATURE_NAMES)
+    if art is None:
+        return None
+    meta = art["meta"]
+    ens = Ensemble.__new__(Ensemble)
+    ens.meta = art["ensemble_meta"]
+    base = _profile_features()[3]
+
+    def predict_fn(arr):
+        out = []
+        for row in arr:
+            prob = float(_proba(art["lgbm"].model, row.reshape(1, -1))[0])
+            emb_row = art["cnn"].predict_embedding(_rows_to_sequences(row.reshape(1, -1), seed=99))
+            out.append(ens.predict_proba(prob, emb_row, row))
+        return np.array(out)
+
+    sandbox = precompute_sandbox_sweeps(predict_fn, base.reshape(1, -1), "placeholder")
+    sc = dict(meta["scorecard"])
+    return {
+        "lgbm": art["lgbm"], "calibrator": art["calibrator"], "cnn": art["cnn"],
+        "ens": ens,
+        "frame": {"source": meta["training_source"], "note": meta["training_note"]},
+        "oof": None, "ci_half": float(meta["ci_half"]),
+        "oof_auc": float(meta["oof_auc"]), "oof_brier": float(meta["oof_brier"]),
+        "version": meta["model_version"],
+        "scorecard": sc, "sandbox": sandbox, "base": base, "clim": None,
+        "p_bloom": float(meta["headline"]["p_bloom"]),
+        "ci_lo": float(meta["headline"]["ci_lo"]),
+        "ci_hi": float(meta["headline"]["ci_hi"]),
+        "top_features": [dict(f) for f in meta["headline"]["shap_top_features"]],
+        "baseline_climatology": float(meta["headline"]["baseline_climatology"]),
+    }
+
+
+def train_and_predict():
+    bundle = _load_bundle()
+    if bundle is None:
+        bundle = _fit_all()
+    lgbm = bundle["lgbm"]
+    p_bloom, ci_lo, ci_hi = bundle["p_bloom"], bundle["ci_lo"], bundle["ci_hi"]
+    top_features = bundle["top_features"]
+    scorecard, sandbox = bundle["scorecard"], bundle["sandbox"]
+    version, source = bundle["version"], bundle["frame"]["source"]
+    if bundle["clim"] is not None:
+        X, doy, wb_ids = bundle["frame"]["X"], bundle["frame"]["doy"], bundle["frame"]["wb_ids"]
+        base_clim = round(float(bundle["clim"].predict(
+            bundle["base"].reshape(1, -1), doy[:1], wb_ids[:1])[0]), 4)
+    else:
+        base_clim = bundle["baseline_climatology"]
+
+    return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "model_version": version,
         "training_source": source,
-        "training_note": frame["note"],
+        "training_note": bundle["frame"]["note"],
         "p_bloom": round(p_bloom, 4),
         "ci_lo": round(ci_lo, 4),
         "ci_hi": round(ci_hi, 4),
-        "baseline_climatology": round(float(clim.predict(base.reshape(1, -1), doy[:1], wb_ids[:1])[0]), 4),
+        "baseline_climatology": base_clim,
         "shap_top_features": top_features,
         "horizons": {
             "3d": {"p_bloom": round(max(0.0, p_bloom - 0.05), 4), "ci_lo": round(max(0.0, ci_lo - 0.05), 4), "ci_hi": round(min(1.0, ci_hi + 0.05), 4), "shap_top_features": top_features[:3]},

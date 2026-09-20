@@ -309,9 +309,75 @@ def test_alert_routes_reject_bad_input():
     assert client.get("/v1/alerts/check").status_code == 422
     assert client.post("/v1/alerts/unsubscribe", json={"token": "nope"}).status_code == 404
     assert client.post("/v1/citizen/validate", json={}).status_code == 400
-    assert client.get("/v1/alerts/check?email=nobody@example.org").json() == {
-        "email": "nobody@example.org", "alerts": [],
-    }
+    assert client.post("/v1/alerts/subscribe", json={"waterbody_id": "CH-ZUR-01"}).status_code == 400
+    d = client.get("/v1/alerts/check?email=nobody@example.org").json()
+    assert d["alerts"] == []
+
+
+# --- artifact round-trip (Kaggle flow) --------------------------------------
+
+def test_artifact_roundtrip_matches(tmp_path):
+    import numpy as np
+    from features.feature_store import FEATURE_NAMES
+    from ml.inference.predict import _fit_all
+    from ml.training import artifacts as A
+
+    bundle = _fit_all()
+    out = tmp_path / "art"
+    A.save_artifacts(
+        out,
+        lgbm_branch=bundle["lgbm"],
+        calibrator=bundle["calibrator"],
+        ensemble=bundle["ens"],
+        cnn=bundle["cnn"],
+        feature_names=FEATURE_NAMES,
+        meta={
+            "model_version": bundle["version"],
+            "training_source": bundle["frame"]["source"],
+            "training_note": bundle["frame"]["note"],
+            "ci_half": bundle["ci_half"],
+            "oof_auc": bundle["oof_auc"],
+            "oof_brier": bundle["oof_brier"],
+            "scorecard": bundle["scorecard"],
+            "headline": {
+                "p_bloom": bundle["p_bloom"],
+                "ci_lo": bundle["ci_lo"],
+                "ci_hi": bundle["ci_hi"],
+                "shap_top_features": bundle["top_features"],
+                "baseline_climatology": 0.3,
+            },
+        },
+    )
+    loaded = A.load_artifacts(out, FEATURE_NAMES)
+    assert loaded is not None
+    rng = np.random.default_rng(3)
+    Xt = rng.normal(0, 1, (20, 32)).astype(np.float32)
+    assert np.allclose(
+        bundle["lgbm"].model.predict_proba(Xt)[:, 1],
+        loaded["lgbm"].predict_proba(Xt)[:, 1],
+        atol=1e-9,
+    )
+    assert np.allclose(
+        bundle["calibrator"].transform([0.2, 0.5, 0.8]),
+        loaded["calibrator"].transform([0.2, 0.5, 0.8]),
+        atol=1e-12,
+    )
+    e1 = bundle["cnn"].predict_embedding(np.zeros((2, 30, 6), dtype=np.float32))
+    e2 = loaded["cnn"].predict_embedding(np.zeros((2, 30, 6), dtype=np.float32))
+    assert np.allclose(e1, e2, atol=1e-6)
+
+
+def test_committed_artifacts_are_real():
+    import json
+
+    meta_path = SRC / "backend" / "ml" / "artifacts" / "meta.json"
+    if not meta_path.exists():
+        return
+    meta = json.loads(meta_path.read_text())
+    assert meta.get("training_source") == "tick-tick-bloom", (
+        "committed model artifacts must be real-label trained — "
+        "see docs/kaggle-training.md"
+    )
 
 
 if __name__ == "__main__":

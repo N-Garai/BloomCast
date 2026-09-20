@@ -7,6 +7,7 @@ import { Footer } from "@/components/brand/Footer";
 import { ForecastCard } from "@/components/dashboard/ForecastCard";
 import { ForecastPipeline } from "@/components/dashboard/ForecastPipeline";
 import { LocationExplorer } from "@/components/dashboard/LocationExplorer";
+import { NdciExplainer } from "@/components/dashboard/NdciExplainer";
 import { RiskLegend } from "@/components/dashboard/RiskLegend";
 import { StreamFlushOverlay } from "@/components/streamflush/StreamFlushOverlay";
 import { ScrollReveal } from "@/components/motion/ScrollReveal";
@@ -140,8 +141,9 @@ export default function DashboardPage() {
               </ScrollReveal>
             ))}
           </div>
-          <div className="p-4 border-t border-border-subtle">
+          <div className="p-4 border-t border-border-subtle space-y-4">
             <RiskLegend />
+            <NdciExplainer waterbodyId={selected} waterbodyName={selectedWb?.name} />
           </div>
         </aside>
 

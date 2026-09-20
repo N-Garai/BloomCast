@@ -11,7 +11,6 @@ const ODORS = ["none", "earthy", "musty", "rotten-egg", "other"];
 export function ReportForm() {
   const [form, setForm] = useState({
     waterbody_id: "CH-ZUR-01",
-    observer_id: "",
     water_color: "green",
     scum_visible: false,
     odor: "none",
@@ -62,7 +61,6 @@ export function ReportForm() {
         body: JSON.stringify({
           observation_id,
           waterbody_id: form.waterbody_id,
-          observer_id: form.observer_id || undefined,
           observed_at: new Date().toISOString(),
           latitude: lat,
           longitude: lon,
@@ -108,31 +106,19 @@ export function ReportForm() {
 
   return (
     <form onSubmit={submit} className="glass rounded-2xl p-8 border border-border-subtle space-y-6">
-      <div className="grid md:grid-cols-2 gap-6">
-        <div>
-          <label className="block text-sm text-fg-secondary mb-2" htmlFor="wb">Waterbody</label>
-          <select
-            id="wb"
-            value={form.waterbody_id}
-            onChange={(e) => setForm({ ...form, waterbody_id: e.target.value })}
-            className="w-full bg-bg-deep border border-border-subtle rounded-lg px-3 py-2.5 text-fg-primary focus:border-glow-cyan outline-none"
-          >
-            {["CH-ZUR-01", "CH-GVA-01", "IT-MAG-01", "DE-CON-01", "IT-GAR-01", "IT-COM-01", "US-ERI-01", "IN-VEM-01"].map((id) => (
-              <option key={id} value={id}>{id}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm text-fg-secondary mb-2" htmlFor="email">Observer email (optional)</label>
-          <input
-            id="email"
-            type="email"
-            value={form.observer_id}
-            onChange={(e) => setForm({ ...form, observer_id: e.target.value })}
-            placeholder="you@example.org"
-            className="w-full bg-bg-deep border border-border-subtle rounded-lg px-3 py-2.5 text-fg-primary focus:border-glow-cyan outline-none"
-          />
-        </div>
+      <div>
+        <label className="block text-sm text-fg-secondary mb-2" htmlFor="wb">Waterbody</label>
+        <select
+          id="wb"
+          value={form.waterbody_id}
+          onChange={(e) => setForm({ ...form, waterbody_id: e.target.value })}
+          className="w-full bg-bg-deep border border-border-subtle rounded-lg px-3 py-2.5 text-fg-primary focus:border-glow-cyan outline-none"
+        >
+          {["CH-ZUR-01", "CH-GVA-01", "IT-MAG-01", "DE-CON-01", "IT-GAR-01", "IT-COM-01", "US-ERI-01", "IN-VEM-01"].map((id) => (
+            <option key={id} value={id}>{id}</option>
+          ))}
+        </select>
+        <p className="mt-1.5 text-xs text-fg-faint">Reports are anonymous — no account or email needed.</p>
       </div>
 
       <div>

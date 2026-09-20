@@ -127,9 +127,14 @@ def list_observations(wb_id: str | None = None, limit: int = 20) -> list:
 def subscribe(body: dict) -> str:
     import uuid
     token = str(uuid.uuid4())
+    # Anonymous-first: the subscriber key (device ID) identifies the
+    # subscription. A legacy email is accepted as the same kind of key.
+    identity = body.get("email") or body.get("subscriber_key")
+    if not identity:
+        raise ValueError("email or subscriber_key required")
     with get_session() as s:
         s.add(AlertSubscription(
-            email=body["email"],
+            email=identity,
             waterbody_id=body["waterbody_id"],
             threshold=body.get("threshold", 0.6),
             horizon_days=body.get("horizon_days", 5),

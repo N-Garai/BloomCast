@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
 import { API } from "@/lib/api";
@@ -14,7 +14,7 @@ interface CheckedAlert {
   crossed: boolean;
 }
 
-function ThresholdStatus({ email }: { email: string }) {
+function ThresholdStatus({ subscriberKey }: { subscriberKey: string }) {
   const [alerts, setAlerts] = useState<CheckedAlert[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,7 +23,7 @@ function ThresholdStatus({ email }: { email: string }) {
     setLoading(true);
     setError(null);
     try {
-      const r = await fetch(`${API}/v1/alerts/check?email=${encodeURIComponent(email)}`);
+      const r = await fetch(`${API}/v1/alerts/check?subscriber_key=${encodeURIComponent(subscriberKey)}`);
       const d = await r.json();
       if (!r.ok) throw new Error(d?.detail ?? `HTTP ${r.status}`);
       setAlerts(d.alerts ?? []);
@@ -52,7 +52,7 @@ function ThresholdStatus({ email }: { email: string }) {
       {loading && <Spinner label="Evaluating thresholds" />}
       {error && <p className="text-xs font-mono text-glow-red">{error}</p>}
       {alerts && alerts.length === 0 && (
-        <p className="text-sm text-fg-muted">No subscriptions for this email yet.</p>
+        <p className="text-sm text-fg-muted">No subscriptions on this device yet.</p>
       )}
       {alerts && alerts.length > 0 && (
         <div className="space-y-2">
@@ -85,8 +85,8 @@ function ThresholdStatus({ email }: { email: string }) {
 }
 
 export function AlertsClient() {
+  const [subscriberKey, setSubscriberKey] = useState("");
   const [form, setForm] = useState({
-    email: "",
     waterbody_id: "CH-ZUR-01",
     threshold: 0.6,
     horizon_days: 5,
@@ -95,6 +95,20 @@ export function AlertsClient() {
   const [status, setStatus] = useState<"idle" | "submitting" | "ok" | "error">("idle");
   const [token, setToken] = useState("");
 
+  useEffect(() => {
+    let key = "";
+    try {
+      key = localStorage.getItem("bc-subscriber") || "";
+      if (!key) {
+        key = (crypto.randomUUID ? crypto.randomUUID() : `sub-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+        localStorage.setItem("bc-subscriber", key);
+      }
+    } catch {
+      key = `sub-${Date.now()}`;
+    }
+    setSubscriberKey(key);
+  }, []);
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setStatus("submitting");
@@ -102,7 +116,7 @@ export function AlertsClient() {
       const res = await fetch(`${API}/v1/alerts/subscribe`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({ ...form, subscriber_key: subscriberKey }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "subscribe failed");
@@ -123,9 +137,9 @@ export function AlertsClient() {
       >
         <div className="font-display text-3xl font-bold text-glow-green mb-3">Subscribed</div>
         <p className="text-fg-secondary mb-6">
-          You will be alerted when the {form.horizon_days}-day bloom probability for{" "}
-          <span className="font-mono text-fg-primary">{form.waterbody_id}</span> crosses{" "}
-          {Math.round(form.threshold * 100)}%.
+          Tracking the {form.horizon_days}-day bloom probability for{" "}
+          <span className="font-mono text-fg-primary">{form.waterbody_id}</span> against{" "}
+          {Math.round(form.threshold * 100)}%. Check your thresholds below anytime.
         </p>
         <div className="rounded-lg bg-bg-deep/60 p-4 border border-border-faint text-xs text-fg-muted break-all">
           Unsubscribe token: <span className="font-mono text-fg-secondary">{token}</span>
@@ -137,7 +151,7 @@ export function AlertsClient() {
           Add another subscription
         </button>
       </motion.div>
-      <ThresholdStatus email={form.email} />
+      <ThresholdStatus subscriberKey={subscriberKey} />
       </div>
     );
   }
@@ -145,18 +159,7 @@ export function AlertsClient() {
   return (
     <div className="space-y-6">
     <form onSubmit={submit} className="glass rounded-2xl p-8 border border-border-subtle space-y-6">
-      <div>
-        <label className="block text-sm text-fg-secondary mb-2" htmlFor="aemail">Email</label>
-        <input
-          id="aemail"
-          type="email"
-          required
-          value={form.email}
-          onChange={(e) => setForm({ ...form, email: e.target.value })}
-          placeholder="you@example.org"
-          className="w-full bg-bg-deep border border-border-subtle rounded-lg px-3 py-2.5 text-fg-primary focus:border-glow-cyan outline-none"
-        />
-      </div>
+      <p className="text-xs text-fg-faint -mb-2">Anonymous — subscriptions live on this device, no email needed.</p>
       <div className="grid md:grid-cols-2 gap-6">
         <div>
           <label className="block text-sm text-fg-secondary mb-2" htmlFor="awb">Waterbody</label>
@@ -203,7 +206,7 @@ export function AlertsClient() {
           onChange={(e) => setForm({ ...form, fhir_export_consent: e.target.checked })}
           className="w-4 h-4 accent-glow-cyan"
         />
-        Include FHIR R4 bundle export in alert emails (GDPR consent)
+        Include FHIR R4 bundle export with triggered alerts (export consent)
       </label>
       <button
         type="submit"
@@ -213,7 +216,7 @@ export function AlertsClient() {
         {status === "submitting" ? "Subscribing…" : "Subscribe to alerts"}
       </button>
     </form>
-    {form.email && <ThresholdStatus email={form.email} />}
+    {subscriberKey && <ThresholdStatus subscriberKey={subscriberKey} />}
     </div>
   );
 }
