@@ -1,7 +1,9 @@
 # Lightweight CI dependency set for the nightly GitHub Actions pipeline.
 # Kept separate from the backend's runtime requirements.txt so the runner
 # stays small — the API does not need pandas/lightgbm to serve static JSON.
-numpy>=1.26,<3
+# numpy 2.x breaks the lightgbm/scipy wheels of this era — pin to 1.x
+# so the nightly seed job cannot die on an ABI mismatch.
+numpy>=1.26,<2
 pandas>=2.0,<3
 scipy>=1.11
 scikit-learn>=1.4

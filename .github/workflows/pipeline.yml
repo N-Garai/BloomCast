@@ -16,12 +16,23 @@ on:
 permissions:
   contents: write
 
+# Never run two refreshes concurrently — overlapping runs corrupt the seed.
+concurrency:
+  group: nightly-seed
+  cancel-in-progress: false
+
 jobs:
   refresh:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      # Deterministic hashing so identical inputs produce identical seed
+      # files. Quiet nights then produce zero diff and commit nothing.
+      PYTHONHASHSEED: "0"
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -34,20 +45,64 @@ jobs:
           pip install -r src/backend/ml/inference/requirements-ci.txt
 
       - name: Refresh features + regenerate forecasts
+        id: refresh
         env:
           COPERNICUS_USERNAME: ${{ secrets.COPERNICUS_USERNAME }}
           COPERNICUS_PASSWORD: ${{ secrets.COPERNICUS_PASSWORD }}
           OPEN_METEO_BASE: https://api.open-meteo.com
         run: |
           cd src/backend
-          python -m ml.inference.pipeline_nightly \
-            --src "$GITHUB_WORKSPACE" \
-            --out "$GITHUB_WORKSPACE/src/data/seed"
+          STATUS="failed"
+          for attempt in 1 2; do
+            if python -m ml.inference.pipeline_nightly \
+              --src "$GITHUB_WORKSPACE" \
+              --out "$GITHUB_WORKSPACE/src/data/seed"; then
+              STATUS="ok"
+              break
+            fi
+            echo "Attempt $attempt failed — retrying in 60s…"
+            sleep 60
+          done
+          if [ "$STATUS" = "failed" ]; then
+            echo "Seed regeneration failed twice — restoring seed dir, committing nothing."
+            git -C "$GITHUB_WORKSPACE" checkout -- src/data/seed || true
+          fi
+          echo "status=$STATUS" >> "$GITHUB_OUTPUT"
+
+      - name: Summarize run
+        if: always()
+        run: |
+          python - "$GITHUB_WORKSPACE/src/data/seed/pipeline_run.json" >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          import json, sys
+          try:
+              report = json.load(open(sys.argv[1]))
+          except Exception as exc:
+              print(f"Could not read pipeline report: {exc}")
+              sys.exit(0)
+          print(f"### Nightly refresh — {report.get('run_at', 'unknown time')}")
+          for step in report.get("steps", []):
+              icon = "✅" if step.get("status") in ("ok", "empty") else "⚠️"
+              extra = ""
+              if step.get("reason"):
+                  extra = f" — {step['reason']}"
+              elif step.get("rows") is not None:
+                  extra = f" — {step['rows']} rows"
+              print(f"- {icon} **{step['name']}**: {step['status']}{extra}")
+          EOF
 
       - name: Commit refreshed seed
+        if: steps.refresh.outputs.status == 'ok'
         run: |
           git config user.name "bloomcast-bot"
           git config user.email "bot@bloomcast.local"
-          git add src/data/seed || true
-          git commit -m "chore(seed): nightly forecast refresh [skip ci]" || echo "nothing changed"
+          # Commit ONLY when forecast payload actually changed. The run log
+          # (pipeline_run.json) always changes, so it is excluded — otherwise
+          # every night produces an empty churn commit.
+          if git diff --quiet -- src/data/seed ':(exclude)src/data/seed/pipeline_run.json'; then
+            echo "No forecast payload change — skipping commit."
+            exit 0
+          fi
+          git add src/data/seed
+          git commit -m "chore(seed): nightly forecast refresh [skip ci]"
+          git pull --rebase origin main
           git push
