@@ -12,7 +12,7 @@ export function FhirClient() {
   useEffect(() => {
     fetch(`${API}/v1/fhir/Communication/sample`)
       .then((r) => r.json())
-      .then(setBundle)
+      .then(d => setBundle(d))
       .catch(() => setBundle(null));
   }, []);
 

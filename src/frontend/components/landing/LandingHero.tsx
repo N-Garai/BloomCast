@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/brand/Navbar";
 
@@ -12,10 +11,8 @@ const STATS = [
 ];
 
 export function LandingHero() {
-  const ref = useRef<HTMLElement>(null);
-
   return (
-    <section ref={ref} className="relative min-h-screen flex flex-col">
+    <section className="relative min-h-screen flex flex-col">
       <Navbar />
       <div className="flex-1 flex flex-col items-center justify-center text-center px-6 pt-24 pb-16">
         <motion.div
@@ -24,16 +21,6 @@ export function LandingHero() {
           transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
           className="max-w-4xl mx-auto"
         >
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-            className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-glow-cyan/10 border border-glow-cyan/30 text-xs text-glow-cyan mb-6"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-glow-cyan animate-pulse" />
-            Operational · v2 pipeline online
-          </motion.div>
-
           <h1 className="font-display text-5xl md:text-7xl font-bold leading-tight tracking-tight">
             From seeing blooms{" "}
             <span className="text-gradient-to-r from-glow-cyan via-glow-green to-glow-cyan bg-clip-text">

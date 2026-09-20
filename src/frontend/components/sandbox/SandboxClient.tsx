@@ -22,7 +22,7 @@ export function SandboxClient() {
   useEffect(() => {
     fetch(`${API}/v1/sandbox/${wbId}`)
       .then((r) => r.json())
-      .then(setData)
+      .then(d => setData(d))
       .catch(() => setData(null));
   }, [wbId]);
 

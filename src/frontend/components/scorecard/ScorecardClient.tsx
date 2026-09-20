@@ -37,7 +37,7 @@ export function ScorecardClient() {
   useEffect(() => {
     fetch(`${API}/v1/scorecard`)
       .then((r) => r.json())
-      .then(setSc)
+      .then(d => setSc(d))
       .catch(() => setSc(null));
   }, []);
 

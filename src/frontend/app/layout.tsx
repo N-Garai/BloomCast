@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { AppShell } from "@/components/brand/AppShell";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -9,12 +10,17 @@ export const metadata: Metadata = {
     description: "From seeing blooms to seeing them coming.",
     type: "website",
   },
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <body className="font-sans antialiased">{children}</body>
+      <body className="font-body antialiased">
+        <AppShell>{children}</AppShell>
+      </body>
     </html>
   );
 }

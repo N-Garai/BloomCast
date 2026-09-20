@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { ScrollReveal, StaggerContainer, StaggerItem } from "@/components/motion/ScrollReveal";
 
 const FEATURES = [
   {
@@ -39,38 +39,30 @@ export function LandingFeatures() {
   return (
     <section className="py-24 px-6">
       <div className="max-w-6xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-16"
-        >
-          <h2 className="font-display text-4xl font-bold tracking-tight">
-            Prediction. Proof. Planning.
-          </h2>
-          <p className="mt-4 text-fg-secondary max-w-2xl mx-auto">
-            Three pillars that no competing free or paid tool delivers together.
-          </p>
-        </motion.div>
+        <ScrollReveal>
+          <div className="text-center mb-16">
+            <h2 className="font-display text-4xl font-bold tracking-tight">
+              Prediction. Proof. Planning.
+            </h2>
+            <p className="mt-4 text-fg-secondary max-w-2xl mx-auto">
+              Three pillars that no competing free or paid tool delivers together.
+            </p>
+          </div>
+        </ScrollReveal>
 
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {FEATURES.map((f, i) => (
-            <motion.div
-              key={f.title}
-              initial={{ opacity: 0, y: 20 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true }}
-              transition={{ delay: i * 0.08 }}
-              className="glass rounded-2xl p-6 border border-border-subtle hover:border-glow-cyan/40 hover:shadow-glow-sm transition-all duration-300"
-            >
-              <div className="text-3xl mb-4">{f.icon}</div>
-              <h3 className="font-display text-xl font-semibold text-fg-primary mb-2">
-                {f.title}
-              </h3>
-              <p className="text-sm text-fg-secondary leading-relaxed">{f.body}</p>
-            </motion.div>
+        <StaggerContainer className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {FEATURES.map((f) => (
+            <StaggerItem key={f.title}>
+              <div className="glass-card h-full rounded-2xl p-6 hover:shadow-glow-md transition-all duration-300">
+                <div className="text-3xl mb-4">{f.icon}</div>
+                <h3 className="font-display text-xl font-semibold text-fg-primary mb-2">
+                  {f.title}
+                </h3>
+                <p className="text-sm text-fg-secondary leading-relaxed">{f.body}</p>
+              </div>
+            </StaggerItem>
           ))}
-        </div>
+        </StaggerContainer>
       </div>
     </section>
   );

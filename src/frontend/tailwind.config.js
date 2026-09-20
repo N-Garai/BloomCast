@@ -3,11 +3,11 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        "bg-abyss": "#02060f",
-        "bg-deep": "#04111f",
-        "bg-surface": "#082236",
-        "bg-elevated": "#0d3050",
-        "bg-overlay": "#1a4a6e",
+        abyss: "#02060f",
+        deep: "#04111f",
+        surface: "#082236",
+        elevated: "#0d3050",
+        overlay: "#1a4a6e",
         "fg-primary": "#e8f4f8",
         "fg-secondary": "#9fb8c7",
         "fg-muted": "#5a7888",
@@ -25,23 +25,54 @@ module.exports = {
         "viz-citizen": "#c77dff",
       },
       fontFamily: {
-        display: ["var(--font-display)", "system-ui", "sans-serif"],
-        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
+        display: ['"Bebas Neue"', '"Instrument Sans"', "Manrope", "system-ui", "sans-serif"],
+        body: ["Manrope", "system-ui", "sans-serif"],
+        mono: ['"JetBrains Mono"', '"Fira Code"', "monospace"],
+        serif: ["Newsreader", "Georgia", "serif"],
       },
       boxShadow: {
-        "glow-sm": "0 0 12px -2px rgba(0, 240, 212, 0.25)",
-        "glow-md": "0 0 24px -4px rgba(0, 240, 212, 0.40)",
-        "glow-lg": "0 0 40px -6px rgba(255, 51, 85, 0.50)",
+        "glow-sm": "0 0 12px rgba(0, 240, 212, 0.25)",
+        "glow-md": "0 0 24px rgba(0, 240, 212, 0.4)",
+        "glow-lg": "0 0 48px rgba(0, 240, 212, 0.55)",
+        "glow-red": "0 0 24px rgba(255, 51, 85, 0.5)",
       },
-      animation: {
-        "pulse-slow": "pulse 3s ease-in-out infinite",
-        "fade-up": "fadeInUp 0.6s ease-out both",
-        "scroll-reveal": "scrollReveal 0.8s ease-out both",
+      maxWidth: {
+        content: "1280px",
+      },
+      zIndex: {
+        base: "0",
+        card: "10",
+        sticky: "20",
+        drawer: "30",
+        modal: "40",
+        toast: "50",
+        tooltip: "60",
       },
       keyframes: {
-        fadeInUp: { "0%": { opacity: 0, transform: "translateY(16px)" }, "100%": { opacity: 1, transform: "translateY(0)" } },
-        scrollReveal: { "0%": { opacity: 0, transform: "translateY(32px)" }, "100%": { opacity: 1, transform: "translateY(0)" } },
-        pulse: { "0%,100%": { opacity: 1 }, "50%": { opacity: 0.45 } },
+        pulseGlow: {
+          "0%, 100%": { opacity: "0.55" },
+          "50%": { opacity: "1" },
+        },
+        drift: {
+          "0%": { transform: "translate3d(0,0,0)" },
+          "50%": { transform: "translate3d(12px,-18px,0)" },
+          "100%": { transform: "translate3d(0,0,0)" },
+        },
+        caustic: {
+          "0%": { backgroundPosition: "0% 50%" },
+          "50%": { backgroundPosition: "100% 50%" },
+          "100%": { backgroundPosition: "0% 50%" },
+        },
+        shimmer: {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(100%)" },
+        },
+      },
+      animation: {
+        "pulse-glow": "pulseGlow 2.4s ease-in-out infinite",
+        drift: "drift 14s ease-in-out infinite",
+        caustic: "caustic 18s ease infinite",
+        shimmer: "shimmer 1.6s ease-in-out infinite",
       },
     },
   },

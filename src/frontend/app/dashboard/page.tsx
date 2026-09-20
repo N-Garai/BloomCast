@@ -7,6 +7,7 @@ import { Footer } from "@/components/brand/Footer";
 import { ForecastCard } from "@/components/dashboard/ForecastCard";
 import { RiskLegend } from "@/components/dashboard/RiskLegend";
 import { StreamFlushOverlay } from "@/components/streamflush/StreamFlushOverlay";
+import { ScrollReveal } from "@/components/motion/ScrollReveal";
 
 const Globe = lazy(() => import("@/components/three/Globe").then(m => ({ default: m.Globe })));
 
@@ -29,7 +30,22 @@ export default function DashboardPage() {
   useEffect(() => {
     fetch(`${API}/v1/waterbodies?limit=25`)
       .then(r => r.json())
-      .then(d => setWaterbodies(d.data ?? []))
+      .then(d => {
+        const features = (d.data ?? []).filter((f: any) => f?.type === "Feature");
+        const mapped = features.map((f: any) => {
+          const p = f.properties ?? {};
+          const g = f.geometry ?? {};
+          return {
+            id: p.id,
+            name: p.name,
+            region: p.region,
+            country: p.country,
+            centroid: g.coordinates ?? p.centroid ?? [0, 0],
+            type: p.type,
+          };
+        });
+        setWaterbodies(mapped);
+      })
       .catch(() => setWaterbodies([]));
   }, []);
 
@@ -39,23 +55,26 @@ export default function DashboardPage() {
       <div className="flex-1 flex">
         <aside className="w-80 border-r border-border-subtle bg-bg-deep/60 backdrop-blur-xl flex flex-col">
           <div className="p-4 border-b border-border-subtle">
-            <h2 className="font-display text-lg font-semibold">Forecast Map</h2>
-            <p className="text-xs text-fg-muted mt-1">25 pilot waterbodies · updated nightly</p>
+            <ScrollReveal>
+              <h2 className="font-display text-lg font-semibold">Forecast Map</h2>
+              <p className="text-xs text-fg-muted mt-1">25 pilot waterbodies · updated nightly</p>
+            </ScrollReveal>
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             {waterbodies.map((wb, i) => (
-              <motion.div
-                key={wb.id}
-                initial={{ opacity: 0, x: -16 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: i * 0.03 }}
-              >
-                <ForecastCard
-                  waterbody={wb}
-                  selected={selected === wb.id}
-                  onClick={() => setSelected(wb.id)}
-                />
-              </motion.div>
+              <ScrollReveal key={wb.id} delay={i * 0.03}>
+                <motion.div
+                  initial={{ opacity: 0, x: -16 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.03 }}
+                >
+                  <ForecastCard
+                    waterbody={wb}
+                    selected={selected === wb.id}
+                    onClick={() => setSelected(wb.id)}
+                  />
+                </motion.div>
+              </ScrollReveal>
             ))}
           </div>
           <div className="p-4 border-t border-border-subtle">
