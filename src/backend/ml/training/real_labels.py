@@ -92,26 +92,41 @@ def _sample_weather(lat: float, lon: float, date: str, fetch_fn) -> dict:
     }
 
 
-def _default_fetch(lat: float, lon: float, start: str, end: str) -> dict:
-    """Live Open-Meteo archive fetch (network)."""
+def _default_fetch(lat: float, lon: float, start: str, end: str,
+                   retries: int = 3) -> dict:
+    """Live Open-Meteo archive fetch (network) with bounded retries.
+
+    A 23k-sample join makes thousands of calls — without retries the normal
+    background rate of transient 5xx/timeouts silently eats rows as skips.
+    """
+    import time
+
     import httpx
 
-    r = httpx.get(
-        "https://archive-api.open-meteo.com/v1/archive",
-        params={
-            "latitude": lat,
-            "longitude": lon,
-            "start_date": start,
-            "end_date": end,
-            "hourly": "temperature_2m,wind_speed_10m,wind_direction_10m,precipitation,shortwave_radiation,cloud_cover,dewpoint_2m,pressure_msl",
-            "timezone": "UTC",
-            "wind_speed_unit": "ms",
-            "precipitation_unit": "mm",
-        },
-        timeout=45.0,
-    )
-    r.raise_for_status()
-    return r.json()
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "start_date": start,
+        "end_date": end,
+        "hourly": "temperature_2m,wind_speed_10m,wind_direction_10m,precipitation,shortwave_radiation,cloud_cover,dewpoint_2m,pressure_msl",
+        "timezone": "UTC",
+        "wind_speed_unit": "ms",
+        "precipitation_unit": "mm",
+    }
+    last: Exception | None = None
+    for attempt in range(retries + 1):
+        try:
+            r = httpx.get(
+                "https://archive-api.open-meteo.com/v1/archive",
+                params=params,
+                timeout=45.0,
+            )
+            r.raise_for_status()
+            return r.json()
+        except Exception as exc:  # noqa: BLE001 - retry, then propagate
+            last = exc
+            time.sleep(2.0 * (attempt + 1))
+    raise last  # type: ignore[misc]
 
 
 def _cache_key(lat: float, lon: float, date: str) -> str:
@@ -159,55 +174,78 @@ def build_weather_frame(rows: list, cache_path: str | Path | None = None,
         except Exception:
             return ("skip", r, None, None, None)
 
-    todo = [(i, r) for i, r in enumerate(rows)
-            if _cache_key(r["lat"], r["lon"], r["date"]) not in cache]
-    fetched: dict = {}
-    if todo:
-        with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
-            for i, res in zip([i for i, _ in todo],
-                              pool.map(lambda t: _one(t[1]), todo)):
-                fetched[i] = res
+    # Chunked fetch-assemble-flush: a crash or timeout keeps everything
+    # flushed so far, and a rerun resumes from the on-disk cache instead of
+    # starting over. Final output order always follows the input rows,
+    # regardless of fetch completion order.
+    FLUSH_EVERY = 500
 
-    X, S, y, doy, wids, dates = [], [], [], [], [], []
-    sev_list = []
-    skipped, new_cache_rows = 0, []
-    for i, r in enumerate(rows):
-        if i in fetched:
-            status, _, w, seq, fresh = fetched[i]
-        else:
-            status, _, w, seq, fresh = _one(r)  # cache hit path
-        if status != "ok":
-            skipped += 1
-            continue
-        if fresh:
-            new_cache_rows.append(fresh)
+    def assemble_parts(r, w, seq):
         static = {"area_km2": 5.0, "latitude": r["lat"], "longitude": r["lon"],
                   "impervious_proxy": 0.3}
-        X.append(build_tabular_features(w, {}, {}, static))
+        x = build_tabular_features(w, {}, {}, static)
         chans = np.zeros((SEQ_DAYS, 6), dtype=np.float32)
         chans[:, 2] = np.asarray(seq["temp"][:SEQ_DAYS], dtype=np.float32)
         chans[:, 3] = np.asarray(seq["wind"][:SEQ_DAYS], dtype=np.float32)
         chans[:, 4] = np.asarray(seq["precip"][:SEQ_DAYS], dtype=np.float32)
         chans[:, 5] = np.asarray(seq["solar"][:SEQ_DAYS], dtype=np.float32)
-        S.append(chans)
-        y.append(r["y"])
         try:
-            sev_list.append(int(float(r.get("severity", 3))))
+            sev = int(float(r.get("severity", 3)))
         except (TypeError, ValueError):
-            sev_list.append(3)
+            sev = 3
         dt = datetime.fromisoformat(r["date"])
-        doy.append(dt.timetuple().tm_yday)
-        wids.append(reg_id[r["region"]])
-        dates.append(r["date"])
+        return (x, chans, r["y"], sev, dt.timetuple().tm_yday,
+                reg_id[r["region"]], r["date"])
 
-    if cache_path and new_cache_rows:
-        cache_path.parent.mkdir(parents=True, exist_ok=True)
-        write_header = not cache_path.exists()
-        with open(cache_path, "a", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=["key", "weather", "sequence"])
-            if write_header:
-                w.writeheader()
-            w.writerows(new_cache_rows)
+    X, S, y, doy, wids, dates = [], [], [], [], [], []
+    sev_list = []
+    skipped = 0
+
+    todo_idx = [i for i, r in enumerate(rows)
+                if _cache_key(r["lat"], r["lon"], r["date"]) not in cache]
+    fetched_parts: dict = {}
+    for c in range(0, len(todo_idx), FLUSH_EVERY):
+        chunk = todo_idx[c:c + FLUSH_EVERY]
+        fresh_batch = []
+        if chunk:
+            with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
+                for i, res in zip(chunk, pool.map(lambda i: _one(rows[i]), chunk)):
+                    status, _, w, seq, fresh = res
+                    if status != "ok":
+                        fetched_parts[i] = None
+                        continue
+                    fetched_parts[i] = assemble_parts(rows[i], w, seq)
+                    if fresh:
+                        fresh_batch.append(fresh)
+        if cache_path and fresh_batch:
+            cache_path.parent.mkdir(parents=True, exist_ok=True)
+            header = not cache_path.exists() or cache_path.stat().st_size == 0
+            with open(cache_path, "a", newline="") as f:
+                dw = csv.DictWriter(f, fieldnames=["key", "weather", "sequence"])
+                if header:
+                    dw.writeheader()
+                dw.writerows(fresh_batch)
+
+    for i, r in enumerate(rows):
+        if i in fetched_parts:
+            parts = fetched_parts[i]
+            if parts is None:
+                skipped += 1
+                continue
+            x, s_row, yy, sev, dd, wid, date = parts
+        else:
+            status, _, w, seq, _ = _one(r)  # cache-hit path, no network
+            if status != "ok":
+                skipped += 1
+                continue
+            x, s_row, yy, sev, dd, wid, date = assemble_parts(r, w, seq)
+        X.append(x)
+        S.append(s_row)
+        y.append(yy)
+        sev_list.append(sev)
+        doy.append(dd)
+        wids.append(wid)
+        dates.append(date)
 
     return {
         "X": np.asarray(X, dtype=np.float32),

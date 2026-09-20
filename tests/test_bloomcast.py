@@ -233,12 +233,13 @@ def test_weather_frame_builder_shapes(monkeypatch, tmp_path):
     assert frame2["X"].shape == (12, 32)
 
 
-def test_train_selects_real_labels(monkeypatch):
+def test_train_selects_real_labels(monkeypatch, tmp_path):
     import ml.training.real_labels as rl
     from ml.inference import predict as P
 
     monkeypatch.setattr(rl, "_default_fetch", _stub_archive)
     monkeypatch.setenv("TICKTICKBLOOM_DIR", str(FIXTURE_DIR))
+    monkeypatch.setenv("BLOOMCAST_WEATHER_CACHE", str(tmp_path / "wc.csv"))
     frame = P._load_training_frame()
     assert frame["source"] == "tick-tick-bloom"
     assert frame["n"] == 12
@@ -542,6 +543,66 @@ def test_frame_prefers_competition(tmp_path):
         "z1,47.3,8.5,2016-06-01,train,midwest\n", encoding="utf-8")
     rows = load_training_frame(tmp_path)
     assert len(rows) == 1 and rows[0]["uid"] == "z1"
+
+
+# --- crash-safe training: resume from cache + optuna storage ---------------
+
+def test_weather_cache_resume(tmp_path):
+    import ml.training.real_labels as rl
+    from ingestion.drivendata_loader import load_training_frame
+
+    calls = []
+
+    def stub(lat, lon, start, end):
+        calls.append((round(lat, 2), start))
+        hours = 30 * 24
+        return {"hourly": {
+            "temperature_2m": [20.0] * hours,
+            "wind_speed_10m": [3.0] * hours,
+            "precipitation": [0.0] * hours,
+            "shortwave_radiation": [200.0] * hours,
+            "cloud_cover": [20.0] * hours,
+            "dewpoint_2m": [12.0] * hours,
+            "pressure_msl": [1013.0] * hours,
+        }}
+
+    rows = load_training_frame(
+        ROOT / "tests" / "fixtures" / "ticktickbloom_mini")
+    cache = tmp_path / "wc.csv"
+    f1 = rl.build_weather_frame(rows, cache_path=cache, fetch_fn=stub)
+    assert cache.exists() and len(f1["y"]) == 12
+
+    # Simulate a crash: keep only the first 6 cached rows, rebuild.
+    import csv as _csv
+    with open(cache, newline="") as f:
+        kept = list(_csv.DictReader(f))[:6]
+    with open(cache, "w", newline="") as f:
+        w = _csv.DictWriter(f, fieldnames=["key", "weather", "sequence"])
+        w.writeheader()
+        w.writerows(kept)
+    calls.clear()
+    f2 = rl.build_weather_frame(rows, cache_path=cache, fetch_fn=stub)
+    assert len(calls) == 6, f"expected only the 6 missing rows refetched, got {len(calls)}"
+    assert len(f2["y"]) == 12
+    assert f2["dates"] == sorted(f2["dates"])
+
+
+def test_optuna_resume(tmp_path):
+    optuna = pytest.importorskip("optuna")
+    import numpy as np
+    from ml.training.tuning import tune_lightgbm
+
+    rng = np.random.default_rng(0)
+    X = rng.normal(0, 1, (60, 32))
+    y = (rng.random(60) > 0.5).astype(int)
+    storage = f"sqlite:///{tmp_path}/opt.db"
+    r1 = tune_lightgbm(X, y, n_trials=2, n_splits=2, storage=storage)
+    r2 = tune_lightgbm(X, y, n_trials=2, n_splits=2, storage=storage)
+    study = optuna.load_study(study_name="bloomcast-lgbm", storage=storage)
+    # optimize() runs n_trials *additional* trials: 2+2 accumulate, nothing lost.
+    assert len(study.trials) == 4
+    assert study.best_value == min(r1["best_brier"], r2["best_brier"])
+    assert set(r2["params"]) >= {"n_estimators", "learning_rate", "num_leaves"}
 
 
 if __name__ == "__main__":

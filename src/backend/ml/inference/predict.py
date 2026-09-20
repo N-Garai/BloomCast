@@ -4,6 +4,8 @@ Runs in CI (GitHub Actions) only — never on the server. Writes the forecast
 JSON artifacts that the API then serves statically.
 """
 import sys, os, json
+from pathlib import Path
+
 import numpy as np
 from datetime import datetime, timezone
 
@@ -144,7 +146,10 @@ def _load_training_frame():
         data_dir = default_data_dir()
         if data_dir is not None:
             rows = load_training_frame(data_dir)
-            frame = build_weather_frame(rows, cache_path=data_dir / "weather_cache.csv")
+            _cache = (Path(os.environ["BLOOMCAST_WEATHER_CACHE"])
+                      if os.environ.get("BLOOMCAST_WEATHER_CACHE")
+                      else data_dir / "weather_cache.csv")
+            frame = build_weather_frame(rows, cache_path=_cache)
             if len(frame["y"]) >= 10 and 0.0 < float(frame["y"].mean()) < 1.0:
                 return {
                     "X": frame["X"], "S": frame["S"], "y": frame["y"],

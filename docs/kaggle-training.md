@@ -25,10 +25,11 @@ them — the backend and nightly job then do pure inference.**
    competition CSVs or `.sb` at any depth under `/kaggle/input`.
 3. **Training code access** — pick one:
    - *Repo public:* nothing to do, the notebook clones it.
-   - *Repo private:* set a `GITHUB_TOKEN` secret (classic PAT, scope
-     `public_repo`), or upload `src/backend/{ml,features,ingestion,shared}`
+   - *Repo private:* set a `GITHUB_TOKEN` secret (classic PAT, scope `repo` —
+     `public_repo` does NOT cover private clones; fine-grained PATs: contents
+     read-only on this repo), or upload `src/backend/{ml,features,ingestion,shared}`
      once as a second input dataset — the notebook detects and uses it, no
-     git involved.
+     git involved. **Revoke the token when done** — it exists only for the clone.
 4. **Run the notebook** `src/backend/ml/training/kaggle_train.ipynb` on Kaggle
    (GPU accelerator, internet ON). It trains, exports, and self-verifies.
    Expected final line: `reload OK — download /kaggle/working/bloomcast_artifacts …`
@@ -63,4 +64,7 @@ empty spectral block, outside pilot calibration).
 | Variable | Purpose |
 |---|---|
 | `TICKTICKBLOOM_DIR` | Competition CSVs (training time only) |
+| `CAML_DIR` | CAML `.sb` file location (alternative to the above) |
+| `CAML_MAX_DISTANCE_M` | Drop samples taken farther than this from water |
+| `BLOOMCAST_WEATHER_CACHE` | Override the weather-join cache path (training time) |
 | `BLOOMCAST_ARTIFACTS` | Override the artifacts directory (serving time) |

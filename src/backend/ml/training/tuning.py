@@ -24,8 +24,14 @@ def _suggest(trial):
 
 
 def tune_lightgbm(X: np.ndarray, y: np.ndarray, n_trials: int = 30,
-                  n_splits: int = 3, seed: int = 42) -> dict:
-    """Return the best params by time-series CV Brier score."""
+                  n_splits: int = 3, seed: int = 42,
+                  storage: str | None = None,
+                  study_name: str = "bloomcast-lgbm") -> dict:
+    """Return the best params by time-series CV Brier score.
+
+    Pass storage (e.g. "sqlite:////kaggle/working/optuna.db") to persist
+    trials: an interrupted run resumes instead of restarting.
+    """
     try:
         import optuna
     except ImportError as exc:
@@ -56,7 +62,9 @@ def tune_lightgbm(X: np.ndarray, y: np.ndarray, n_trials: int = 30,
         return float(np.mean(scores))
 
     sampler = optuna.samplers.TPESampler(seed=seed)
-    study = optuna.create_study(direction="minimize", sampler=sampler)
+    study = optuna.create_study(direction="minimize", sampler=sampler,
+                                storage=storage, study_name=study_name,
+                                load_if_exists=True)
     study.optimize(objective, n_trials=n_trials)
     best = dict(study.best_params)
     best.update({"random_state": 42, "verbose": -1})
