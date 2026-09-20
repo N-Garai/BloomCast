@@ -135,13 +135,14 @@ def _live_feature_row(lat: float, lon: float, fc: dict, arch: dict,
     """
     import numpy as np
 
-    from features.feature_store import build_tabular_features
+    from features.feature_store import build_tabular_features, wind_dir_circular_variance
 
     hourly = fc.get("hourly", {}) if isinstance(fc, dict) else {}
     temps = _num_list(hourly.get("temperature_2m", []))
     if not temps:
         return None
     winds = _num_list(hourly.get("wind_speed_10m", []))
+    wdirs = [v for v in (hourly.get("wind_direction_10m", []) or []) if v is not None]
     precs = _num_list(hourly.get("precipitation", []))
     solars = _num_list(hourly.get("shortwave_radiation", []))
     clouds = _num_list(hourly.get("cloud_cover", []))
@@ -160,7 +161,7 @@ def _live_feature_row(lat: float, lon: float, fc: dict, arch: dict,
         "temp_anomaly_7d": mean(last7) - (mean(arch_t) if arch_t else mean(last7)),
         "wind_speed_mean_3d": wmean3,
         "wind_speed_max_3d": max(winds[-72:] or [0.0]),
-        "wind_dir_variance_3d": 0.5,
+        "wind_dir_variance_3d": wind_dir_circular_variance(wdirs[-72:]) if wdirs else 0.5,
         "precip_sum_7d": sum(precs[-168:]),
         "precip_sum_3d": sum(precs[-72:]),
         "dry_days_7d": float(dry_days_7d),

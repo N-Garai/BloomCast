@@ -16,7 +16,11 @@ from pathlib import Path
 
 import numpy as np
 
-from features.feature_store import WEATHER_FEATURES, build_tabular_features
+from features.feature_store import (
+    WEATHER_FEATURES,
+    build_tabular_features,
+    wind_dir_circular_variance,
+)
 
 CACHE_NAME = "weather_cache.csv"
 
@@ -59,6 +63,8 @@ def _sample_weather(lat: float, lon: float, date: str, fetch_fn) -> dict:
         else:
             break
     gdd = sum(max(0.0, t - 10.0) for t in last7)
+    wdir = [v for v in (hourly.get("wind_direction_10m") or []) if v is not None]
+    dir_var = wind_dir_circular_variance(wdir[-72:]) if wdir else 0.5
     return {
         "weather": {
             "temp_mean_3d": mean(last3),
@@ -66,7 +72,7 @@ def _sample_weather(lat: float, lon: float, date: str, fetch_fn) -> dict:
             "temp_anomaly_7d": mean(last7) - mean(past30),
             "wind_speed_mean_3d": mean(winds[-3:]),
             "wind_speed_max_3d": max(winds[-3:] or [0.0]),
-            "wind_dir_variance_3d": 0.5,
+            "wind_dir_variance_3d": dir_var,
             "precip_sum_7d": sum(precs[-7:]),
             "precip_sum_3d": sum(precs[-3:]),
             "dry_days_7d": float(dry),
@@ -97,7 +103,7 @@ def _default_fetch(lat: float, lon: float, start: str, end: str) -> dict:
             "longitude": lon,
             "start_date": start,
             "end_date": end,
-            "hourly": "temperature_2m,wind_speed_10m,precipitation,shortwave_radiation,cloud_cover,dewpoint_2m,pressure_msl",
+            "hourly": "temperature_2m,wind_speed_10m,wind_direction_10m,precipitation,shortwave_radiation,cloud_cover,dewpoint_2m,pressure_msl",
             "timezone": "UTC",
             "wind_speed_unit": "ms",
             "precipitation_unit": "mm",
@@ -163,6 +169,7 @@ def build_weather_frame(rows: list, cache_path: str | Path | None = None,
                 fetched[i] = res
 
     X, S, y, doy, wids, dates = [], [], [], [], [], []
+    sev_list = []
     skipped, new_cache_rows = 0, []
     for i, r in enumerate(rows):
         if i in fetched:
@@ -184,6 +191,10 @@ def build_weather_frame(rows: list, cache_path: str | Path | None = None,
         chans[:, 5] = np.asarray(seq["solar"][:SEQ_DAYS], dtype=np.float32)
         S.append(chans)
         y.append(r["y"])
+        try:
+            sev_list.append(int(float(r.get("severity", 3))))
+        except (TypeError, ValueError):
+            sev_list.append(3)
         dt = datetime.fromisoformat(r["date"])
         doy.append(dt.timetuple().tm_yday)
         wids.append(reg_id[r["region"]])
@@ -202,6 +213,7 @@ def build_weather_frame(rows: list, cache_path: str | Path | None = None,
         "X": np.asarray(X, dtype=np.float32),
         "S": np.asarray(S, dtype=np.float32),
         "y": np.asarray(y, dtype=int),
+        "severity": np.asarray(sev_list, dtype=int),
         "doy": np.asarray(doy, dtype=int),
         "wb_ids": np.asarray(wids, dtype=int),
         "dates": dates,

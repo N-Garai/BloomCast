@@ -11,6 +11,7 @@ def generate_scorecard(
     model_version: str,
     sample_size: int,
     horizon_days: int,
+    per_region: dict | None = None,
 ) -> dict:
     from sklearn.metrics import roc_auc_score, brier_score_loss
     from sklearn.calibration import calibration_curve
@@ -24,7 +25,7 @@ def generate_scorecard(
         }
 
     prob_true, prob_pred = calibration_curve(y_true, preds, n_bins=8)
-    return {
+    out = {
         "model_version": model_version,
         "horizon_days": horizon_days,
         "sample_size": sample_size,
@@ -61,3 +62,6 @@ def generate_scorecard(
             "The Scorecard is updated nightly as new observations arrive." % max(1, sample_size)
         ),
     }
+    if per_region:
+        out["per_region"] = per_region
+    return out

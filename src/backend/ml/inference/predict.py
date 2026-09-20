@@ -148,7 +148,9 @@ def _load_training_frame():
             if len(frame["y"]) >= 10 and 0.0 < float(frame["y"].mean()) < 1.0:
                 return {
                     "X": frame["X"], "S": frame["S"], "y": frame["y"],
+                    "severity": frame["severity"],
                     "doy": frame["doy"], "wb_ids": frame["wb_ids"],
+                    "regions": frame["regions"],
                     "source": "tick-tick-bloom",
                     "n": len(frame["y"]),
                     "note": (
@@ -162,7 +164,8 @@ def _load_training_frame():
         print(f"[train] real-label path unavailable ({exc}); using synthetic fallback")
     X, y, doy, wb_ids = _synthetic_training_data()
     return {
-        "X": X, "S": _rows_to_sequences(X), "y": y, "doy": doy, "wb_ids": wb_ids,
+        "X": X, "S": _rows_to_sequences(X), "y": y, "severity": None,
+        "doy": doy, "wb_ids": wb_ids, "regions": None,
         "source": "synthetic-seed",
         "n": len(y),
         "note": (
@@ -173,20 +176,55 @@ def _load_training_frame():
     }
 
 
-def _fit_with_oof(X: np.ndarray, y: np.ndarray, n_splits: int = 5):
+def _fit_with_oof(X: np.ndarray, y: np.ndarray, n_splits: int = 5,
+                  sample_weight: np.ndarray | None = None):
     """TimeSeriesSplit out-of-fold predictions + model refit on full data."""
     from sklearn.model_selection import TimeSeriesSplit
 
     tscv = TimeSeriesSplit(n_splits=min(n_splits, max(2, len(y) // 20)))
     oof = np.full(len(y), np.nan)
     for tr, te in tscv.split(X):
-        fold = LightGBMBranch().fit(X[tr], y[tr])
+        fold = LightGBMBranch().fit(
+            X[tr], y[tr],
+            sample_weight=None if sample_weight is None else sample_weight[tr])
         oof[te] = _proba(fold.model, X[te])
     # Rows before the first split have no OOF prediction; fill with the mean.
     mean_oof = float(np.nanmean(oof)) if np.isfinite(oof).any() else 0.5
     oof = np.where(np.isfinite(oof), oof, mean_oof)
-    model = LightGBMBranch().fit(X, y)
+    model = LightGBMBranch().fit(X, y, sample_weight=sample_weight)
     return model, oof
+
+
+def per_region_metrics(y: np.ndarray, oof: np.ndarray,
+                       region_ids: np.ndarray, region_names: list) -> dict:
+    """Out-of-fold skill per competition region — the geographic-bias audit.
+
+    Region IDs never enter any fitted model (only the climatology baseline
+    sees them, by design); these numbers prove whether skill is evenly spread
+    or geography-dependent. AUC is null for single-class regions.
+    """
+    from sklearn.metrics import roc_auc_score, brier_score_loss
+
+    out = {}
+    for rid, name in enumerate(region_names):
+        mask = np.asarray(region_ids) == rid
+        if not mask.any():
+            continue
+        yt = np.asarray(y)[mask]
+        pt = np.asarray(oof)[mask]
+        auc = None
+        if len(np.unique(yt)) == 2:
+            try:
+                auc = float(roc_auc_score(yt, pt))
+            except Exception:
+                auc = None
+        out[str(name)] = {
+            "auc": auc,
+            "brier": float(brier_score_loss(yt, pt)),
+            "n": int(mask.sum()),
+            "positive_rate": round(float(yt.mean()), 4),
+        }
+    return out
 
 
 def empirical_ci_half(y: np.ndarray, oof: np.ndarray) -> float:
@@ -280,19 +318,29 @@ def _fit_all():
     source = frame["source"]
     version = "v2.1.0-real-labels" if source == "tick-tick-bloom" else "v2.1.0-synthetic-seed"
 
-    lgbm, oof = _fit_with_oof(X, y)
+    # Severity-weighted fitting: the binary label discards the 1-5 severity
+    # gradient, so severe blooms (5) count 1.5x and mild non-blooms (1) 0.7x.
+    # Mild on purpose — weights shape emphasis, not calibration.
+    sev = frame.get("severity")
+    weights = None
+    if sev is not None and len(sev) == len(y):
+        weights = 0.5 + np.asarray(sev, dtype=float) / 5.0
+
+    lgbm, oof = _fit_with_oof(X, y, sample_weight=weights)
     calibrator = calibrate(oof, y)
     ci_half = empirical_ci_half(y, oof)
     from sklearn.metrics import roc_auc_score, brier_score_loss
     oof_auc = float(roc_auc_score(y, oof))
     oof_brier = float(brier_score_loss(y, oof))
+    regions = frame.get("regions")
+    per_region = per_region_metrics(y, oof, wb_ids, regions) if regions else {}
 
     clim = ClimatologyBaseline().fit(X, y, doy, wb_ids)
     persist = PersistenceBaseline().fit(X, y)
     weather = WeatherOnlyBaseline().fit(X, y)
-    cnn = BloomCNN().fit(frame["S"], y)
+    cnn = BloomCNN().fit(frame["S"], y, sample_weight=weights)
     emb_train = cnn.predict_embedding(frame["S"])
-    ens = Ensemble().fit(oof, emb_train, X, y)
+    ens = Ensemble().fit(oof, emb_train, X, y, sample_weight=weights)
 
     # Representative feature vector: a low-moderate risk profile, so the
     # headline forecast and its counterfactuals spread across the risk scale.
@@ -308,6 +356,7 @@ def _fit_all():
     scorecard = generate_scorecard(
         y, oof, clim.predict(X, doy, wb_ids), persist.predict(X), weather.predict(X),
         model_version=version, sample_size=int(len(y)), horizon_days=5,
+        per_region=per_region or None,
     )
     scorecard["training_source"] = source
     scorecard["training_note"] = frame["note"]

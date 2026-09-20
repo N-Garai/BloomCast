@@ -20,6 +20,7 @@ interface Scorecard {
   delta_vs_weather_only: { brier: number; auc: number };
   calibration_method: string;
   limitations: string;
+  per_region?: Record<string, { auc: number | null; brier: number; n: number; positive_rate: number }>;
 }
 
 function Metric({ label, value, hint, delay = 0 }: { label: string; value: string; hint?: string; delay?: number }) {
@@ -165,6 +166,40 @@ export function ScorecardClient() {
           ))}
         </div>
       </div>
+
+      {sc.per_region && Object.keys(sc.per_region).length > 0 && (
+        <div className="glass rounded-2xl p-8 border border-glow-violet/30">
+          <h3 className="font-display text-lg font-semibold mb-2 tracking-wide">Skill by region</h3>
+          <p className="text-xs text-fg-muted mb-4">
+            Region IDs never enter any fitted model — only the climatology baseline sees
+            them. This table audits whether skill is evenly spread or geography-dependent.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-fg-muted text-xs uppercase tracking-wider">
+                  <th className="text-left pb-3">Region</th>
+                  <th className="text-right pb-3">Samples</th>
+                  <th className="text-right pb-3">AUC</th>
+                  <th className="text-right pb-3">Brier</th>
+                  <th className="text-right pb-3">Positive rate</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(sc.per_region).map(([name, m]) => (
+                  <tr key={name} className="border-t border-border-faint text-fg-secondary">
+                    <td className="py-3 capitalize">{name}</td>
+                    <td className="text-right font-mono">{m.n}</td>
+                    <td className="text-right font-mono">{m.auc == null ? "—" : m.auc.toFixed(3)}</td>
+                    <td className="text-right font-mono">{m.brier.toFixed(3)}</td>
+                    <td className="text-right font-mono">{(m.positive_rate * 100).toFixed(1)}%</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       <div className="glass rounded-2xl p-8 border border-glow-yellow/30">
         <h3 className="font-display text-lg font-semibold mb-3 text-glow-yellow">Honest limitations</h3>

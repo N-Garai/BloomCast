@@ -417,5 +417,66 @@ def test_explore_live_row_and_estimate():
     assert _model_estimate(row, None) is None
 
 
+# --- region policy + feature parity ------------------------------------------
+
+def test_wind_dir_circular_variance():
+    from features.feature_store import wind_dir_circular_variance as wv
+
+    assert wv([90.0] * 10) == 0.0
+    assert wv([0.0, 180.0]) == pytest.approx(1.0, abs=1e-9)
+    # Compass wrap: 359° and 1° are neighbors, not opposites.
+    assert wv([359.0, 1.0]) < 0.01
+    assert wv([]) == 0.0
+    assert 0.0 <= wv([10.0, 90.0, 200.0, 320.0]) <= 1.0
+
+
+def test_per_region_metrics():
+    import numpy as np
+    from ml.inference.predict import per_region_metrics
+
+    y = np.array([0, 1, 0, 1, 0, 1])
+    oof = np.array([0.2, 0.8, 0.4, 0.6, 0.1, 0.9])
+    out = per_region_metrics(y, oof, np.array([0, 0, 0, 1, 1, 1]), ["west", "midwest"])
+    assert set(out) == {"west", "midwest"}
+    assert out["west"]["n"] == 3 and out["midwest"]["n"] == 3
+    assert out["west"]["positive_rate"] == pytest.approx(1 / 3, abs=1e-3)
+    assert out["west"]["auc"] is not None
+    single = per_region_metrics(
+        np.array([0, 0, 0, 0]), np.array([0.2, 0.3, 0.1, 0.4]),
+        np.array([0, 0, 0, 0]), ["only"],
+    )
+    assert single["only"]["auc"] is None  # single-class guard
+
+
+def test_ensemble_ignores_raw_tabular():
+    """Anti-leakage lock: the meta-learner sees (lgbm_p, cnn_emb) only, so no
+    raw feature — region ID included — can steer it."""
+    import numpy as np
+    from ml.training.ensemble import Ensemble
+
+    rng = np.random.default_rng(0)
+    y = (rng.random(60) > 0.5).astype(int)
+    oof = rng.random(60)
+    emb = rng.normal(0, 1, (60, 16))
+    a = Ensemble().fit(oof, emb, np.zeros((60, 32)), y)
+    b = Ensemble().fit(oof, emb, rng.normal(0, 1, (60, 32)), y)
+    probe = (0.7, rng.normal(0, 1, 16), np.zeros(32))
+    assert a.predict_proba(*probe) == b.predict_proba(*probe)
+
+
+def test_severity_weighted_fit_runs():
+    import numpy as np
+    from ml.training.lightgbm_branch import LightGBMBranch
+    from ml.training.cnn_branch import BloomCNN
+
+    rng = np.random.default_rng(2)
+    X = rng.normal(0, 1, (40, 32)).astype(np.float32)
+    y = (rng.random(40) > 0.5).astype(int)
+    w = 0.5 + rng.integers(1, 6, 40) / 5.0
+    LightGBMBranch().fit(X, y, sample_weight=w)
+    BloomCNN().fit(rng.normal(0, 1, (40, 30, 6)).astype(np.float32), y,
+                   epochs=1, subsample=40, sample_weight=w)
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

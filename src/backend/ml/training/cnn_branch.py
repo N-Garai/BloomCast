@@ -69,7 +69,8 @@ class BloomCNN:
         return 1.0 / (1.0 + np.exp(-(emb @ self.Wo + self.bo))).ravel()
 
     def fit(self, X_seq: np.ndarray, y: np.ndarray, epochs: int = 3,
-            lr: float = 0.05, subsample: int = 1000, seed: int = 7):
+            lr: float = 0.05, subsample: int = 1000, seed: int = 7,
+            sample_weight=None):
         """Train the head + conv stack with full-batch SGD on BCE loss.
 
         Subsampled + few epochs by design: this is a small auxiliary branch,
@@ -81,13 +82,18 @@ class BloomCNN:
         n = min(subsample, len(X))
         idx = rng.choice(len(X), n, replace=False)
         X, y = X[idx], y[idx]
+        if sample_weight is not None:
+            sw = np.asarray(sample_weight, dtype=np.float32).ravel()[idx]
+            sw = sw * (n / sw.sum())
+        else:
+            sw = np.ones(n, dtype=np.float32)
         T = X.shape[1]
 
         for _ in range(epochs):
             emb, (xt, z1, h1, z2, h2, z3, h3) = self._forward_cache(X)
             logit = emb @ self.Wo + self.bo
             p = 1.0 / (1.0 + np.exp(-logit))
-            err = (p.ravel() - y) / n  # dBCE/dlogit, averaged
+            err = ((p.ravel() - y) * sw) / n  # dBCE/dlogit, averaged
 
             dWo = emb.T @ err[:, None]
             dbo = err.sum(keepdims=True)

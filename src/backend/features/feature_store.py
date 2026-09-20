@@ -1,6 +1,7 @@
 """Feature engineering for the BloomCast hybrid model."""
+import math
+
 import numpy as np
-import pandas as pd
 
 
 WEATHER_FEATURES = [
@@ -49,6 +50,30 @@ def build_tabular_features(
 
 
 FEATURE_NAMES = WEATHER_FEATURES + SPECTRAL_FEATURES + CITIZEN_FEATURES + STATIC_FEATURES
+
+
+def wind_dir_circular_variance(degs: list) -> float:
+    """Circular variance of wind directions in [0, 1].
+
+    0 = perfectly steady direction, 1 = uniformly scattered. Linear
+    variance is meaningless on a compass (359° and 1° are 2° apart, not
+    358°), so this uses the mean resultant length instead.
+    """
+    vals = []
+    for v in degs or []:
+        if v is None:
+            continue
+        try:
+            vals.append(float(v))
+        except (TypeError, ValueError):
+            continue
+    if not vals:
+        return 0.0
+    rad = [math.radians(v % 360.0) for v in vals]
+    mean_cos = sum(math.cos(a) for a in rad) / len(rad)
+    mean_sin = sum(math.sin(a) for a in rad) / len(rad)
+    resultant = math.sqrt(mean_cos ** 2 + mean_sin ** 2)
+    return max(0.0, min(1.0, 1.0 - resultant))
 
 
 def build_time_series(spectral_history: list, weather_history: list, n_timesteps: int = 30) -> np.ndarray:

@@ -16,11 +16,12 @@ class Ensemble:
     def __init__(self):
         self.meta = LogisticRegression(max_iter=1000)
 
-    def fit(self, lgbm_proba: np.ndarray, cnn_emb: np.ndarray, tabular: np.ndarray, y: np.ndarray):
+    def fit(self, lgbm_proba: np.ndarray, cnn_emb: np.ndarray, tabular: np.ndarray, y: np.ndarray,
+            sample_weight=None):
         lp = np.asarray(lgbm_proba).reshape(-1, 1)
         ce = np.asarray(cnn_emb).reshape(len(y), -1)
         X = np.hstack([lp, ce])
-        self.meta.fit(X, y)
+        self.meta.fit(X, y, sample_weight=sample_weight)
         return self
 
     def predict_proba(self, lgbm_proba: float, cnn_emb: np.ndarray, tabular: np.ndarray) -> float:

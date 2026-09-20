@@ -66,8 +66,8 @@ class LightGBMBranch:
             random_state=42, verbose=-1,
         )
 
-    def fit(self, X: np.ndarray, y: np.ndarray):
-        self.model.fit(X, y)
+    def fit(self, X: np.ndarray, y: np.ndarray, sample_weight=None):
+        self.model.fit(X, y, sample_weight=sample_weight)
         return self
 
     def predict_proba(self, X: np.ndarray) -> np.ndarray:

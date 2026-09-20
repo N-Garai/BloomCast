@@ -72,7 +72,14 @@ The published scorecard makes this distinction explicit.
 4. **StreamFlush is a heuristic.** The urban-stream nowcast is a risk score
    from rainfall × dry days × impervious surface, not a calibrated
    probability. It triggers citizen check-missions.
-5. **Synthetic seed.** MVP forecast numbers come from the deterministic
+5. **Region policy.** Competition labels cover four U.S. regions. Region IDs
+   never enter any fitted model — only the climatology baseline sees them, by
+   design (seasonal patterns genuinely differ by region). Latitude/longitude
+   remain as climate-zone features. Per-region skill is published on the
+   scorecard (`per_region`); a large inter-region gap means geography is doing
+   work the weather features should do, and must be investigated, not shipped
+   past. Pilots outside the U.S. training range are extrapolation.
+6. **Synthetic seed.** MVP forecast numbers come from the deterministic
    generator (see above), not from real satellite retrieval.
 
 ## Update cadence
