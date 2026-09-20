@@ -11,6 +11,7 @@ __version__ = "2.0.0"
 from shared.config import ALLOWED_ORIGIN
 from api import seed
 from api.db import insert_observation, list_observations, subscribe, record_influence
+from api.explore import explore_location
 from api.fhir import build_alert_bundle
 
 # Next.js static export. Resolved by walking up from this file until a
@@ -220,6 +221,18 @@ async def streamflush_segment(seg_id: str):
     if not sf:
         raise HTTPException(status_code=404, detail="Not found")
     return sf
+
+
+@app.get("/v1/explore")
+async def explore(lat: float, lon: float):
+    """Live weather-only assessment for ANY coordinates.
+
+    Fetches realtime Open-Meteo data at request time (no nightly job
+    involved) and scores wash-off risk with the StreamFlush heuristic.
+    This is a live nowcast, not a calibrated forecast — pilot waterbodies
+    (see nearest_waterbody) carry the full 3–7 day model outlook.
+    """
+    return await explore_location(lat, lon)
 
 
 @app.get("/v1/fhir/Communication/{alert_id}")

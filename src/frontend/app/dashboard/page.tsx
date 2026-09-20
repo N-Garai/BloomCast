@@ -6,6 +6,7 @@ import { Navbar } from "@/components/brand/Navbar";
 import { Footer } from "@/components/brand/Footer";
 import { ForecastCard } from "@/components/dashboard/ForecastCard";
 import { ForecastPipeline } from "@/components/dashboard/ForecastPipeline";
+import { LocationExplorer } from "@/components/dashboard/LocationExplorer";
 import { RiskLegend } from "@/components/dashboard/RiskLegend";
 import { StreamFlushOverlay } from "@/components/streamflush/StreamFlushOverlay";
 import { ScrollReveal } from "@/components/motion/ScrollReveal";
@@ -179,6 +180,13 @@ export default function DashboardPage() {
           )}
           <StreamFlushOverlay />
         </main>
+      </div>
+      <div className="border-t border-border-subtle bg-bg-abyss">
+        <div className="max-w-6xl mx-auto w-full px-4 md:px-6 py-8">
+          <ScrollReveal>
+            <LocationExplorer onSelectWaterbody={setSelected} />
+          </ScrollReveal>
+        </div>
       </div>
       <Footer />
     </div>

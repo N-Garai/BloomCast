@@ -127,5 +127,36 @@ def test_no_card_required_anywhere():
     assert r.returncode == 0, r.stdout + r.stderr
 
 
+# --- live explorer (network-free: validation + math only) --------------------
+
+def test_explore_rejects_bad_coordinates():
+    from fastapi.testclient import TestClient
+    from api.main import app
+
+    client = TestClient(app, raise_server_exceptions=False)
+    assert client.get("/v1/explore?lat=999&lon=8.5").status_code == 400
+    assert client.get("/v1/explore?lat=47.3&lon=999").status_code == 400
+    assert client.get("/v1/explore?lat=abc&lon=8.5").status_code == 422
+
+
+def test_explore_math_is_consistent():
+    from api.explore import _haversine_km, nearest_waterbody
+    from ingestion.streamflush import compute_streamflush_risk, risk_level
+
+    # Zurich is ~0 km from itself; Sydney is far from Zurich.
+    assert _haversine_km(47.37, 8.54, 47.37, 8.54) == pytest.approx(0.0, abs=1e-6)
+    assert _haversine_km(47.37, 8.54, -33.87, 151.21) > 15000
+
+    nb = nearest_waterbody(47.37, 8.54)
+    assert nb is not None and nb["id"] == "CH-ZUR-01"
+    assert nb["distance_km"] < 50
+
+    # Heuristic is monotone: more rain / more dry days => more risk.
+    low = compute_streamflush_risk(0.0, 0.0, 0.5)
+    high = compute_streamflush_risk(40.0, 10.0, 0.9)
+    assert 0.0 <= low < high <= 1.0
+    assert risk_level(low) == "low"
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
