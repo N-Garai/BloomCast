@@ -113,12 +113,17 @@ def _cache_key(lat: float, lon: float, date: str) -> str:
 
 
 def build_weather_frame(rows: list, cache_path: str | Path | None = None,
-                        fetch_fn=None) -> dict:
+                        fetch_fn=None, max_workers: int = 8) -> dict:
     """Build (X_tab, X_seq, y, doy, wb_ids, dates) from labeled rows.
 
     Skips rows whose weather cannot be fetched (logged count in meta).
     Spectral/citizen blocks are zeros; static block carries lat/lon.
+    Uncached fetches run in a thread pool (network-bound) while result order
+    follows the input rows, so date-sorted training output is preserved.
     """
+    import json as _json
+    from concurrent.futures import ThreadPoolExecutor
+
     fetch_fn = fetch_fn or _default_fetch
     cache: dict = {}
     cache_path = Path(cache_path) if cache_path else None
@@ -130,28 +135,45 @@ def build_weather_frame(rows: list, cache_path: str | Path | None = None,
     regions = sorted({r["region"] for r in rows})
     reg_id = {name: i for i, name in enumerate(regions)}
 
-    X, S, y, doy, wids, dates, skipped = [], [], [], [], [], [], 0
-    new_cache_rows = []
-    for r in rows:
+    def _one(r: dict):
         key = _cache_key(r["lat"], r["lon"], r["date"])
         hit = cache.get(key)
         try:
             if hit:
-                import json as _json
                 w = {k: float(v) for k, v in _json.loads(hit["weather"]).items()}
-                seq = {k: [float(v) for v in vals] for k, vals in _json.loads(hit["sequence"]).items()}
-            else:
-                got = _sample_weather(r["lat"], r["lon"], r["date"], fetch_fn)
-                w, seq = got["weather"], got["sequence"]
-                import json as _json
-                new_cache_rows.append({
-                    "key": key,
-                    "weather": _json.dumps(w),
-                    "sequence": _json.dumps(seq),
-                })
+                seq = {k: [float(v) for v in vals]
+                       for k, vals in _json.loads(hit["sequence"]).items()}
+                return ("ok", r, w, seq, None)
+            got = _sample_weather(r["lat"], r["lon"], r["date"], fetch_fn)
+            return ("ok", r, got["weather"], got["sequence"], {
+                "key": key,
+                "weather": _json.dumps(got["weather"]),
+                "sequence": _json.dumps(got["sequence"]),
+            })
         except Exception:
+            return ("skip", r, None, None, None)
+
+    todo = [(i, r) for i, r in enumerate(rows)
+            if _cache_key(r["lat"], r["lon"], r["date"]) not in cache]
+    fetched: dict = {}
+    if todo:
+        with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
+            for i, res in zip([i for i, _ in todo],
+                              pool.map(lambda t: _one(t[1]), todo)):
+                fetched[i] = res
+
+    X, S, y, doy, wids, dates = [], [], [], [], [], []
+    skipped, new_cache_rows = 0, []
+    for i, r in enumerate(rows):
+        if i in fetched:
+            status, _, w, seq, fresh = fetched[i]
+        else:
+            status, _, w, seq, fresh = _one(r)  # cache hit path
+        if status != "ok":
             skipped += 1
             continue
+        if fresh:
+            new_cache_rows.append(fresh)
         static = {"area_km2": 5.0, "latitude": r["lat"], "longitude": r["lon"],
                   "impervious_proxy": 0.3}
         X.append(build_tabular_features(w, {}, {}, static))
