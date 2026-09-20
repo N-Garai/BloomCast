@@ -23,6 +23,7 @@ from api.db import (
 )
 from api.explore import explore_location
 from api.fhir import build_alert_bundle
+from api.rationale import NoKeyError, generate_rationale
 
 # Next.js static export. Resolved by walking up from this file until a
 # `frontend/out` directory is found, so it works regardless of how deeply the
@@ -471,6 +472,28 @@ async def create_fhir_bundle(request: Request):
         shap_top_features=body.get("shap_top_features", []),
     )
     return bundle
+
+
+@app.post("/v1/rationale")
+async def rationale(request: Request):
+    """Optional plain-language narrative over an assessment (Gemini/Groq).
+
+    The LLM explains numbers the system already computed — it never scores.
+    No provider key configured means HTTP 501, never a silent failure.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    try:
+        text, provider = await generate_rationale(
+            body.get("provider", "auto"), body.get("context", {})
+        )
+    except NoKeyError as exc:
+        return JSONResponse({"error": str(exc)}, status_code=501)
+    except Exception as exc:  # noqa: BLE001 - upstream outage becomes a 502
+        return JSONResponse({"error": f"rationale provider failed: {exc}"}, status_code=502)
+    return {"rationale": text, "provider": provider}
 
 
 # NOTE: no @app.get("/") route here. The StaticFiles mount at the bottom of

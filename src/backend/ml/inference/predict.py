@@ -195,6 +195,24 @@ def empirical_ci_half(y: np.ndarray, oof: np.ndarray) -> float:
     return float(np.clip(1.28 * resid_std, 0.05, 0.30))
 
 
+def _band(p: float, row: np.ndarray, quantiles: dict | None, ci_half: float):
+    """Prediction band for a blended probability (PRD §7.4/§7.5).
+
+    Quantile regressors (trained on the feature row) give a non-parametric
+    interval that widens with feature uncertainty; the band always brackets
+    p. Falls back to the empirical OOF half-width.
+    """
+    if quantiles:
+        try:
+            r = np.asarray(row, dtype=np.float64).reshape(1, -1)
+            q_lo = float(np.asarray(quantiles["q05"].predict(r)).ravel()[0])
+            q_hi = float(np.asarray(quantiles["q95"].predict(r)).ravel()[0])
+            return max(0.0, min(q_lo, p)), min(1.0, max(q_hi, p))
+        except Exception:
+            pass
+    return max(0.0, p - ci_half), min(1.0, p + ci_half)
+
+
 def _profile_features() -> list:
     """One feature vector per waterbody profile, for diverse forecasts."""
     rng = np.random.default_rng(7)
@@ -214,19 +232,26 @@ def _profile_features() -> list:
     return rows
 
 
-def per_waterbody_forecasts(lgbm=None, calibrator=None, ci_half: float = 0.12) -> list:
+def per_waterbody_forecasts(lgbm=None, calibrator=None, ci_half: float = 0.12,
+                          quantiles: dict | None = None) -> list:
     """One calibrated forecast per waterbody profile.
 
     Used by scripts/generate_seed.py so each waterbody on the dashboard globe
     shows a genuinely different risk level, instead of one shared forecast.
     Profiles are illustrative vectors run through the fitted model — the
     training provenance (real vs synthetic) is attached to each output.
+    Prefers committed artifacts (no training) when available.
     """
     if lgbm is None or calibrator is None:
-        frame = _load_training_frame()
-        lgbm, oof = _fit_with_oof(frame["X"], frame["y"])
-        calibrator = calibrate(oof, frame["y"])
-        ci_half = empirical_ci_half(frame["y"], oof)
+        bundle = _load_bundle()
+        if bundle is not None:
+            lgbm, calibrator = bundle["lgbm"], bundle["calibrator"]
+            ci_half, quantiles = bundle["ci_half"], bundle.get("quantiles")
+        else:
+            frame = _load_training_frame()
+            lgbm, oof = _fit_with_oof(frame["X"], frame["y"])
+            calibrator = calibrate(oof, frame["y"])
+            ci_half = empirical_ci_half(frame["y"], oof)
 
     out = []
     for row in _profile_features():
@@ -237,11 +262,12 @@ def per_waterbody_forecasts(lgbm=None, calibrator=None, ci_half: float = 0.12) -
         # model probability so the dashboard shows a realistic spread of risk
         # levels while retaining the calibration information.
         p = 0.5 * p_iso + 0.5 * raw
+        lo, hi = _band(p, row, quantiles, ci_half)
         top = _shap_top(lgbm, row)
         out.append({
             "p_bloom": round(p, 4),
-            "ci_lo": round(max(0.0, p - ci_half), 4),
-            "ci_hi": round(min(1.0, p + ci_half), 4),
+            "ci_lo": round(lo, 4),
+            "ci_hi": round(hi, 4),
             "shap_top_features": top,
         })
     return out

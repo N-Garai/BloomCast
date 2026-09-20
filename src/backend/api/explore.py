@@ -125,6 +125,103 @@ def build_daily_outlook(
     return days
 
 
+def _live_feature_row(lat: float, lon: float, fc: dict, arch: dict,
+                      dry_days_7d: float):
+    """32-dim model input built from the live fetch (pure function).
+
+    Weather block is real; spectral/citizen blocks are zeros (no satellite
+    for arbitrary points); static block carries the coordinates. Returns None
+    when the forecast window has no usable temperatures.
+    """
+    import numpy as np
+
+    from features.feature_store import build_tabular_features
+
+    hourly = fc.get("hourly", {}) if isinstance(fc, dict) else {}
+    temps = _num_list(hourly.get("temperature_2m", []))
+    if not temps:
+        return None
+    winds = _num_list(hourly.get("wind_speed_10m", []))
+    precs = _num_list(hourly.get("precipitation", []))
+    solars = _num_list(hourly.get("shortwave_radiation", []))
+    clouds = _num_list(hourly.get("cloud_cover", []))
+    dews = _num_list(hourly.get("dewpoint_2m", []))
+    press = _num_list(hourly.get("pressure_msl", []))
+    arch_t = _num_list((arch.get("hourly", {}) if isinstance(arch, dict) else {}).get("temperature_2m", []))
+
+    def mean(a):
+        return sum(a) / len(a) if a else 0.0
+
+    last3, last7 = temps[-72:], temps[-168:]
+    wmean3 = mean(winds[-72:])
+    weather = {
+        "temp_mean_3d": mean(last3),
+        "temp_mean_7d": mean(last7),
+        "temp_anomaly_7d": mean(last7) - (mean(arch_t) if arch_t else mean(last7)),
+        "wind_speed_mean_3d": wmean3,
+        "wind_speed_max_3d": max(winds[-72:] or [0.0]),
+        "wind_dir_variance_3d": 0.5,
+        "precip_sum_7d": sum(precs[-168:]),
+        "precip_sum_3d": sum(precs[-72:]),
+        "dry_days_7d": float(dry_days_7d),
+        "solar_mean_3d": mean(solars[-72:]),
+        "cloud_cover_mean_3d": mean(clouds[-72:]),
+        "dewpoint_mean_3d": mean(dews[-72:]),
+        "pressure_trend_3d": (press[-1] - press[-72]) if len(press) >= 72 else 0.0,
+        "growing_degree_days": sum(max(0.0, t - 10.0) for t in last7),
+        "heat_wave_flag": 1.0 if mean(last7) > HEAT_WAVE_C else 0.0,
+    }
+    static = {"area_km2": 5.0, "latitude": lat, "longitude": lon,
+              "impervious_proxy": 0.3}
+    return build_tabular_features(weather, {}, {}, static)
+
+
+def _model_estimate(row, art) -> dict | None:
+    """Run the exported model on a live feature row (pure function).
+
+    Experimental by design: weather-only input with an empty spectral block,
+    outside pilot calibration. Always labeled as such — never presented as a
+    calibrated forecast.
+    """
+    if row is None or art is None:
+        return None
+    try:
+        from ml.inference.predict import _band, _shap_top
+
+        r = row.reshape(1, -1)
+        raw = float(art["lgbm"].predict_proba(r)[0][1])
+        p_iso = float(art["calibrator"].transform([raw])[0])
+        p = 0.5 * p_iso + 0.5 * raw
+        lo, hi = _band(p, row, art.get("quantiles"),
+                       float(art["meta"].get("ci_half", 0.3)))
+        drivers = _shap_top(art["lgbm"], row)[:3]
+        return {
+            "experimental": True,
+            "p_bloom": round(p, 4),
+            "ci_lo": round(lo, 4),
+            "ci_hi": round(hi, 4),
+            "drivers": drivers,
+            "model_version": art["meta"].get("model_version"),
+            "training_source": art["meta"].get("training_source"),
+            "caveats": (
+                "Weather-only input — spectral block empty, outside pilot "
+                "calibration. Indicative, not a forecast."
+            ),
+        }
+    except Exception:
+        return None
+
+
+def _load_serving_artifacts():
+    try:
+        from features.feature_store import FEATURE_NAMES
+        from ml.training.artifacts import default_dir, load_artifacts
+
+        return load_artifacts(default_dir(), FEATURE_NAMES)
+    except Exception:
+        return None
+
+
 async def explore_location(lat: float, lon: float) -> dict:
     """Fetch live weather for any point and score it. Raises HTTPException."""
     if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
@@ -220,6 +317,10 @@ async def explore_location(lat: float, lon: float) -> dict:
             "temp_mean_c": round(past_temp_mean, 1) if past_temp_mean is not None else None,
             "precip_sum_mm": round(sum(arch_precip), 1),
         },
+        "model_estimate": _model_estimate(
+            _live_feature_row(lat, lon, fc, arch, dry_days),
+            _load_serving_artifacts(),
+        ),
         "signals": signals,
         "nearest_waterbody": nearest_waterbody(lat, lon),
     }

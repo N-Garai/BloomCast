@@ -14,12 +14,15 @@ import os
 import sys
 from datetime import datetime, timezone
 
+import numpy as np
+
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(_ROOT, "src", "backend"))
 
-from ml.inference.predict import _fit_all  # noqa: E402
+from ml.inference.predict import _fit_all, _band  # noqa: E402
 from ml.training.artifacts import save_artifacts  # noqa: E402
 from features.feature_store import FEATURE_NAMES  # noqa: E402
+from ml.training.tuning import train_quantiles  # noqa: E402
 
 
 def main() -> int:
@@ -38,6 +41,13 @@ def main() -> int:
         print("or re-run with --allow-synthetic for a local-only smoke test.")
         return 2
 
+    quantiles = train_quantiles(bundle["frame"]["X"], bundle["frame"]["y"])
+    base = bundle["base"]
+    raw_head = float(bundle["lgbm"].model.predict_proba(
+        base.reshape(1, -1).astype(np.float64))[0][1])
+    p_head = float(bundle["calibrator"].transform([raw_head])[0])
+    lo_head, hi_head = _band(p_head, base, quantiles, bundle["ci_half"])
+
     meta = {
         "model_version": bundle["version"],
         "training_source": source,
@@ -48,9 +58,9 @@ def main() -> int:
         "oof_brier": bundle["oof_brier"],
         "scorecard": json.loads(json.dumps(bundle["scorecard"], default=float)),
         "headline": {
-            "p_bloom": bundle["p_bloom"],
-            "ci_lo": bundle["ci_lo"],
-            "ci_hi": bundle["ci_hi"],
+            "p_bloom": p_head,
+            "ci_lo": lo_head,
+            "ci_hi": hi_head,
             "shap_top_features": bundle["top_features"],
             "baseline_climatology": round(float(bundle["clim"].predict(
                 bundle["base"].reshape(1, -1),
@@ -66,6 +76,7 @@ def main() -> int:
         cnn=bundle["cnn"],
         feature_names=FEATURE_NAMES,
         meta=meta,
+        quantiles=quantiles,
     )
     print(f"artifacts exported to {args.out} (source={source})")
     return 0

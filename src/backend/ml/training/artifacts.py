@@ -26,6 +26,8 @@ CALIBRATOR_FILE = "calibrator.json"
 ENSEMBLE_FILE = "ensemble.npz"
 CNN_FILE = "cnn.npz"
 META_FILE = "meta.json"
+Q05_FILE = "quantile_q05.txt"
+Q95_FILE = "quantile_q95.txt"
 
 
 def default_dir() -> Path:
@@ -41,10 +43,16 @@ def default_dir() -> Path:
 
 
 def save_artifacts(path: str | Path, *, lgbm_branch, calibrator, ensemble, cnn,
-                   feature_names: list, meta: dict) -> Path:
+                   feature_names: list, meta: dict, quantiles: dict | None = None) -> Path:
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
     lgbm_branch.model.booster_.save_model(str(path / MODEL_FILE))
+    if quantiles:
+        quantiles["q05"].booster_.save_model(str(path / Q05_FILE))
+        quantiles["q95"].booster_.save_model(str(path / Q95_FILE))
+        meta = {**meta, "has_quantiles": True}
+    else:
+        meta = {**meta, "has_quantiles": False}
     with open(path / CALIBRATOR_FILE, "w") as f:
         json.dump({
             "x": [float(v) for v in np.asarray(calibrator.X_thresholds_).ravel()],
@@ -124,11 +132,18 @@ def load_artifacts(path: str | Path, expected_features: list) -> dict | None:
         for k in ("W1", "W2", "W3", "b1", "b2", "b3", "Wo", "bo"):
             setattr(cnn, k, np.asarray(w[k], dtype=np.float32))
         cnn.n_timesteps, cnn.n_channels, cnn.embedding_dim = 30, 6, 16
+        quantiles = None
+        if meta.get("has_quantiles") and (path / Q05_FILE).exists() and (path / Q95_FILE).exists():
+            quantiles = {
+                "q05": lgb.Booster(model_file=str(path / Q05_FILE)),
+                "q95": lgb.Booster(model_file=str(path / Q95_FILE)),
+            }
         return {
             "lgbm": _BoosterShim(booster),
             "calibrator": calibrator,
             "ensemble_meta": meta_lr,
             "cnn": cnn,
+            "quantiles": quantiles,
             "meta": meta,
         }
     except Exception as exc:  # noqa: BLE001 - corrupt artifacts must not break serving

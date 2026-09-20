@@ -380,5 +380,42 @@ def test_committed_artifacts_are_real():
     )
 
 
+# --- rationale (no keys configured → honest 501) ----------------------------
+
+def test_rationale_needs_keys(monkeypatch):
+    import api.rationale as R
+    from fastapi.testclient import TestClient
+    from api.main import app
+
+    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    prompt = R.build_prompt({"latitude": 1.0, "wash_off": {"risk_score": 0.7}})
+    assert "0.7" in prompt and "1.0" in prompt
+    client = TestClient(app, raise_server_exceptions=False)
+    r = client.post("/v1/rationale", json={"context": {"latitude": 1.0}})
+    assert r.status_code == 501
+
+
+def test_explore_live_row_and_estimate():
+    import numpy as np
+    from api.explore import _live_feature_row, _model_estimate
+
+    fc = {"hourly": {
+        "temperature_2m": [22.0] * 168,
+        "wind_speed_10m": [2.0] * 168,
+        "precipitation": [0.0] * 168,
+        "shortwave_radiation": [200.0] * 168,
+        "cloud_cover": [10.0] * 168,
+        "dewpoint_2m": [12.0] * 168,
+        "pressure_msl": [1013.0] * 168,
+    }}
+    arch = {"hourly": {"temperature_2m": [18.0] * 720}}
+    row = _live_feature_row(47.38, 8.54, fc, arch, 5.0)
+    assert row.shape == (32,)
+    assert row[0] == 22.0 and row[2] == 4.0  # temp mean + anomaly
+    assert _live_feature_row(0, 0, {"hourly": {}}, {}, 0.0) is None
+    assert _model_estimate(row, None) is None
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

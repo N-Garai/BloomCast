@@ -26,6 +26,16 @@ interface ExploreResult {
     precip_sum_mm: number;
   };
   signals: string[];
+  model_estimate?: {
+    experimental: boolean;
+    p_bloom: number;
+    ci_lo: number;
+    ci_hi: number;
+    drivers: Array<{ feature: string; human: string; shap_value: number; method?: string }>;
+    model_version?: string;
+    training_source?: string;
+    caveats: string;
+  } | null;
   daily_outlook?: Array<{
     date: string;
     risk_score: number;
@@ -127,6 +137,9 @@ export function LocationExplorer({
   const [step, setStep] = useState(0);
   const [result, setResult] = useState<ExploreResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rationale, setRationale] = useState<string | null>(null);
+  const [rationaleBusy, setRationaleBusy] = useState(false);
+  const [rationaleError, setRationaleError] = useState<string | null>(null);
 
   useEffect(() => {
     if (phase !== "working") return;
@@ -146,6 +159,8 @@ export function LocationExplorer({
     setStep(0);
     setError(null);
     setResult(null);
+    setRationale(null);
+    setRationaleError(null);
     try {
       // Realtime by design: every selection triggers a fresh live fetch —
       // no cache, no nightly job involved.
@@ -157,6 +172,35 @@ export function LocationExplorer({
     } catch (e: any) {
       setError(e?.message ?? "Live weather unavailable — try again in a minute.");
       setPhase("error");
+    }
+  };
+
+  const explain = async () => {
+    if (!result) return;
+    setRationaleBusy(true);
+    setRationaleError(null);
+    try {
+      const r = await fetch(`${API}/v1/rationale`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          context: {
+            latitude: result.latitude,
+            longitude: result.longitude,
+            wash_off: result.wash_off,
+            week_ahead: result.week_ahead,
+            signals: result.signals,
+            model_estimate: result.model_estimate,
+          },
+        }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d?.error ?? `HTTP ${r.status}`);
+      setRationale(d.rationale);
+    } catch (e: any) {
+      setRationaleError(String(e?.message ?? e));
+    } finally {
+      setRationaleBusy(false);
     }
   };
 
@@ -383,6 +427,45 @@ export function LocationExplorer({
               {w.impervious_note.toLowerCase()}.
             </p>
 
+            {result.model_estimate ? (
+              <div className="mt-4 rounded-xl border border-glow-violet/40 bg-glow-violet/5 p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded border border-glow-violet/50 text-glow-violet uppercase tracking-widest">
+                    Model estimate · experimental
+                  </span>
+                  {result.model_estimate.training_source && (
+                    <span className="text-[10px] font-mono text-fg-faint">
+                      {result.model_estimate.training_source} · {result.model_estimate.model_version}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="font-display text-3xl font-bold tabular text-glow-violet">
+                    {Math.round(result.model_estimate.p_bloom * 100)}%
+                  </span>
+                  <span className="text-xs font-mono text-fg-muted">
+                    CI {Math.round(result.model_estimate.ci_lo * 100)}–{Math.round(result.model_estimate.ci_hi * 100)}%
+                  </span>
+                </div>
+                <div className="mt-2 space-y-1">
+                  {result.model_estimate.drivers.map((d) => (
+                    <div key={d.feature} className="flex items-center gap-2 text-xs">
+                      <span className="text-fg-secondary flex-1">{d.human}</span>
+                      <span className="font-mono text-fg-muted">
+                        {d.shap_value > 0 ? "+" : ""}{(d.shap_value * 100).toFixed(1)}%
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-2 text-[11px] text-fg-faint">{result.model_estimate.caveats}</p>
+              </div>
+            ) : (
+              <p className="mt-3 text-[11px] text-fg-faint">
+                No exported model on this deployment yet — the model estimate appears
+                once real-label artifacts are committed (docs/kaggle-training.md).
+              </p>
+            )}
+
             {result.nearest_waterbody && (
               <button
                 onClick={() => onSelectWaterbody?.(result.nearest_waterbody!.id)}
@@ -391,6 +474,28 @@ export function LocationExplorer({
                 Open calibrated forecast: {result.nearest_waterbody.name} ({result.nearest_waterbody.distance_km} km away) →
               </button>
             )}
+
+            <div className="mt-4">
+              <button
+                onClick={explain}
+                disabled={rationaleBusy}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-lg glass border border-border-subtle text-fg-secondary text-sm hover:text-glow-cyan hover:border-glow-cyan/40 transition-colors disabled:opacity-50"
+              >
+                {rationaleBusy ? "Explaining…" : "✦ Explain with AI"}
+              </button>
+              {rationaleError && (
+                <p className="mt-2 text-xs font-mono text-fg-muted">{rationaleError}</p>
+              )}
+              {rationale && (
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-2 rounded-xl border border-glow-cyan/25 bg-glow-cyan/5 p-4 text-sm text-fg-secondary leading-relaxed"
+                >
+                  {rationale}
+                </motion.div>
+              )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
