@@ -1,9 +1,10 @@
-# Training on real labels (Tick Tick Bloom)
+# Training on real labels (Tick Tick Bloom / CAML)
 
 By default BloomCast trains on a synthetic stand-in (see `model-card.md`).
-To train on real in-situ cyanobacteria labels:
+To train on real in-situ cyanobacteria labels, provide **either** input —
+they carry the same underlying labels:
 
-## 1. Download the competition data (login required, do not redistribute)
+## Option A — competition CSVs (preferred, exact schema)
 
 1. Create a free account at https://www.drivendata.org/competitions/143/tick-tick-bloom/
 2. Download `train_labels.csv` (`uid, severity 1–5, density`) and `metadata.csv`
@@ -11,8 +12,25 @@ To train on real in-situ cyanobacteria labels:
 3. Place both in `src/data/ticktickbloom/` (git-ignored), or anywhere and set:
 
 ```bash
-export TICKTICKBLOOM_DIR=/path/to/ticktickbloom
+export TICKTICKBLOOM_DIR=/path/to/csvs
 ```
+
+## Option B — CAML SeaBASS file (same labels, one table)
+
+The competition labels derive from the **CAML dataset** (23,570 in-situ points,
+U.S. inland waters 2013–2021, doi:10.5067/SeaBASS/CAML/DATA001). If you have
+the `.sb` data file (or a CAML csv), drop it in the data dir instead:
+
+```bash
+export CAML_DIR=/path/to/caml
+# optional quality filter — drop samples taken far from water (manual Table 4):
+export CAML_MAX_DISTANCE_M=1000
+```
+
+Columns understood: `uid, data_provider, region, latitude, longitude, date,
+density_cells_per_ml, severity, distance_to_water_m`. Missing severities are
+derived from density via the same bands; when both formats are present, the
+competition CSVs win.
 
 Severity bands (cells/mL): 1:<20k · 2:20k–100k · 3:100k–1M · 4:1M–10M · 5:≥10M.
 BloomCast binarizes at severity ≥ 3 (`ingestion/drivendata_loader.py`).

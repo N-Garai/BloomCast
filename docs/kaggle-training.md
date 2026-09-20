@@ -15,29 +15,25 @@ them — the backend and nightly job then do pure inference.**
 
 ## Steps
 
-1. **Prepare the data** (one time, on your machine):
-   - Download `train_labels.csv` + `metadata.csv` from the Tick Tick Bloom
-     competition page (free DrivenData login; do not redistribute).
-2. **Kaggle notebook** (or any machine with the CSVs):
-   ```python
-   # Cell 1 — get the code
-   !git clone https://github.com/N-Garai/BloomCast.git
-   %cd BloomCast
-   !pip install -q lightgbm scikit-learn pandas numpy httpx scipy
-   ```
-   ```python
-   # Cell 2 — point at the data (upload CSVs via Kaggle Datasets,
-   # or attach them to the notebook as inputs)
-   import os
-   os.environ["TICKTICKBLOOM_DIR"] = "/kaggle/input/ticktickbloom"
-   ```
-   ```bash
-   # Cell 3 (! shell) — train + export
-   !python scripts/export_artifacts.py
-   ```
-   Expected output: `artifacts exported to src/backend/ml/artifacts
+1. **Get the labels** (one time) — either:
+   - competition CSVs (`train_labels.csv` + `metadata.csv`, free DrivenData
+     login at drivendata.org/competitions/143, do not redistribute), or
+   - the CAML SeaBASS `.sb` data file (doi:10.5067/SeaBASS/CAML/DATA001 —
+     same underlying labels, public, no login). Optional: `CAML_MAX_DISTANCE_M=1000`
+     drops samples taken far from water.
+2. **Attach the data** as a Kaggle input dataset — the notebook finds
+   competition CSVs or `.sb` at any depth under `/kaggle/input`.
+3. **Training code access** — pick one:
+   - *Repo public:* nothing to do, the notebook clones it.
+   - *Repo private:* set a `GITHUB_TOKEN` secret (classic PAT, scope
+     `public_repo`), or upload `src/backend/{ml,features,ingestion,shared}`
+     once as a second input dataset — the notebook detects and uses it, no
+     git involved.
+4. **Run the notebook** `src/backend/ml/training/kaggle_train.ipynb` on Kaggle
+   (GPU accelerator, internet ON). It trains, exports, and self-verifies.
+   Expected final line: `reload OK — download /kaggle/working/bloomcast_artifacts …`
    (source=tick-tick-bloom)` plus OOF AUC/Brier printed by the trainer.
-3. **Download** `src/backend/ml/artifacts/` (5 files) from the notebook output.
+3. **Download** `bloomcast_artifacts/` (7 files) from the notebook output.
 4. **Commit them** to the repo. CI enforces the honesty rule:
    `test_committed_artifacts_are_real` fails the build if committed artifacts
    claim anything but `tick-tick-bloom` provenance.
@@ -57,10 +53,10 @@ bundle = _load_bundle()  # artifacts preferred
 p = bundle["lgbm"].predict_proba(live_row_32dim)  # + calibrator + ensemble
 ```
 
-`/v1/explore` deliberately stays on the transparent heuristic (it has no
-satellite block for arbitrary points — see the model card). A weather-only
-model variant for arbitrary coordinates is the natural next step once
-real-label artifacts exist.
+`/v1/explore` always returns the transparent heuristic, and adds a
+`model_estimate` block whenever committed artifacts exist — the exported model
+scored on the live 32-dim row, labeled experimental (weather-only input,
+empty spectral block, outside pilot calibration).
 
 ## Environment knobs
 

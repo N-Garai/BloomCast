@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { API } from "@/lib/api";
+import { LocationMap } from "@/components/dashboard/LocationMap";
 
 interface ExploreResult {
   latitude: number;
@@ -246,10 +247,23 @@ export function LocationExplorer({
         </span>
       </div>
       <p className="text-sm text-fg-secondary max-w-2xl mb-5">
-        Pick any point on Earth — coordinates, GPS, or a preset — and BloomCast fetches
-        realtime weather for it on the spot and scores wash-off risk instantly.
-        Every selection triggers a fresh live fetch; nothing here waits on the nightly job.
+        Pick any point on Earth — click the map, type coordinates, use GPS, or a
+        preset — and BloomCast fetches realtime weather for it on the spot and
+        scores wash-off risk instantly. Every selection triggers a fresh live
+        fetch; nothing here waits on the nightly job.
       </p>
+
+      <div className="mb-4">
+        <LocationMap
+          onPick={(la, lo) => {
+            const sla = String(la);
+            const slo = String(lo);
+            setLat(sla);
+            setLon(slo);
+            run(sla, slo);
+          }}
+        />
+      </div>
 
       <div className="flex flex-col md:flex-row gap-3 md:items-end">
         <label className="flex-1">

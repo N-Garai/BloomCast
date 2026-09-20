@@ -28,6 +28,10 @@
   --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
 }
 
+:root {
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
   -webkit-font-smoothing: antialiased;
@@ -67,6 +71,25 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--fg-faint);
+  opacity: 1;
+}
+
+/* Native dropdown popups ignore most inheritance — style them explicitly
+   so options never render white-on-white. */
+select option,
+select optgroup {
+  background-color: var(--bg-deep);
+  color: var(--fg-primary);
+}
+
+input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
 }
 
 :focus-visible {

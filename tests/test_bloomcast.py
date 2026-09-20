@@ -478,5 +478,71 @@ def test_severity_weighted_fit_runs():
                    epochs=1, subsample=40, sample_weight=w)
 
 
+# --- CAML SeaBASS loader ------------------------------------------------------
+
+CAML_SB = """\
+/begin_header
+/investigators=test_team
+/fields=uid,latitude,longitude,date,severity,density_cells_per_ml,region,distance_to_water_m
+/units=none,degrees,degrees,yyyymmdd,none,cells/ml,none,m
+/missing=-9999
+/delimiter=comma
+/end_header
+a1,47.30,8.50,2016-06-01,1,5000,midwest,0
+a2,41.90,-83.10,2016-07-01,,200000,midwest,120
+a3,33.04,-117.07,2016-08-05,5,12000000,west,2500
+"""
+
+
+def test_severity_bands():
+    from ingestion.drivendata_loader import severity_from_density as s
+
+    assert (s(0), s(19999), s(20000), s(99999), s(100000), s(999999),
+            s(1000000), s(9999999), s(10000000), s(5e7)) == (1, 1, 2, 2, 3, 3, 4, 4, 5, 5)
+    assert s(None) is None and s("junk") is None
+
+
+def test_caml_seabass_frame(tmp_path):
+    from ingestion.drivendata_loader import load_training_frame
+
+    sb = tmp_path / "caml.sb"
+    sb.write_text(CAML_SB, encoding="utf-8")
+    rows = load_training_frame(tmp_path)
+    assert len(rows) == 3
+    by_uid = {r["uid"]: r for r in rows}
+    assert by_uid["a1"]["y"] == 0 and by_uid["a3"]["y"] == 1
+    assert by_uid["a2"]["severity"] == 3  # derived from density
+    assert by_uid["a2"]["distance_to_water_m"] == 120.0
+    assert [r["date"] for r in rows] == sorted(r["date"] for r in rows)
+
+    near = load_training_frame(tmp_path, max_distance_m=1000)
+    assert [r["uid"] for r in near] == ["a1", "a2"]
+
+
+def test_caml_plain_csv_without_header(tmp_path):
+    from ingestion.drivendata_loader import load_training_frame
+
+    (tmp_path / "caml.csv").write_text(
+        "uid,latitude,longitude,date,severity,density_cells_per_ml,region\n"
+        "b1,47.3,8.5,2016-06-01,2,50000,midwest\n",
+        encoding="utf-8",
+    )
+    rows = load_training_frame(tmp_path)
+    assert len(rows) == 1 and rows[0]["y"] == 0
+
+
+def test_frame_prefers_competition(tmp_path):
+    from ingestion.drivendata_loader import load_training_frame
+
+    (tmp_path / "x.sb").write_text(CAML_SB, encoding="utf-8")
+    (tmp_path / "train_labels.csv").write_text(
+        "uid,severity,density\nz1,4,2000000\n", encoding="utf-8")
+    (tmp_path / "metadata.csv").write_text(
+        "uid,latitude,longitude,date,split,region\n"
+        "z1,47.3,8.5,2016-06-01,train,midwest\n", encoding="utf-8")
+    rows = load_training_frame(tmp_path)
+    assert len(rows) == 1 and rows[0]["uid"] == "z1"
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
