@@ -1,0 +1,14 @@
+uid,latitude,longitude,date,split,region
+s001,47.30,8.50,2016-06-01,train,midwest
+s002,47.31,8.51,2016-06-15,train,midwest
+s003,41.90,-83.10,2016-07-01,train,midwest
+s004,41.91,-83.11,2016-07-20,train,midwest
+s005,33.04,-117.07,2016-08-05,train,west
+s006,33.05,-117.08,2016-08-20,train,west
+s007,40.70,-80.29,2016-09-01,train,northeast
+s008,40.71,-80.30,2016-09-10,train,northeast
+s009,36.55,-121.51,2016-09-20,train,west
+s010,36.56,-121.52,2016-10-01,train,west
+s011,47.32,8.52,2016-10-15,train,midwest
+s012,47.33,8.53,2016-11-01,train,midwest
+s999,47.30,8.50,2016-11-02,test,midwest

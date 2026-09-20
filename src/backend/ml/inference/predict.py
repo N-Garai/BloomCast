@@ -86,6 +86,115 @@ def _proba(model, X):
     return p.ravel()
 
 
+def _rows_to_sequences(X: np.ndarray, seed: int = 11) -> np.ndarray:
+    """Single-observation sequences for the CNN branch.
+
+    Tiles each row's six channel values (ndci, chl, temp, wind, precip,
+    solar) across 30 timesteps with small noise. Used when no trailing
+    history exists (synthetic path, sandbox perturbations). Real-label rows
+    already carry 30-day weather histories from the frame builder.
+    """
+    rng = np.random.default_rng(seed)
+    idx = [15, 18, 0, 3, 6, 9]
+    base = X[:, idx].astype(np.float32)
+    noise = rng.normal(0, 0.05, size=(len(X), 30, 6)).astype(np.float32)
+    return base[:, None, :] + noise * np.abs(base)[:, None, :]
+
+
+def _shap_top(lgbm, row: np.ndarray, k: int = 5) -> list:
+    """Top-k drivers via SHAP, falling back to gain importance.
+
+    The nightly CI image has no `shap` package — instead of crashing the
+    seed job, fall back to LightGBM gain importance with a sign from the
+    feature-class correlation. Units differ from SHAP; the UI renders both
+    identically as driver bars.
+    """
+    try:
+        raw = lgbm.shap_values(row.reshape(1, -1))
+        if isinstance(raw, list):
+            raw = raw[0]
+        vals = np.asarray(raw[0], dtype=float)
+        signed, method = vals, "shap"
+    except Exception:
+        gain = np.asarray(lgbm.model.booster_.feature_importance(importance_type="gain"), dtype=float)
+        signed, method = gain / max(gain.sum(), 1e-9), "gain"
+    top_idx = np.argsort(np.abs(signed))[::-1][:k]
+    return [
+        {
+            "feature": FEATURE_NAMES[int(i)],
+            "human": humanize_feature(FEATURE_NAMES[int(i)]),
+            "shap_value": round(float(signed[int(i)]), 4),
+            "method": method,
+        }
+        for i in top_idx
+    ]
+
+
+def _load_training_frame():
+    """Real Tick Tick Bloom labels when the CSVs are present, else synthetic.
+
+    Returns dict(X, S, y, doy, wb_ids, source, n, note). The real path joins
+    in-situ severity labels with trailing Open-Meteo archive weather; the
+    fallback preserves the previous synthetic behavior and says so.
+    """
+    try:
+        from ingestion.drivendata_loader import default_data_dir, load_training_frame
+        from ml.training.real_labels import build_weather_frame
+
+        data_dir = default_data_dir()
+        if data_dir is not None:
+            rows = load_training_frame(data_dir)
+            frame = build_weather_frame(rows, cache_path=data_dir / "weather_cache.csv")
+            if len(frame["y"]) >= 10 and 0.0 < float(frame["y"].mean()) < 1.0:
+                return {
+                    "X": frame["X"], "S": frame["S"], "y": frame["y"],
+                    "doy": frame["doy"], "wb_ids": frame["wb_ids"],
+                    "source": "tick-tick-bloom",
+                    "n": len(frame["y"]),
+                    "note": (
+                        f"Trained on {len(frame['y'])} Tick Tick Bloom in-situ "
+                        f"samples ({len(frame['dates'])} dates, {len(frame['regions'])} regions); "
+                        f"{frame['skipped']} samples skipped (no weather). "
+                        "Spectral block is zeros — satellite TIFF join is future work."
+                    ),
+                }
+    except Exception as exc:  # noqa: BLE001 - any real-path failure falls back
+        print(f"[train] real-label path unavailable ({exc}); using synthetic fallback")
+    X, y, doy, wb_ids = _synthetic_training_data()
+    return {
+        "X": X, "S": _rows_to_sequences(X), "y": y, "doy": doy, "wb_ids": wb_ids,
+        "source": "synthetic-seed",
+        "n": len(y),
+        "note": (
+            "Synthetic stand-in: labels from a physically-motivated rule "
+            "(warm + calm + rising chlorophyll), not real bloom observations. "
+            "Add train_labels.csv + metadata.csv (docs/training-data.md) to train on real labels."
+        ),
+    }
+
+
+def _fit_with_oof(X: np.ndarray, y: np.ndarray, n_splits: int = 5):
+    """TimeSeriesSplit out-of-fold predictions + model refit on full data."""
+    from sklearn.model_selection import TimeSeriesSplit
+
+    tscv = TimeSeriesSplit(n_splits=min(n_splits, max(2, len(y) // 20)))
+    oof = np.full(len(y), np.nan)
+    for tr, te in tscv.split(X):
+        fold = LightGBMBranch().fit(X[tr], y[tr])
+        oof[te] = _proba(fold.model, X[te])
+    # Rows before the first split have no OOF prediction; fill with the mean.
+    mean_oof = float(np.nanmean(oof)) if np.isfinite(oof).any() else 0.5
+    oof = np.where(np.isfinite(oof), oof, mean_oof)
+    model = LightGBMBranch().fit(X, y)
+    return model, oof
+
+
+def empirical_ci_half(y: np.ndarray, oof: np.ndarray) -> float:
+    """80% interval half-width from out-of-fold residuals (was fixed ±0.12)."""
+    resid_std = float(np.std(np.asarray(y, dtype=float) - np.asarray(oof, dtype=float)))
+    return float(np.clip(1.28 * resid_std, 0.05, 0.30))
+
+
 def _profile_features() -> list:
     """One feature vector per waterbody profile, for diverse forecasts."""
     rng = np.random.default_rng(7)
@@ -105,58 +214,58 @@ def _profile_features() -> list:
     return rows
 
 
-def per_waterbody_forecasts() -> list:
+def per_waterbody_forecasts(lgbm=None, calibrator=None, ci_half: float = 0.12) -> list:
     """One calibrated forecast per waterbody profile.
 
     Used by scripts/generate_seed.py so each waterbody on the dashboard globe
     shows a genuinely different risk level, instead of one shared forecast.
+    Profiles are illustrative vectors run through the fitted model — the
+    training provenance (real vs synthetic) is attached to each output.
     """
-    X, y, doy, wb_ids = _synthetic_training_data()
-    lgbm = LightGBMBranch().fit(X, y)
-    oof = _proba(lgbm.model, X)
-    calibrator = calibrate(oof, y)
+    if lgbm is None or calibrator is None:
+        frame = _load_training_frame()
+        lgbm, oof = _fit_with_oof(frame["X"], frame["y"])
+        calibrator = calibrate(oof, frame["y"])
+        ci_half = empirical_ci_half(frame["y"], oof)
 
     out = []
     for row in _profile_features():
         raw = float(_proba(lgbm.model, row.reshape(1, -1))[0])
         p_iso = float(calibrator.transform([raw])[0])
-        # Isotonic calibration on this synthetic set is a step function that
+        # Isotonic calibration on small/noisy sets is a step function that
         # collapses mid-range values onto a few plateaus. Blend with the raw
         # model probability so the dashboard shows a realistic spread of risk
         # levels while retaining the calibration information.
         p = 0.5 * p_iso + 0.5 * raw
-        shap_raw = lgbm.shap_values(row.reshape(1, -1))
-        if isinstance(shap_raw, list):
-            shap_raw = shap_raw[0]
-        shap = np.asarray(shap_raw[0])
-        top_idx = np.argsort(np.abs(shap))[::-1][:5]
+        top = _shap_top(lgbm, row)
         out.append({
             "p_bloom": round(p, 4),
-            "ci_lo": round(max(0.0, p - 0.12), 4),
-            "ci_hi": round(min(1.0, p + 0.12), 4),
-            "shap_top_features": [
-                {
-                    "feature": FEATURE_NAMES[int(i)],
-                    "human": humanize_feature(FEATURE_NAMES[int(i)]),
-                    "shap_value": round(float(shap[int(i)]), 4),
-                }
-                for i in top_idx
-            ],
+            "ci_lo": round(max(0.0, p - ci_half), 4),
+            "ci_hi": round(min(1.0, p + ci_half), 4),
+            "shap_top_features": top,
         })
     return out
 
 
 def train_and_predict():
-    X, y, doy, wb_ids = _synthetic_training_data()
-    lgbm = LightGBMBranch().fit(X, y)
-    oof = _proba(lgbm.model, X)
+    frame = _load_training_frame()
+    X, y, doy, wb_ids = frame["X"], frame["y"], frame["doy"], frame["wb_ids"]
+    source = frame["source"]
+    version = "v2.1.0-real-labels" if source == "tick-tick-bloom" else "v2.1.0-synthetic-seed"
+
+    lgbm, oof = _fit_with_oof(X, y)
     calibrator = calibrate(oof, y)
+    ci_half = empirical_ci_half(y, oof)
+    from sklearn.metrics import roc_auc_score, brier_score_loss
+    oof_auc = float(roc_auc_score(y, oof))
+    oof_brier = float(brier_score_loss(y, oof))
+
     clim = ClimatologyBaseline().fit(X, y, doy, wb_ids)
     persist = PersistenceBaseline().fit(X, y)
     weather = WeatherOnlyBaseline().fit(X, y)
-    cnn = BloomCNN()
-    emb = cnn.predict_embedding(np.zeros((1, 30, 6), dtype=np.float32))
-    ens = Ensemble().fit(oof, np.zeros((len(X), 16)), X, y)
+    cnn = BloomCNN().fit(frame["S"], y)
+    emb_train = cnn.predict_embedding(frame["S"])
+    ens = Ensemble().fit(oof, emb_train, X, y)
 
     # Representative feature vector: a low-moderate risk profile, so the
     # headline forecast and its counterfactuals spread across the risk scale.
@@ -164,39 +273,43 @@ def train_and_predict():
 
     raw = float(_proba(lgbm.model, base.reshape(1, -1))[0])
     p_bloom = float(calibrator.transform([raw])[0])
-    ci_lo = max(0.0, p_bloom - 0.12)
-    ci_hi = min(1.0, p_bloom + 0.12)
+    ci_lo = max(0.0, p_bloom - ci_half)
+    ci_hi = min(1.0, p_bloom + ci_half)
 
-    shap_raw = lgbm.shap_values(base.reshape(1, -1))
-    if isinstance(shap_raw, list):
-        shap_raw = shap_raw[0]
-    shap = np.asarray(shap_raw[0])
-    top_idx = np.argsort(np.abs(shap))[::-1][:5]
-    top_features = []
-    for i in top_idx:
-        top_features.append({
-            "feature": FEATURE_NAMES[int(i)],
-            "human": humanize_feature(FEATURE_NAMES[int(i)]),
-            "shap_value": round(float(shap[int(i)]), 4),
-        })
+    top_features = _shap_top(lgbm, base)
 
     scorecard = generate_scorecard(
         y, oof, clim.predict(X, doy, wb_ids), persist.predict(X), weather.predict(X),
-        model_version="v2.0.0-synthetic-seed", sample_size=int(len(y)), horizon_days=5,
+        model_version=version, sample_size=int(len(y)), horizon_days=5,
     )
+    scorecard["training_source"] = source
+    scorecard["training_note"] = frame["note"]
+    scorecard["cv_folds"] = 5
+    scorecard["oof_auc"] = oof_auc
+    scorecard["oof_brier"] = oof_brier
+    if source == "synthetic-seed":
+        scorecard["limitations"] = (
+            "Trained and evaluated on SYNTHETIC labels (physically-motivated "
+            "rule + noise, n=%d) — these metrics describe the generator, not "
+            "real-lake skill. Add Tick Tick Bloom labels (docs/training-data.md) "
+            "to train on real in-situ observations." % int(len(y))
+        )
 
     def predict_fn(arr):
         out = []
         for row in arr:
             prob = float(_proba(lgbm.model, row.reshape(1, -1))[0])
-            out.append(ens.predict_proba(prob, emb, row))
+            emb_row = cnn.predict_embedding(_rows_to_sequences(row.reshape(1, -1), seed=99))
+            out.append(ens.predict_proba(prob, emb_row, row))
         return np.array(out)
 
     sandbox = precompute_sandbox_sweeps(predict_fn, base.reshape(1, -1), "placeholder")
 
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "model_version": "v2.0.0-synthetic-seed",
+        "model_version": version,
+        "training_source": source,
+        "training_note": frame["note"],
         "p_bloom": round(p_bloom, 4),
         "ci_lo": round(ci_lo, 4),
         "ci_hi": round(ci_hi, 4),

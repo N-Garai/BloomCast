@@ -56,13 +56,15 @@ def precompute_sandbox_sweeps(
 
 
 def _extrapolate_annual(p: float) -> int:
-    """Heuristic: annual high-risk days, capped at a realistic 120 days.
+    """Heuristic: annual high-risk days.
 
     A 100% daily bloom probability would mean year-round bloom, which no
     temperate lake exhibits. Seasonality is modeled as a sinusoid peaking in
     high summer, so the annual count is the mean probability scaled by the
-    fraction of the year in the bloom season, not a flat p*365.
+    fraction of the year in the bloom season, not a flat p*365. The cap sits
+    above the realistic temperate maximum so scenarios stay distinguishable
+    instead of collapsing onto one value.
     """
     bloom_season_fraction = 0.45  # ~165 days of stratified warm season
     days = p * 365 * bloom_season_fraction
-    return int(min(120, max(0, days)))
+    return int(min(200, max(0, days)))

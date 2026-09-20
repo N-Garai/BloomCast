@@ -17,6 +17,7 @@ src/frontend/out
 *.webp
 *.joblib
 *.onnx
+weather_cache.csv
 
 # Local runtime state
 *.db

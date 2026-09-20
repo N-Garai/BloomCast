@@ -2,6 +2,7 @@ import { Metadata } from "next";
 import { Navbar } from "@/components/brand/Navbar";
 import { Footer } from "@/components/brand/Footer";
 import { ReportForm } from "@/components/report/ReportForm";
+import { StewardQueue } from "@/components/report/StewardQueue";
 import { ScrollReveal } from "@/components/motion/ScrollReveal";
 
 export const metadata: Metadata = { title: "BloomCast — Submit Observation" };
@@ -25,6 +26,9 @@ export default function ReportPage() {
           </div>
         </ScrollReveal>
         <ReportForm />
+        <ScrollReveal className="mt-8">
+          <StewardQueue />
+        </ScrollReveal>
       </main>
       <Footer />
     </div>

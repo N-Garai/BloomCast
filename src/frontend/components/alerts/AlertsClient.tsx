@@ -4,6 +4,85 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 
 import { API } from "@/lib/api";
+import { Spinner } from "@/components/ui/Spinner";
+
+interface CheckedAlert {
+  waterbody_id: string;
+  threshold: number;
+  horizon_days: number;
+  current_probability: number;
+  crossed: boolean;
+}
+
+function ThresholdStatus({ email }: { email: string }) {
+  const [alerts, setAlerts] = useState<CheckedAlert[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const check = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const r = await fetch(`${API}/v1/alerts/check?email=${encodeURIComponent(email)}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d?.detail ?? `HTTP ${r.status}`);
+      setAlerts(d.alerts ?? []);
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="glass rounded-2xl p-6 border border-border-subtle">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-2">
+        <h3 className="font-display text-lg font-semibold tracking-wide">Your thresholds, right now</h3>
+        <button
+          onClick={check}
+          disabled={loading}
+          className="px-4 py-2 rounded-lg bg-glow-cyan/10 border border-glow-cyan/30 text-glow-cyan text-sm font-medium hover:bg-glow-cyan/20 transition-colors disabled:opacity-50"
+        >
+          {loading ? "Checking…" : "Check now"}
+        </button>
+      </div>
+      <p className="text-xs text-fg-muted mb-4">
+        Evaluated live against current forecasts — no email service needed.
+      </p>
+      {loading && <Spinner label="Evaluating thresholds" />}
+      {error && <p className="text-xs font-mono text-glow-red">{error}</p>}
+      {alerts && alerts.length === 0 && (
+        <p className="text-sm text-fg-muted">No subscriptions for this email yet.</p>
+      )}
+      {alerts && alerts.length > 0 && (
+        <div className="space-y-2">
+          {alerts.map((a) => (
+            <div
+              key={`${a.waterbody_id}-${a.horizon_days}`}
+              className={`flex items-center justify-between rounded-xl border px-4 py-3 text-sm ${
+                a.crossed ? "border-glow-red/50 bg-glow-red/5" : "border-border-faint"
+              }`}
+            >
+              <div>
+                <span className="font-mono text-fg-primary">{a.waterbody_id}</span>
+                <span className="text-fg-muted"> · {a.horizon_days}d ≥ {Math.round(a.threshold * 100)}%</span>
+              </div>
+              <span
+                className={`font-mono text-xs px-2.5 py-1 rounded-full border ${
+                  a.crossed
+                    ? "border-glow-red/50 text-glow-red animate-pulse"
+                    : "border-glow-green/40 text-glow-green"
+                }`}
+              >
+                {a.crossed ? `CROSSED · ${Math.round(a.current_probability * 100)}%` : `${Math.round(a.current_probability * 100)}% · quiet`}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function AlertsClient() {
   const [form, setForm] = useState({
@@ -36,6 +115,7 @@ export function AlertsClient() {
 
   if (status === "ok") {
     return (
+      <div className="space-y-6">
       <motion.div
         initial={{ opacity: 0, scale: 0.96 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -57,10 +137,13 @@ export function AlertsClient() {
           Add another subscription
         </button>
       </motion.div>
+      <ThresholdStatus email={form.email} />
+      </div>
     );
   }
 
   return (
+    <div className="space-y-6">
     <form onSubmit={submit} className="glass rounded-2xl p-8 border border-border-subtle space-y-6">
       <div>
         <label className="block text-sm text-fg-secondary mb-2" htmlFor="aemail">Email</label>
@@ -130,5 +213,7 @@ export function AlertsClient() {
         {status === "submitting" ? "Subscribing…" : "Subscribe to alerts"}
       </button>
     </form>
+    {form.email && <ThresholdStatus email={form.email} />}
+    </div>
   );
 }

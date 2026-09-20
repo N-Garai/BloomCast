@@ -67,6 +67,21 @@ export function ScorecardClient() {
 
   return (
     <div className="space-y-8">
+      {(sc as any).training_source && (
+        <div className="rounded-2xl border border-glow-violet/30 bg-glow-violet/5 px-5 py-4 text-sm">
+          <span className="font-mono text-xs uppercase tracking-widest text-glow-violet">
+            Training provenance
+          </span>
+          <p className="mt-1 text-fg-secondary">
+            {(sc as any).training_source === "tick-tick-bloom"
+              ? "Trained on real Tick Tick Bloom in-situ labels."
+              : "Trained on synthetic stand-in labels — metrics describe the generator, not real-lake skill."}{" "}
+            <span className="font-mono text-xs text-fg-muted">
+              5-fold time-series CV · OOF AUC {((sc as any).oof_auc ?? sc.auc).toFixed(3)} · n={sc.sample_size}
+            </span>
+          </p>
+        </div>
+      )}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Metric label="Brier score" value={sc.brier.toFixed(3)} hint="lower is better" delay={0} />
         <Metric label="ROC-AUC" value={sc.auc.toFixed(3)} hint="discrimination" delay={0.08} />

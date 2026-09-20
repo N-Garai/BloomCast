@@ -10,7 +10,17 @@ import mimetypes
 __version__ = "2.0.0"
 from shared.config import ALLOWED_ORIGIN
 from api import seed
-from api.db import insert_observation, list_observations, subscribe, record_influence
+from api.db import (
+    insert_observation,
+    list_observations,
+    list_pending_observations,
+    list_influence,
+    subscribe,
+    subscriptions_for_email,
+    unsubscribe,
+    record_influence,
+    validate_observation,
+)
 from api.explore import explore_location
 from api.fhir import build_alert_bundle
 
@@ -178,7 +188,36 @@ async def forecast_timeline(wb_id: str):
 
 @app.get("/v1/forecast/{wb_id}/chip")
 async def forecast_chip(wb_id: str):
-    return Response(content=b"", media_type="image/webp")
+    """NDCI snapshot chip: a data-driven SVG rendered from the latest replay
+    day's satellite NDCI (or the current forecast probability when no replay
+    exists). A stylized visualization, not satellite imagery."""
+    ndci_val = 0.1
+    label = "forecast"
+    for ev in seed.get_replay_events():
+        if ev["waterbody_id"] == wb_id:
+            full = seed.get_replay(ev["event_id"])
+            days = full.get("days", [])
+            if days:
+                last = days[-1]
+                ndci_val = float(last.get("satellite_ndci", ndci_val))
+                label = str(last.get("date", "satellite"))
+            break
+    else:
+        fc = seed.get_forecast(wb_id) or {}
+        ndci_val = float((fc.get("horizons") or {}).get("5d", {}).get("p_bloom", fc.get("p_bloom", 0.1)))
+    green = int(120 + 135 * max(0.0, min(1.0, ndci_val)))
+    svg = (
+        "<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256' viewBox='0 0 256 256'>"
+        f"<defs><radialGradient id='c' cx='45%' cy='40%' r='75%'>"
+        f"<stop offset='0%' stop-color='rgb(20,{green},140)'/>"
+        f"<stop offset='60%' stop-color='rgb(10,{green - 40},90)'/>"
+        "<stop offset='100%' stop-color='#02060f'/></radialGradient></defs>"
+        "<rect width='256' height='256' fill='#02060f'/>"
+        "<rect width='256' height='256' fill='url(#c)'/>"
+        f"<text x='12' y='240' font-family='monospace' font-size='13' fill='#9fb8c7'>NDCI {ndci_val:.2f} · {label}</text>"
+        "</svg>"
+    )
+    return Response(content=svg.encode(), media_type="image/svg+xml")
 
 
 @app.get("/v1/replay/events")
@@ -279,6 +318,63 @@ async def citizen_recent(waterbody_id: str | None = None, limit: int = 20):
     return {"data": list_observations(waterbody_id, limit)}
 
 
+@app.get("/v1/citizen/queue")
+async def citizen_queue(limit: int = 50):
+    """Steward moderation queue: reports awaiting validation."""
+    return {"data": list_pending_observations(limit)}
+
+
+@app.get("/v1/citizen/influence")
+async def citizen_influence(waterbody_id: str | None = None, limit: int = 20):
+    """Ground Truth Loop ledger: how validated reports moved forecasts."""
+    return {"data": list_influence(waterbody_id, limit)}
+
+
+@app.post("/v1/citizen/validate")
+async def citizen_validate(request: Request):
+    """Steward approve/reject a report. Approved bloom evidence is written to
+    the influence log with its estimated probability delta."""
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    obs_id = body.get("observation_id")
+    decision = body.get("decision")
+    steward = body.get("steward", "steward")
+    if not obs_id or decision not in ("approved", "rejected"):
+        return JSONResponse(
+            {"error": "observation_id and decision (approved|rejected) required"},
+            status_code=400,
+        )
+    updated = validate_observation(obs_id, steward, decision)
+    if updated is None:
+        return JSONResponse({"error": "observation not found"}, status_code=404)
+    influence = None
+    if decision == "approved":
+        fc = seed.get_forecast(updated["waterbody_id"]) or {}
+        horizon = (fc.get("horizons") or {}).get("5d", {})
+        prior = float(horizon.get("p_bloom", fc.get("p_bloom", 0.5)))
+        delta = 0.0
+        if updated["scum_visible"]:
+            delta += 0.08
+        if (updated["water_color"] or "") in ("green", "blue-green"):
+            delta += 0.04
+        if updated["wildlife_dead"]:
+            delta += 0.02
+        new = round(min(0.97, prior + delta), 4)
+        record_influence(
+            updated["waterbody_id"], prior, new,
+            [obs_id], [updated["observer_id"] or "anonymous"],
+        )
+        influence = {
+            "waterbody_id": updated["waterbody_id"],
+            "prior_probability": prior,
+            "new_probability": new,
+            "probability_delta": round(new - prior, 4),
+        }
+    return {"status": decision, "observation": updated, "influence": influence}
+
+
 @app.post("/v1/citizen/report")
 async def citizen_report(request: Request):
     try:
@@ -288,6 +384,8 @@ async def citizen_report(request: Request):
     required = ["observation_id", "waterbody_id", "observed_at", "latitude", "longitude", "water_color"]
     if not all(k in obs for k in required):
         return JSONResponse({"error": "Missing required fields"}, status_code=400)
+    if obs.get("photo_url") and len(str(obs["photo_url"])) > 700 * 1024:
+        return JSONResponse({"error": "photo must be under 500 KB"}, status_code=400)
     insert_observation(obs)
     return JSONResponse({"status": "accepted", "observation_id": obs["observation_id"]}, status_code=202)
 
@@ -302,6 +400,41 @@ async def alert_subscribe(request: Request):
         return JSONResponse({"error": "email and waterbody_id required"}, status_code=400)
     token = subscribe(body)
     return JSONResponse({"status": "subscribed", "unsubscribe_token": token}, status_code=201)
+
+
+@app.post("/v1/alerts/unsubscribe")
+async def alert_unsubscribe(request: Request):
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    if not body.get("token") or not unsubscribe(body["token"]):
+        return JSONResponse({"error": "unknown unsubscribe token"}, status_code=404)
+    return {"status": "unsubscribed"}
+
+
+@app.get("/v1/alerts/check")
+async def alert_check(email: str):
+    """Evaluate a subscriber's thresholds against current forecasts.
+
+    Free-tier dispatch: instead of an email service, subscribers (and the
+    nightly job) read which thresholds are crossed right now.
+    """
+    out = []
+    for sub in subscriptions_for_email(email):
+        fc = seed.get_forecast(sub["waterbody_id"]) or {}
+        horizon = (fc.get("horizons") or {}).get(f"{sub['horizon_days']}d", {})
+        p = horizon.get("p_bloom", fc.get("p_bloom"))
+        if p is None:
+            continue
+        out.append({
+            "waterbody_id": sub["waterbody_id"],
+            "threshold": sub["threshold"],
+            "horizon_days": sub["horizon_days"],
+            "current_probability": p,
+            "crossed": bool(p >= sub["threshold"]),
+        })
+    return {"email": email, "alerts": out}
 
 
 @app.post("/v1/fhir/bundle")

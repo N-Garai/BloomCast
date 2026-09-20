@@ -22,6 +22,22 @@ export function ReportForm() {
   });
   const [status, setStatus] = useState<"idle" | "submitting" | "ok" | "error">("idle");
   const [error, setError] = useState("");
+  const [photo, setPhoto] = useState<string | null>(null);
+
+  function onPhoto(file: File | undefined) {
+    if (!file) {
+      setPhoto(null);
+      return;
+    }
+    if (file.size > 500 * 1024) {
+      setError("Photo must be under 500 KB — compress it first.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => setPhoto(String(reader.result));
+    reader.onerror = () => setError("Could not read that photo file.");
+    reader.readAsDataURL(file);
+  }
 
   function setLocation() {
     if (!navigator.geolocation) return;
@@ -55,6 +71,7 @@ export function ReportForm() {
           odor: form.odor,
           wildlife_dead: form.wildlife_dead,
           notes: form.notes || undefined,
+          photo_url: photo || undefined,
           source: "bloomcast-form",
         }),
       });
@@ -213,6 +230,22 @@ export function ReportForm() {
           placeholder="Anything else the steward should know…"
           className="w-full bg-bg-deep border border-border-subtle rounded-lg px-3 py-2.5 text-fg-primary focus:border-glow-cyan outline-none resize-none"
         />
+      </div>
+
+      <div>
+        <label className="block text-sm text-fg-secondary mb-2" htmlFor="photo">
+          Photo (optional, ≤500 KB — stored with your report)
+        </label>
+        <input
+          id="photo"
+          type="file"
+          accept="image/*"
+          onChange={(e) => onPhoto(e.target.files?.[0])}
+          className="block w-full text-sm text-fg-muted file:mr-3 file:px-4 file:py-2 file:rounded-lg file:border file:border-glow-cyan/30 file:bg-glow-cyan/10 file:text-glow-cyan file:text-sm hover:file:bg-glow-cyan/20 file:transition-colors"
+        />
+        {photo && (
+          <img src={photo} alt="Observation preview" className="mt-3 max-h-40 rounded-xl border border-border-subtle" />
+        )}
       </div>
 
       {error && <div className="text-sm text-glow-red">{error}</div>}

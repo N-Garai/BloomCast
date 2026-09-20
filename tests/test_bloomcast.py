@@ -178,5 +178,141 @@ def test_explore_daily_outlook_shape():
     assert days[6]["risk_score"] > days[0]["risk_score"]
 
 
+# --- real-label training path (network-free via stubbed weather) ----------
+
+FIXTURE_DIR = ROOT / "tests" / "fixtures" / "ticktickbloom_mini"
+
+
+def _stub_archive(lat, lon, start, end):
+    hours = 30 * 24
+    ramp = [20.0 + 8.0 * (i / hours) for i in range(hours)]
+    return {
+        "hourly": {
+            "temperature_2m": ramp,
+            "wind_speed_10m": [3.0] * hours,
+            "precipitation": [0.0] * hours,
+            "shortwave_radiation": [200.0] * hours,
+            "cloud_cover": [20.0] * hours,
+            "dewpoint_2m": [12.0] * hours,
+            "pressure_msl": [1013.0] * hours,
+        }
+    }
+
+
+def test_ticktickbloom_loader_joins_and_binarizes():
+    from ingestion.drivendata_loader import load_training_frame
+
+    rows = load_training_frame(FIXTURE_DIR)
+    assert len(rows) == 12, "test-split row must be excluded"
+    assert [r["date"] for r in rows] == sorted(r["date"] for r in rows)
+    by_uid = {r["uid"]: r for r in rows}
+    assert by_uid["s001"]["y"] == 0
+    assert by_uid["s005"]["y"] == 1
+    assert sum(r["y"] for r in rows) == 7
+
+
+def test_weather_frame_builder_shapes(monkeypatch, tmp_path):
+    import ml.training.real_labels as rl
+
+    monkeypatch.setattr(rl, "_default_fetch", _stub_archive)
+    from ingestion.drivendata_loader import load_training_frame
+
+    frame = rl.build_weather_frame(
+        load_training_frame(FIXTURE_DIR), cache_path=tmp_path / "cache.csv"
+    )
+    assert frame["X"].shape == (12, 32)
+    assert frame["S"].shape == (12, 30, 6)
+    assert set(frame["y"].tolist()) == {0, 1}
+    assert frame["skipped"] == 0
+    assert (tmp_path / "cache.csv").exists()
+    # Second build reads the cache without touching the network.
+    monkeypatch.setattr(rl, "_default_fetch", lambda *a: (_ for _ in ()).throw(AssertionError("network used")))
+    frame2 = rl.build_weather_frame(
+        load_training_frame(FIXTURE_DIR), cache_path=tmp_path / "cache.csv"
+    )
+    assert frame2["X"].shape == (12, 32)
+
+
+def test_train_selects_real_labels(monkeypatch):
+    import ml.training.real_labels as rl
+    from ml.inference import predict as P
+
+    monkeypatch.setattr(rl, "_default_fetch", _stub_archive)
+    monkeypatch.setenv("TICKTICKBLOOM_DIR", str(FIXTURE_DIR))
+    frame = P._load_training_frame()
+    assert frame["source"] == "tick-tick-bloom"
+    assert frame["n"] == 12
+
+
+def test_train_falls_back_without_dataset(monkeypatch):
+    from ml.inference import predict as P
+
+    monkeypatch.setenv("TICKTICKBLOOM_DIR", "/nonexistent-dir-xyz")
+    frame = P._load_training_frame()
+    assert frame["source"] == "synthetic-seed"
+
+
+# --- steward queue + alerts (isolated temp DB) ------------------------------
+
+def _isolated_db(tmp_path, monkeypatch):
+    import importlib
+    import api.db as dbmod
+
+    monkeypatch.setattr("shared.config.DATABASE_URL", f"sqlite:///{tmp_path}/t.db")
+    return importlib.reload(dbmod)
+
+
+def test_steward_validate_and_influence(tmp_path, monkeypatch):
+    db = _isolated_db(tmp_path, monkeypatch)
+    oid = db.insert_observation({
+        "observation_id": "test-obs-1",
+        "waterbody_id": "CH-ZUR-01",
+        "observer_id": "tester",
+        "observed_at": "2026-09-01T10:00:00Z",
+        "latitude": 47.3,
+        "longitude": 8.5,
+        "water_color": "green",
+        "scum_visible": True,
+        "odor": "none",
+        "wildlife_dead": False,
+    })
+    assert oid == "test-obs-1"
+    assert len(db.list_pending_observations()) == 1
+    updated = db.validate_observation("test-obs-1", "steward-a", "approved")
+    assert updated["validation_status"] == "approved"
+    assert db.validate_observation("test-obs-1", "s", "maybe") is None
+    assert db.validate_observation("nope", "s", "approved") is None
+    assert len(db.list_pending_observations()) == 0
+    db.record_influence("CH-ZUR-01", 0.58, 0.71, ["test-obs-1"], ["tester"])
+    log = db.list_influence("CH-ZUR-01")
+    assert len(log) == 1 and log[0]["probability_delta"] == pytest.approx(0.13)
+
+
+def test_alert_subscribe_check_unsubscribe(tmp_path, monkeypatch):
+    db = _isolated_db(tmp_path, monkeypatch)
+    token = db.subscribe({
+        "email": "t@example.org", "waterbody_id": "CH-ZUR-01",
+        "threshold": 0.6, "horizon_days": 5,
+    })
+    subs = db.subscriptions_for_email("t@example.org")
+    assert len(subs) == 1 and subs[0]["threshold"] == 0.6
+    assert db.unsubscribe("bad-token") is False
+    assert db.unsubscribe(token) is True
+    assert db.subscriptions_for_email("t@example.org") == []
+
+
+def test_alert_routes_reject_bad_input():
+    from fastapi.testclient import TestClient
+    from api.main import app
+
+    client = TestClient(app, raise_server_exceptions=False)
+    assert client.get("/v1/alerts/check").status_code == 422
+    assert client.post("/v1/alerts/unsubscribe", json={"token": "nope"}).status_code == 404
+    assert client.post("/v1/citizen/validate", json={}).status_code == 400
+    assert client.get("/v1/alerts/check?email=nobody@example.org").json() == {
+        "email": "nobody@example.org", "alerts": [],
+    }
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

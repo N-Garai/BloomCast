@@ -27,7 +27,7 @@
         },
         "payload": [
           {
-            "contentString": "BloomCast alert: Lake Zurich 5-day bloom probability 64% (CI 52-76%). Triggered by threshold \u226560%. Drivers: Rising chlorophyll trend +18%; Solar radiation +11%; Calm winds (low mixing) +8%."
+            "contentString": "BloomCast alert: Lake Zurich 5-day bloom probability 64% (CI 52-76%). Triggered by threshold \u226560%. Drivers: Rising chlorophyll trend +9%; Calm winds (low mixing) +9%; Recent warm temperatures +9%."
           },
           {
             "contentAttachment": {

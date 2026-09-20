@@ -152,3 +152,107 @@ def record_influence(wb_id: str, prior: float, new: float, obs_ids: list, contri
             contributor_user_ids=json.dumps(contributors),
         ))
         s.commit()
+
+
+def list_pending_observations(limit: int = 50) -> list:
+    with get_session() as s:
+        rows = (
+            s.query(CitizenObservation)
+            .filter(CitizenObservation.validation_status == "pending")
+            .order_by(CitizenObservation.observed_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return [
+            {
+                "observation_id": r.observation_id,
+                "waterbody_id": r.waterbody_id,
+                "observer_id": r.observer_id,
+                "observed_at": r.observed_at,
+                "water_color": r.water_color,
+                "scum_visible": r.scum_visible,
+                "odor": r.odor,
+                "wildlife_dead": r.wildlife_dead,
+                "notes": r.notes,
+            }
+            for r in rows
+        ]
+
+
+def validate_observation(observation_id: str, steward: str, decision: str) -> dict | None:
+    """Steward approve/reject. Returns the updated report summary or None."""
+    if decision not in ("approved", "rejected"):
+        return None
+    with get_session() as s:
+        r = (
+            s.query(CitizenObservation)
+            .filter(CitizenObservation.observation_id == observation_id)
+            .one_or_none()
+        )
+        if r is None:
+            return None
+        r.validation_status = decision
+        r.validated_by = steward
+        r.validated_at = datetime.now(timezone.utc).isoformat()
+        s.commit()
+        return {
+            "observation_id": r.observation_id,
+            "waterbody_id": r.waterbody_id,
+            "water_color": r.water_color,
+            "scum_visible": r.scum_visible,
+            "wildlife_dead": r.wildlife_dead,
+            "observer_id": r.observer_id,
+            "validation_status": r.validation_status,
+        }
+
+
+def list_influence(wb_id: str | None = None, limit: int = 20) -> list:
+    with get_session() as s:
+        q = s.query(ForecastInfluenceLog)
+        if wb_id:
+            q = q.filter(ForecastInfluenceLog.waterbody_id == wb_id)
+        rows = q.order_by(ForecastInfluenceLog.created_at.desc()).limit(limit).all()
+        return [
+            {
+                "waterbody_id": r.waterbody_id,
+                "forecast_date": r.forecast_date,
+                "prior_probability": r.prior_probability,
+                "new_probability": r.new_probability,
+                "probability_delta": round(r.probability_delta, 4),
+                "contributing_observations": json.loads(r.contributing_observations or "[]"),
+            }
+            for r in rows
+        ]
+
+
+def subscriptions_for_email(email: str) -> list:
+    with get_session() as s:
+        rows = (
+            s.query(AlertSubscription)
+            .filter(AlertSubscription.email == email)
+            .order_by(AlertSubscription.created_at.desc())
+            .all()
+        )
+        return [
+            {
+                "waterbody_id": r.waterbody_id,
+                "threshold": r.threshold,
+                "horizon_days": r.horizon_days,
+                "created_at": r.created_at,
+            }
+            for r in rows
+        ]
+
+
+def unsubscribe(token: str) -> bool:
+    with get_session() as s:
+        r = (
+            s.query(AlertSubscription)
+            .filter(AlertSubscription.unsubscribe_token == token)
+            .one_or_none()
+        )
+        if r is None:
+            return False
+        s.delete(r)
+        s.commit()
+        return True

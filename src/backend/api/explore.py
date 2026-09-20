@@ -50,7 +50,8 @@ def nearest_waterbody(lat: float, lon: float) -> dict | None:
         if len(c) != 2:
             continue
         try:
-            d = _haversine_km(lat, lon, float(c[0]), float(c[1]))
+            # GeoJSON order: centroid is [lon, lat].
+            d = _haversine_km(lat, lon, float(c[1]), float(c[0]))
         except (TypeError, ValueError):
             continue
         if d < best_d:

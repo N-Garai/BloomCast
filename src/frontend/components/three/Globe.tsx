@@ -25,7 +25,8 @@ function latLonToVec3(lat: number, lon: number, r = 1.005): [number, number, num
 
 function BloomPoint({ wb, selected, onSelect }: any) {
   const ref = useRef<THREE.Mesh>(null!);
-  const pos = latLonToVec3(wb.centroid[0], wb.centroid[1]);
+  // Centroids are GeoJSON [lon, lat].
+  const pos = latLonToVec3(wb.centroid[1], wb.centroid[0]);
   const color = RISK_COLORS[wb._risk ?? "low"] ?? "#00f0d4";
 
   useFrame(({ clock }) => {

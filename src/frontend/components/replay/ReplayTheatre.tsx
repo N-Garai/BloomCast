@@ -177,17 +177,25 @@ export function ReplayTheatre() {
             <span>CI {Math.round(day.ci_hi * 100)}%</span>
           </div>
 
-          <div className="relative h-28 bg-bg-abyss rounded-xl border border-border-faint mb-4 overflow-hidden">
-            <motion.div
-              className="absolute inset-0"
-              animate={{ opacity: [0.3, 0.7, 0.3] }}
-              transition={{ duration: 2, repeat: Infinity }}
-              style={{
-                background: `radial-gradient(circle at ${20 + day.satellite_ndci * 200}% 50%, rgba(0,240,212,${0.15 + day.satellite_ndci}), rgba(255,0,170,${day.satellite_ndci * 0.5}) 70%, transparent)`,
-              }}
+          <div className="relative h-28 bg-bg-abyss rounded-xl border border-border-faint mb-4 overflow-hidden flex">
+            <img
+              src={`${API}/v1/forecast/${active.waterbody_id}/chip`}
+              alt={`NDCI snapshot chip for ${active.name}`}
+              className="h-full w-28 shrink-0 object-cover border-r border-border-faint"
+              loading="lazy"
             />
-            <div className="absolute bottom-2 left-3 text-xs font-mono text-fg-secondary">
-              NDCI false-color · satellite {day.satellite_ndci.toFixed(2)}
+            <div className="relative flex-1">
+              <motion.div
+                className="absolute inset-0"
+                animate={{ opacity: [0.3, 0.7, 0.3] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                style={{
+                  background: `radial-gradient(circle at ${20 + day.satellite_ndci * 200}% 50%, rgba(0,240,212,${0.15 + day.satellite_ndci}), rgba(255,0,170,${day.satellite_ndci * 0.5}) 70%, transparent)`,
+                }}
+              />
+              <div className="absolute bottom-2 left-3 text-xs font-mono text-fg-secondary">
+                NDCI false-color · satellite {day.satellite_ndci.toFixed(2)}
+              </div>
             </div>
             {confirmed && (
               <div className="absolute top-2 right-3 text-[11px] font-mono px-2 py-0.5 rounded-full border border-glow-green/50 text-glow-green bg-bg-abyss/70">

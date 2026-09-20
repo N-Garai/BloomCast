@@ -31,22 +31,31 @@ weather-only logistic regression.
 
 ## Training data
 
-Synthetic stand-in for the v2 MVP. A deterministic generator produces
-physically-motivated labels (warm + calm + rising chlorophyll → bloom) with
-heavy label noise, so calibrated probabilities span the risk bands rather
-than saturating at 0/1. The real ingestion clients (Copernicus Sentinel-2,
-Open-Meteo) are implemented in `src/backend/bloomcast/ingestion/` and the pipeline
-runs end-to-end on GitHub Actions once credentials exist.
+Two paths, selected automatically at seed-generation time
+(`ml/inference/predict.py`, recorded as `training_source`):
 
-## Performance (synthetic seed)
+1. **Real labels** (`tick-tick-bloom`): DrivenData Tick Tick Bloom in-situ
+   severity samples joined with trailing Open-Meteo archive weather
+   (`ml/training/real_labels.py`, setup in `docs/training-data.md`).
+   Active when `train_labels.csv` + `metadata.csv` are present.
+2. **Synthetic stand-in** (`synthetic-seed`, the v2 MVP default): a
+   deterministic generator produces physically-motivated labels
+   (warm + calm + rising chlorophyll → bloom) with heavy label noise, so
+   calibrated probabilities span the risk bands rather than saturating
+   at 0/1.
 
-| Metric | Value |
-|---|---|
-| Brier | 0.085 |
-| AUC | 0.989 |
-| Hit rate | 0.954 |
-| False-alarm rate | 0.062 |
-| Sample size | 4000 |
+All verification below is 5-fold time-series cross-validation
+(out-of-fold predictions), never in-sample. The real ingestion clients
+(Copernicus Sentinel-2, Open-Meteo) are implemented in
+`src/backend/bloomcast/ingestion/` and the pipeline runs end-to-end on
+GitHub Actions once credentials exist.
+
+## Performance
+
+Cross-validated (out-of-fold) metrics are published on the live Integrity
+Scorecard and refresh with every nightly seed — see `src/data/seed/scorecard.json`
+for the current values with their `training_source`. Do not quote static
+numbers from this card: any fixed table here goes stale on the next refresh.
 
 **These are synthetic-data numbers, not real-world skill.** They describe the
 model's behavior on the generator, not forecasting accuracy on real lakes.

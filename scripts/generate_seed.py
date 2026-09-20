@@ -89,7 +89,7 @@ for ev in events:
 with open(os.path.join(out_dir, "scorecard.json"), "w") as f:
     json.dump(scorecard, f, indent=2, default=str)
 
-for wb in wbs[:5]:
+for wb in wbs:
     fid = wb["properties"]["id"]
     with open(os.path.join(out_dir, f"sandbox-{fid}.json"), "w") as f:
         json.dump({
