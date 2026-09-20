@@ -26,6 +26,15 @@ interface ExploreResult {
     precip_sum_mm: number;
   };
   signals: string[];
+  daily_outlook?: Array<{
+    date: string;
+    risk_score: number;
+    risk_level: string;
+    rain_mm: number;
+    temp_max_c: number | null;
+    wind_mean_ms: number | null;
+  }>;
+  past_30d?: { temp_mean_c: number | null; precip_sum_mm: number };
   nearest_waterbody: { id: string; name: string; distance_km: number } | null;
 }
 
@@ -43,6 +52,68 @@ const LEVEL_STYLE: Record<string, string> = {
   high: "text-glow-orange border-glow-orange/40 bg-glow-orange/10",
   critical: "text-glow-red border-glow-red/40 bg-glow-red/10",
 };
+
+const DOT_COLOR: Record<string, string> = {
+  low: "#00ff88",
+  moderate: "#ffcc00",
+  high: "#ff8800",
+  critical: "#ff3355",
+};
+
+function RiskTrajectory({ days }: { days: NonNullable<ExploreResult["daily_outlook"]> }) {
+  const W = 560;
+  const H = 150;
+  const PAD = 26;
+  const x = (i: number) => PAD + (i / Math.max(1, days.length - 1)) * (W - PAD * 2);
+  const y = (p: number) => H - PAD - p * (H - PAD * 2);
+  const pts = days.map((d, i) => `${x(i).toFixed(1)},${y(d.risk_score).toFixed(1)}`).join(" ");
+  return (
+    <div className="mt-4 rounded-xl border border-border-faint bg-bg-abyss/60 p-4">
+      <div className="text-xs font-mono uppercase tracking-widest text-fg-muted mb-2">
+        7-day risk trajectory · live forecast window
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-auto" role="img" aria-label="7-day wash-off risk trajectory">
+        {[0.25, 0.5, 0.75].map((g) => (
+          <line key={g} x1={PAD} x2={W - PAD} y1={y(g)} y2={y(g)} stroke="#3d5666" strokeWidth="0.5" strokeDasharray="3 4" opacity="0.6" />
+        ))}
+        <motion.polygon
+          points={`${PAD},${H - PAD} ${pts} ${W - PAD},${H - PAD}`}
+          fill="url(#trajFill)"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 0.35 }}
+          transition={{ duration: 1 }}
+        />
+        <defs>
+          <linearGradient id="trajFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#00f0d4" stopOpacity="0.8" />
+            <stop offset="100%" stopColor="#00f0d4" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <motion.polyline
+          points={pts}
+          fill="none"
+          stroke="#00f0d4"
+          strokeWidth="2.5"
+          strokeLinejoin="round"
+          initial={{ pathLength: 0 }}
+          animate={{ pathLength: 1 }}
+          transition={{ duration: 1.2, ease: "easeOut" }}
+        />
+        {days.map((d, i) => (
+          <g key={d.date}>
+            <circle cx={x(i)} cy={y(d.risk_score)} r="4.5" fill={DOT_COLOR[d.risk_level] ?? "#00f0d4"} stroke="#02060f" strokeWidth="1.5" />
+            <text x={x(i)} y={H - 8} textAnchor="middle" fontSize="10" fill="#5a7888" fontFamily="monospace">
+              {d.date.slice(5)}
+            </text>
+            <text x={x(i)} y={y(d.risk_score) - 9} textAnchor="middle" fontSize="10" fill="#e8f4f8" fontFamily="monospace">
+              {Math.round(d.risk_score * 100)}%
+            </text>
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
 
 export function LocationExplorer({
   onSelectWaterbody,
@@ -295,6 +366,17 @@ export function LocationExplorer({
                 </li>
               ))}
             </ul>
+
+            {result.daily_outlook && result.daily_outlook.length > 0 && (
+              <RiskTrajectory days={result.daily_outlook} />
+            )}
+
+            {result.past_30d && (
+              <p className="mt-3 text-[11px] font-mono text-fg-muted">
+                Past 30 days here: {result.past_30d.temp_mean_c ?? "—"}°C mean ·{" "}
+                {result.past_30d.precip_sum_mm} mm rain — the baseline behind this outlook.
+              </p>
+            )}
 
             <p className="mt-3 text-[11px] text-fg-faint">
               Weather-only heuristic ({result.method}). Land cover assumed neutral —{" "}

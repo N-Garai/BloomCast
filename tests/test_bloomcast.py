@@ -158,5 +158,25 @@ def test_explore_math_is_consistent():
     assert risk_level(low) == "low"
 
 
+def test_explore_daily_outlook_shape():
+    from api.explore import build_daily_outlook
+
+    dry_hist = [0.0] * 72
+    # Storm arrives mid-week: dry first 3 days, wet last 4.
+    fc_precip = [0.0] * 72 + [2.0] * 96
+    fc_times = [f"2026-09-{20 + d:02d}T{h:02d}:00" for d in range(7) for h in range(24)]
+    fc_temps = [22.0] * 168
+    fc_winds = [2.0] * 168
+
+    days = build_daily_outlook(dry_hist, fc_precip, fc_times, fc_temps, fc_winds)
+    assert len(days) == 7
+    assert [d["date"] for d in days] == sorted(d["date"] for d in days)
+    for d in days:
+        assert 0.0 <= d["risk_score"] <= 1.0
+        assert d["risk_level"] in ("low", "moderate", "high", "critical")
+    # Risk must climb once the storm water arrives.
+    assert days[6]["risk_score"] > days[0]["risk_score"]
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

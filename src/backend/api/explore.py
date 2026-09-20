@@ -75,6 +75,55 @@ def _num_list(values: list) -> list:
     return out
 
 
+def build_daily_outlook(
+    hist_precip: list,
+    fc_precip: list,
+    fc_times: list,
+    fc_temps: list,
+    fc_winds: list,
+) -> list:
+    """7-day risk trajectory from the forecast window.
+
+    For each forecast day, wash-off risk is scored from the trailing 48 h of
+    rainfall (history + forecast stitched together) and the antecedent dry
+    days counted back through the same stitched series — the same formula as
+    the nightly StreamFlush engine, rolled forward day by day. Pure function,
+    no network: unit-testable.
+    """
+    hist_precip = [float(p) for p in hist_precip]
+    fc_precip = [float(p) for p in fc_precip]
+    combined = hist_precip + fc_precip
+    hist_hours = len(hist_precip)
+    days = []
+    for d in range(7):
+        end = hist_hours + (d + 1) * 24
+        window = combined[max(0, end - 48):end]
+        rain = float(sum(window))
+        dry_h = 0
+        for p in reversed(combined[: max(0, end - 48)]):
+            if p < 0.1:
+                dry_h += 1
+            else:
+                break
+        dry_days = min(dry_h / 24.0, 14.0)
+        score = compute_streamflush_risk(rain, dry_days, IMPERVIOUS_ASSUMED)
+        day_slice = slice(d * 24, (d + 1) * 24)
+        day_temps = _num_list(fc_temps[day_slice])
+        day_winds = _num_list(fc_winds[day_slice])
+        label = str(fc_times[d * 24])[:10] if len(fc_times) > d * 24 else f"+{d + 1}d"
+        days.append(
+            {
+                "date": label,
+                "risk_score": round(score, 4),
+                "risk_level": risk_level(score),
+                "rain_mm": round(sum(_num_list(fc_precip[day_slice])), 1),
+                "temp_max_c": round(max(day_temps), 1) if day_temps else None,
+                "wind_mean_ms": round(sum(day_winds) / len(day_winds), 2) if day_winds else None,
+            }
+        )
+    return days
+
+
 async def explore_location(lat: float, lon: float) -> dict:
     """Fetch live weather for any point and score it. Raises HTTPException."""
     if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
@@ -85,9 +134,10 @@ async def explore_location(lat: float, lon: float) -> dict:
 
     meteo = OpenMeteoClient()
     try:
-        hist, fc = await asyncio.gather(
+        hist, fc, arch = await asyncio.gather(
             meteo.fetch_historical(lat, lon, past_days=3),
             meteo.fetch_forecast(lat, lon, days=7),
+            meteo.fetch_historical(lat, lon, past_days=30),
         )
     except Exception as exc:  # noqa: BLE001 - upstream outage becomes a 502
         raise HTTPException(
@@ -100,10 +150,23 @@ async def explore_location(lat: float, lon: float) -> dict:
     score = compute_streamflush_risk(rainfall_48h, dry_days, IMPERVIOUS_ASSUMED)
 
     hourly = fc.get("hourly", {})
-    temps = _num_list(hourly.get("temperature_2m", []))
-    winds = _num_list(hourly.get("wind_speed_10m", []))
+    fc_precip = _num_list(hourly.get("precipitation", []))
+    fc_times = list(hourly.get("time", []) or [])
+    fc_temps_raw = list(hourly.get("temperature_2m", []) or [])
+    fc_winds_raw = list(hourly.get("wind_speed_10m", []) or [])
+    temps = _num_list(fc_temps_raw)
+    winds = _num_list(fc_winds_raw)
     solars = _num_list(hourly.get("shortwave_radiation", []))
-    precip_7d = sum(_num_list(hourly.get("precipitation", [])))
+    precip_7d = sum(fc_precip)
+
+    daily_outlook = build_daily_outlook(
+        precip_hist, fc_precip, fc_times, fc_temps_raw, fc_winds_raw
+    )
+
+    arch_hourly = arch.get("hourly", {})
+    arch_temps = _num_list(arch_hourly.get("temperature_2m", []))
+    arch_precip = _num_list(arch_hourly.get("precipitation", []))
+    past_temp_mean = sum(arch_temps) / len(arch_temps) if arch_temps else None
 
     temp_mean = sum(temps) / len(temps) if temps else None
     temp_max = max(temps) if temps else None
@@ -113,6 +176,16 @@ async def explore_location(lat: float, lon: float) -> dict:
     signals = []
     if temp_mean is not None and temp_mean > HEAT_WAVE_C:
         signals.append("Warm 7-day mean favors cyanobacteria growth")
+    if temp_mean is not None and past_temp_mean is not None:
+        delta = temp_mean - past_temp_mean
+        if delta >= 2:
+            signals.append(
+                f"{round(delta, 1)}°C warmer than the past-30-day mean"
+            )
+        elif delta <= -2:
+            signals.append(
+                f"{round(-delta, 1)}°C cooler than the past-30-day mean"
+            )
     if wind_mean is not None and wind_mean < CALM_WIND_MS:
         signals.append("Calm winds — low mixing favors surface scum")
     if temp_max is not None and temp_max > 30:
@@ -140,6 +213,11 @@ async def explore_location(lat: float, lon: float) -> dict:
             "wind_mean_ms": round(wind_mean, 2) if wind_mean is not None else None,
             "solar_mean_wm2": round(solar_mean, 1) if solar_mean is not None else None,
             "precip_sum_mm": round(precip_7d, 1),
+        },
+        "daily_outlook": daily_outlook,
+        "past_30d": {
+            "temp_mean_c": round(past_temp_mean, 1) if past_temp_mean is not None else None,
+            "precip_sum_mm": round(sum(arch_precip), 1),
         },
         "signals": signals,
         "nearest_waterbody": nearest_waterbody(lat, lon),
