@@ -326,38 +326,6 @@ async def create_fhir_bundle(request: Request):
 # and return the JSON API banner instead of the site.
 
 
-class _HtmlRedirectMiddleware:
-    """Redirect clean URLs to the Next.js static export's `.html` files.
-
-    `next.config.js` uses `output: "export"`, which emits both `dashboard.html`
-    and a `dashboard/` directory. StaticFiles serves the `.html` files but
-    returns 404 for the bare directory paths, so a browser visiting `/dashboard`
-    lands on a 404 page instead of the dashboard. This rewrites the request
-    before it reaches the mount.
-    """
-
-    def __init__(self, app):
-        self.app = app
-
-    async def __call__(self, scope, receive, send):
-        if scope["type"] != "http":
-            await self.app(scope, receive, send)
-            return
-        path = scope["path"]
-        # Never touch API/docs/static asset paths.
-        if path.startswith("/v1/") or path.startswith("/_next") or path in ("/", "/404.html"):
-            await self.app(scope, receive, send)
-            return
-        # Already has an extension — let StaticFiles handle it.
-        if "." in path.rsplit("/", 1)[-1]:
-            await self.app(scope, receive, send)
-            return
-        # Clean URL for a route page → append .html.
-        scope = dict(scope)
-        scope["path"] = path + ".html"
-        await self.app(scope, receive, send)
-
-
 # Catch-all for frontend pages and static assets. Registered LAST so /v1/*
 # routes win. The _HtmlRedirectMiddleware rewrites clean URLs to .html before
 # this route sees the request.

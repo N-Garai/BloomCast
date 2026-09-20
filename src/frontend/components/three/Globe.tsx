@@ -1,8 +1,8 @@
 "use client";
 
-import { Canvas } from "@react-three/fiber";
+import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Sphere, Points, PointMaterial } from "@react-three/drei";
-import { useMemo } from "react";
+import { useMemo, useRef } from "react";
 import * as THREE from "three";
 
 const RISK_COLORS: Record<string, string> = {
@@ -24,18 +24,29 @@ function latLonToVec3(lat: number, lon: number, r = 1.005): [number, number, num
 }
 
 function BloomPoint({ wb, selected, onSelect }: any) {
+  const ref = useRef<THREE.Mesh>(null!);
   const pos = latLonToVec3(wb.centroid[0], wb.centroid[1]);
   const color = RISK_COLORS[wb._risk ?? "low"] ?? "#00f0d4";
 
+  useFrame(({ clock }) => {
+    if (ref.current && selected) {
+      const s = 1 + Math.sin(clock.elapsedTime * 4) * 0.35;
+      ref.current.scale.setScalar(s);
+    } else if (ref.current) {
+      ref.current.scale.setScalar(1);
+    }
+  });
+
   return (
     <mesh
+      ref={ref}
       position={pos}
       onClick={(e) => {
         e.stopPropagation();
         onSelect(wb.id);
       }}
     >
-      <sphereGeometry args={[0.022, 16, 16]} />
+      <sphereGeometry args={[selected ? 0.04 : 0.022, 16, 16]} />
       <meshStandardMaterial
         color={color}
         emissive={color}

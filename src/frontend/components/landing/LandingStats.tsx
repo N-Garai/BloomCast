@@ -1,30 +1,75 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+import { useInView } from "framer-motion";
 import { ScrollReveal } from "@/components/motion/ScrollReveal";
+import { SplitHeadline } from "@/components/brand/SplitHeadline";
+import { SectionBackdrop } from "@/components/brand/SectionBackdrop";
+import { useGsapReveal } from "@/lib/useGsapReveal";
+
+function CountUp({ to, duration = 1600 }: { to: number; duration?: number }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const inView = useInView(ref, { once: true, margin: "-60px" });
+  const [val, setVal] = useState(0);
+
+  useEffect(() => {
+    if (!inView) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setVal(to);
+      return;
+    }
+    let raf = 0;
+    const start = performance.now();
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - start) / duration);
+      setVal(Math.round(to * (1 - Math.pow(1 - p, 3))));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [inView, to, duration]);
+
+  return (
+    <span ref={ref} className="tabular">
+      {val.toLocaleString()}
+    </span>
+  );
+}
+
+const STATS = [
+  { value: <CountUp to={2014} />, label: "Toledo 'do not drink' advisory", sub: "500,000 residents, 3 days" },
+  { value: "$2–4B", label: "Global annual cost of blooms", sub: "treatment, recreation, fisheries" },
+  { value: "3–7", label: "Day lead time", sub: "before bloom maturation" },
+  { value: "Tier 2", label: "WHO hazard classification", sub: "recreational water quality" },
+];
 
 export function LandingStats() {
+  const gridRef = useGsapReveal<HTMLDivElement>();
+
   return (
-    <section className="py-20 px-6 bg-bg-deep/50">
-      <div className="max-w-5xl mx-auto">
+    <section className="section-fade relative overflow-hidden py-20 px-6">
+      <SectionBackdrop tone="orange" />
+      <div className="relative max-w-5xl mx-auto">
         <ScrollReveal>
-          <h2 className="font-display text-3xl font-bold tracking-tight text-center">
-            The crisis is real. The lead time is the answer.
-          </h2>
+          <p className="font-mono text-[11px] uppercase tracking-[0.35em] text-glow-orange text-center mb-4">
+            Why it matters
+          </p>
+          <SplitHeadline
+            text="The crisis is real. The lead time is the answer."
+            className="font-display text-3xl md:text-4xl font-bold tracking-tight text-center"
+          />
         </ScrollReveal>
-        <div className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            { value: "2014", label: "Toledo 'do not drink' advisory", sub: "500,000 residents, 3 days" },
-            { value: "$2–4B", label: "Global annual cost of blooms", sub: "across treatment, recreation, fisheries" },
-            { value: "3–7", label: "Day lead time", sub: "before bloom maturation" },
-            { value: "Tier 2", label: "WHO hazard classification", sub: "for recreational water quality" },
-          ].map((s, i) => (
-            <ScrollReveal key={s.label} delay={i * 0.1}>
-              <div className="glass-card rounded-xl p-6 text-center">
-                <div className="font-display text-3xl font-bold text-glow-orange">{s.value}</div>
-                <div className="text-sm text-fg-primary mt-1">{s.label}</div>
-                <div className="text-xs text-fg-muted mt-1">{s.sub}</div>
-              </div>
-            </ScrollReveal>
+        <div ref={gridRef} className="mt-10 grid grid-cols-2 md:grid-cols-4 gap-4">
+          {STATS.map((s) => (
+            <div
+              key={s.label}
+              data-reveal
+              className="glass-card rounded-xl p-6 text-center hover:shadow-glow-md hover:border-glow-orange/40 transition-all duration-300"
+            >
+              <div className="font-display text-3xl font-bold text-glow-orange tabular">{s.value}</div>
+              <div className="text-sm text-fg-primary mt-1">{s.label}</div>
+              <div className="text-xs text-fg-muted mt-1">{s.sub}</div>
+            </div>
           ))}
         </div>
       </div>

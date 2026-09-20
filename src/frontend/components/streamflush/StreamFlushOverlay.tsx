@@ -1,9 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
-
-const API = process.env.NEXT_PUBLIC_API_BASE ?? "/v1";
+import { API } from "@/lib/api";
 
 interface Segment {
   segment_id: string;
@@ -29,15 +27,23 @@ export function StreamFlushOverlay() {
 
   useEffect(() => {
     fetch(`${API}/v1/streamflush`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
       .then(d => setSegments(d.data ?? []))
       .catch(() => setSegments([]));
   }, []);
 
+  if (!segments.length) return null;
+
   return (
-    <div className="absolute bottom-4 left-4 z-10 glass rounded-xl p-4 border border-border-subtle max-w-xs">
+    <div className="absolute bottom-4 left-4 z-10 glass rounded-xl p-4 border border-border-subtle max-w-xs backdrop-blur-xl">
       <div className="flex items-center gap-2 mb-2">
-        <span className="w-2 h-2 rounded-full bg-glow-cyan animate-pulse" />
+        <span className="relative flex h-2 w-2">
+          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-glow-cyan opacity-60" />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-glow-cyan" />
+        </span>
         <h3 className="text-sm font-semibold text-fg-primary">StreamFlush Nowcast</h3>
       </div>
       <p className="text-xs text-fg-muted mb-3">
@@ -47,7 +53,7 @@ export function StreamFlushOverlay() {
         {segments.slice(0, 5).map(s => (
           <div key={s.segment_id} className="flex items-center justify-between text-xs">
             <span className="text-fg-secondary truncate mr-2">{s.name}</span>
-            <span className={`font-mono px-2 py-0.5 rounded border ${LEVEL_STYLES[s.risk_level]}`}>
+            <span className={`font-mono px-2 py-0.5 rounded border tabular ${LEVEL_STYLES[s.risk_level] ?? LEVEL_STYLES.low}`}>
               {Math.round(s.risk_score * 100)}%
             </span>
           </div>

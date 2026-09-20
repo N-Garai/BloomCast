@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-
-const API = process.env.NEXT_PUBLIC_API_BASE ?? "/v1";
+import { API } from "@/lib/api";
+import { Spinner } from "@/components/ui/Spinner";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 
 interface ReplayDay {
   date: string;
@@ -33,20 +34,50 @@ export function ReplayTheatre() {
   const [active, setActive] = useState<ReplayEvent | null>(null);
   const [idx, setIdx] = useState(0);
   const [playing, setPlaying] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadEvents = () => {
+    setLoading(true);
+    setError(null);
+    fetch(`${API}/v1/replay/events`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status} on /v1/replay/events`);
+        return r.json();
+      })
+      .then((d) => {
+        const list = d.data ?? [];
+        setEvents(list);
+        if (!list.length) {
+          setLoading(false);
+          setError("The service returned no replay events.");
+        }
+      })
+      .catch((e) => {
+        setLoading(false);
+        setError(String(e?.message ?? e));
+      });
+  };
 
   useEffect(() => {
-    fetch(`${API}/v1/replay/events`)
-      .then((r) => r.json())
-      .then((d) => setEvents(d.data ?? []))
-      .catch(() => setEvents([]));
+    loadEvents();
   }, []);
 
   useEffect(() => {
     if (!events.length) return;
     fetch(`${API}/v1/replay/${events[0].event_id}`)
-      .then((r) => r.json())
-      .then(setActive)
-      .catch(() => setActive(null));
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then((d) => {
+        setActive(d);
+        setLoading(false);
+      })
+      .catch((e) => {
+        setLoading(false);
+        setError(String(e?.message ?? e));
+      });
   }, [events]);
 
   useEffect(() => {
@@ -63,17 +94,27 @@ export function ReplayTheatre() {
     return () => clearInterval(t);
   }, [playing, active]);
 
-  if (!active) {
-    return (
-      <div className="h-[480px] flex items-center justify-center text-fg-muted">
-        Loading replay events…
-      </div>
-    );
+  if (loading && !active) {
+    return <Spinner label="Loading replay events" />;
   }
 
+  if ((error && !active) || (!loading && !events.length)) {
+    return <ErrorBanner message={error ?? "No replay events available."} onRetry={loadEvents} />;
+  }
+
+  if (!active) return null;
+
   const day = active.days[idx];
-  const confirmed = idx >= active.days.findIndex((d) => d.lead_time_days === 0);
+  const confirmIdx = active.days.findIndex((d) => d.lead_time_days === 0);
+  const confirmed = confirmIdx >= 0 && idx >= confirmIdx;
   const p = day.forecast_probability;
+
+  const selectEvent = (eventId: string) => {
+    fetch(`${API}/v1/replay/${eventId}`)
+      .then((r) => r.json())
+      .then((d) => { setActive(d); setIdx(0); setPlaying(false); })
+      .catch(() => {});
+  };
 
   return (
     <div className="space-y-6">
@@ -81,13 +122,11 @@ export function ReplayTheatre() {
         {events.map((ev) => (
           <button
             key={ev.event_id}
-            onClick={() => {
-              fetch(`${API}/v1/replay/${ev.event_id}`).then((r) => r.json()).then((d) => { setActive(d); setIdx(0); setPlaying(false); });
-            }}
+            onClick={() => selectEvent(ev.event_id)}
             className={`px-4 py-2 rounded-lg text-sm border transition-all ${
               active.event_id === ev.event_id
-                ? "bg-glow-cyan/15 border-glow-cyan/50 text-glow-cyan"
-                : "glass border-border-subtle text-fg-secondary hover:text-fg-primary"
+                ? "bg-glow-cyan/15 border-glow-cyan/50 text-glow-cyan shadow-glow-sm"
+                : "glass border-border-subtle text-fg-secondary hover:text-fg-primary hover:border-glow-cyan/30"
             }`}
           >
             {ev.name}
@@ -96,13 +135,14 @@ export function ReplayTheatre() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 glass rounded-2xl p-6 border border-border-subtle">
+        <div className="lg:col-span-2 glass rounded-2xl p-6 border border-border-subtle relative overflow-hidden">
+          <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-glow-cyan/60 to-transparent" />
           <div className="flex items-start justify-between mb-4">
             <div>
-              <h3 className="font-display text-2xl font-semibold">{active.name}</h3>
+              <h3 className="font-display text-2xl font-semibold tracking-wide">{active.name}</h3>
               <p className="text-sm text-fg-muted mt-1">{active.description}</p>
             </div>
-            <div className="text-right">
+            <div className="text-right shrink-0 ml-4">
               <div className="text-xs text-fg-muted">Confirmed</div>
               <div className="font-mono text-sm text-fg-primary">{active.confirmation_date}</div>
             </div>
@@ -115,12 +155,12 @@ export function ReplayTheatre() {
                 initial={{ opacity: 0, y: 8 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
-                className="font-display text-5xl font-bold text-glow-cyan"
+                className="font-display text-5xl font-bold text-glow-cyan tabular"
               >
                 {Math.round(p * 100)}%
               </motion.span>
             </AnimatePresence>
-            <span className="text-sm text-fg-muted">
+            <span className="text-sm text-fg-muted font-mono">
               {day.date} · T-{day.lead_time_days} days
             </span>
           </div>
@@ -149,6 +189,11 @@ export function ReplayTheatre() {
             <div className="absolute bottom-2 left-3 text-xs font-mono text-fg-secondary">
               NDCI false-color · satellite {day.satellite_ndci.toFixed(2)}
             </div>
+            {confirmed && (
+              <div className="absolute top-2 right-3 text-[11px] font-mono px-2 py-0.5 rounded-full border border-glow-green/50 text-glow-green bg-bg-abyss/70">
+                SATELLITE CONFIRMED
+              </div>
+            )}
           </div>
 
           <input
@@ -157,16 +202,17 @@ export function ReplayTheatre() {
             max={active.days.length - 1}
             value={idx}
             onChange={(e) => setIdx(Number(e.target.value))}
-            className="w-full accent-glow-cyan"
+            className="w-full accent-[#00f0d4]"
+            aria-label="Scrub replay timeline"
           />
           <div className="flex justify-between items-center mt-3">
             <button
               onClick={() => setPlaying(!playing)}
-              className="px-4 py-2 rounded-lg bg-glow-cyan/15 border border-glow-cyan/40 text-glow-cyan text-sm font-medium hover:bg-glow-cyan/25 transition-colors"
+              className="group relative overflow-hidden px-4 py-2 rounded-lg bg-glow-cyan/15 border border-glow-cyan/40 text-glow-cyan text-sm font-medium hover:bg-glow-cyan/25 transition-colors"
             >
-              {playing ? "⏸ Pause" : "▶ Play forecast"}
+              {playing ? "❚❚ Pause" : "▶ Play forecast"}
             </button>
-            <span className="text-xs text-fg-muted font-mono">
+            <span className="text-xs text-fg-muted font-mono tabular">
               {idx + 1} / {active.days.length}
             </span>
           </div>
@@ -176,14 +222,20 @@ export function ReplayTheatre() {
           <div className="glass rounded-2xl p-6 border border-border-subtle">
             <h4 className="text-xs uppercase tracking-wider text-fg-muted mb-3">Why this forecast</h4>
             <div className="space-y-2">
-              {day.shap_top_features.map((f) => (
-                <div key={f.feature} className="flex items-center gap-2 text-sm">
+              {day.shap_top_features.map((f, i) => (
+                <motion.div
+                  key={f.feature}
+                  initial={{ opacity: 0, x: 8 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: i * 0.06 }}
+                  className="flex items-center gap-2 text-sm"
+                >
                   <span className="font-mono">{f.shap_value > 0 ? "▲" : "▼"}</span>
                   <span className="text-fg-secondary flex-1">{f.human}</span>
                   <span className={`font-mono ${f.shap_value > 0 ? "text-glow-orange" : "text-glow-green"}`}>
                     {f.shap_value > 0 ? "+" : ""}{(f.shap_value * 100).toFixed(0)}%
                   </span>
-                </div>
+                </motion.div>
               ))}
             </div>
           </div>

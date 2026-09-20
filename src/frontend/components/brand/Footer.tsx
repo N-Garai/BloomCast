@@ -5,8 +5,12 @@ export function Footer() {
         <div className="grid md:grid-cols-4 gap-8">
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <div className="w-7 h-7 rounded-full bg-gradient-to-br from-glow-cyan to-glow-green opacity-80" />
-              <span className="font-display font-semibold">BloomCast</span>
+              <svg width="26" height="26" viewBox="0 0 64 64" aria-hidden>
+                <circle cx="32" cy="32" r="24" fill="none" stroke="rgba(0,240,212,0.5)" strokeWidth="1.5" strokeDasharray="4 5" />
+                <circle cx="32" cy="32" r="15" fill="#00f0d4" />
+                <circle cx="27" cy="27" r="5" fill="#ffffff" opacity="0.35" />
+              </svg>
+              <span className="font-display font-semibold tracking-wide">BloomCast</span>
             </div>
             <p className="text-sm text-fg-muted">
               Predictive early warning for cyanobacteria blooms in urban freshwater.

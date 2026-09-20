@@ -2,80 +2,97 @@
 
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/brand/Navbar";
-
-const STATS = [
-  { value: "3–7", label: "Day Lead Time", suffix: " days" },
-  { value: "25", label: "Pilot Waterbodies", suffix: "" },
-  { value: "$0", label: "Monthly Cost", suffix: "" },
-  { value: "100%", label: "Free & Open", suffix: "" },
-];
+import { SplitHeadline } from "@/components/brand/SplitHeadline";
+import { DuplicatedLabelButton } from "@/components/brand/DuplicatedLabelButton";
 
 export function LandingHero() {
   return (
-    <section className="relative min-h-screen flex flex-col">
+    <section className="relative min-h-screen flex flex-col overflow-hidden">
       <Navbar />
-      <div className="flex-1 flex flex-col items-center justify-center text-center px-6 pt-24 pb-16">
+      <div className="relative z-10 mx-auto w-full max-w-7xl px-6 flex-1 flex flex-col justify-center pt-28 pb-20">
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3, duration: 0.8 }}
+          className="mb-6 font-mono text-[11px] md:text-xs uppercase tracking-[0.4em] text-glow-cyan"
+        >
+          Sentinel-2 · Open-Meteo · Citizen Science
+        </motion.p>
+
+        <h1 className="font-display leading-[0.85] tracking-tight">
+          <SplitHeadline
+            text="SEE IT"
+            as="span"
+            className="block text-[22vw] md:text-[11rem] text-fg-primary"
+          />
+          <span className="block bg-gradient-to-r from-glow-cyan via-glow-green to-glow-cyan bg-clip-text text-transparent">
+            <SplitHeadline text="COMING." as="span" className="block text-[22vw] md:text-[11rem]" />
+          </span>
+        </h1>
+
+        <motion.p
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.1, duration: 0.8 }}
+          className="mt-8 max-w-xl font-body text-lg text-fg-secondary leading-relaxed"
+        >
+          3–7 day cyanobacteria bloom forecasts —{" "}
+          <span className="text-fg-primary">free, predictive, provably accurate.</span>
+        </motion.p>
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
-          className="max-w-4xl mx-auto"
+          transition={{ delay: 1.4, duration: 0.8 }}
+          className="mt-10 flex flex-col sm:flex-row gap-4"
         >
-          <h1 className="font-display text-5xl md:text-7xl font-bold leading-tight tracking-tight">
-            From seeing blooms{" "}
-            <span className="text-gradient-to-r from-glow-cyan via-glow-green to-glow-cyan bg-clip-text">
-              to seeing them coming.
-            </span>
-          </h1>
+          <DuplicatedLabelButton href="/dashboard" label="View Forecast" />
+          <DuplicatedLabelButton href="/about" label="Why BloomCast" variant="ghost" />
+        </motion.div>
 
-          <p className="mt-6 text-lg md:text-xl text-fg-secondary max-w-2xl mx-auto leading-relaxed">
-            The first free, global system that predicts cyanobacteria blooms{" "}
-            <span className="text-fg-primary font-medium">3–7 days ahead</span>,
-            proves its own accuracy, and lets planners rehearse the future.
-          </p>
-
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <a
-              href="/dashboard"
-              className="px-6 py-3 rounded-xl bg-gradient-to-r from-glow-cyan to-glow-green text-bg-abyss font-semibold hover:shadow-glow-md transition-all"
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.8, duration: 1 }}
+          className="mt-14 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-2xl"
+        >
+          {[
+            { value: "3–7", label: "day lead time" },
+            { value: "25", label: "pilot waterbodies" },
+            { value: "$0", label: "monthly cost" },
+            { value: "100%", label: "free & open" },
+          ].map((s, i) => (
+            <motion.div
+              key={s.label}
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.8 + i * 0.1 }}
             >
-              View Live Forecast →
-            </a>
-            <a
-              href="/replay"
-              className="px-6 py-3 rounded-xl glass border border-border-subtle text-fg-primary font-medium hover:border-glow-cyan/50 transition-all"
-            >
-              Watch Replay Theatre
-            </a>
-          </div>
-
-          <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-2xl mx-auto">
-            {STATS.map((s, i) => (
-              <motion.div
-                key={s.label}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.2 + i * 0.1 }}
-                className="text-center"
-              >
-                <div className="font-display text-3xl font-bold text-glow-cyan">
-                  {s.value}
-                  <span className="text-lg text-fg-muted">{s.suffix}</span>
-                </div>
-                <div className="text-xs text-fg-muted mt-1">{s.label}</div>
-              </motion.div>
-            ))}
-          </div>
+              <div className="font-display text-3xl font-bold text-glow-cyan tabular">{s.value}</div>
+              <div className="text-xs text-fg-muted mt-1">{s.label}</div>
+            </motion.div>
+          ))}
         </motion.div>
       </div>
 
-      <div className="pb-8 text-center">
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
         <motion.div
           animate={{ y: [0, 8, 0] }}
-          transition={{ duration: 2, repeat: Infinity }}
-          className="text-fg-faint text-sm"
+          transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+          className="flex flex-col items-center gap-2 text-fg-muted"
         >
-          ↓ Scroll to explore
+          <span className="font-mono text-[10px] uppercase tracking-[0.3em]">Scroll</span>
+          <svg width="16" height="26" viewBox="0 0 16 26" fill="none" aria-hidden>
+            <rect x="0.5" y="0.5" width="15" height="25" rx="7.5" stroke="currentColor" />
+            <motion.circle
+              cx="8"
+              cy="8"
+              r="2"
+              fill="#00f0d4"
+              animate={{ cy: [8, 15, 8] }}
+              transition={{ repeat: Infinity, duration: 1.8, ease: "easeInOut" }}
+            />
+          </svg>
         </motion.div>
       </div>
     </section>

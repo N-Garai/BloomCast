@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 
-const API = process.env.NEXT_PUBLIC_API_BASE ?? "/v1";
+import { API } from "@/lib/api";
 
 export function AlertsClient() {
   const [form, setForm] = useState({

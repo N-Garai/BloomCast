@@ -14,6 +14,7 @@ module.exports = {
         "fg-faint": "#3d5666",
         "glow-cyan": "#00f0d4",
         "glow-green": "#00ff88",
+        "glow-violet": "#8b5cf6",
         "glow-yellow": "#ffcc00",
         "glow-orange": "#ff8800",
         "glow-red": "#ff3355",

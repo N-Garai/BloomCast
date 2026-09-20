@@ -2,8 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-
-const API = process.env.NEXT_PUBLIC_API_BASE ?? "/v1";
+import { API } from "@/lib/api";
 
 interface Forecast {
   waterbody_id: string;
@@ -58,25 +57,44 @@ export function ForecastCard({
   onClick?: () => void;
 }) {
   const [forecast, setForecast] = useState<Forecast | null>(null);
+  const [failed, setFailed] = useState(false);
   const [horizon, setHorizon] = useState<"3d" | "5d" | "7d">("5d");
 
   useEffect(() => {
+    let live = true;
+    setForecast(null);
+    setFailed(false);
     fetch(`${API}/v1/forecast/${waterbody.id}`)
-      .then(r => r.json())
-      .then(d => setForecast(d))
-      .catch(() => setForecast(null));
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json();
+      })
+      .then(d => { if (live) setForecast(d); })
+      .catch(() => { if (live) setFailed(true); });
+    return () => { live = false; };
   }, [waterbody.id]);
+
+  if (failed) {
+    return (
+      <div className="rounded-xl p-4 border border-glow-red/30 bg-glow-red/5">
+        <p className="text-sm text-fg-primary">{waterbody.name}</p>
+        <p className="text-xs text-fg-muted mt-1">Forecast unavailable right now.</p>
+      </div>
+    );
+  }
 
   if (!forecast) {
     return (
-      <div className="rounded-xl p-4 glass border border-border-subtle animate-pulse">
-        <div className="h-4 w-32 bg-bg-elevated rounded mb-2" />
-        <div className="h-3 w-24 bg-bg-elevated rounded" />
+      <div className="rounded-xl p-4 glass border border-border-subtle overflow-hidden relative">
+        <div className="h-4 w-32 bg-bg-elevated rounded mb-2 animate-pulse" />
+        <div className="h-3 w-24 bg-bg-elevated rounded animate-pulse" />
+        <div className="absolute inset-0 -translate-x-full animate-shimmer bg-gradient-to-r from-transparent via-glow-cyan/10 to-transparent" />
       </div>
     );
   }
 
   const h = forecast.horizons[horizon];
+  if (!h) return null;
   const level = riskLevel(h.p_bloom);
 
   return (
@@ -84,24 +102,29 @@ export function ForecastCard({
       whileHover={{ scale: 1.02 }}
       onClick={onClick}
       className={`rounded-xl p-4 border cursor-pointer transition-all ${riskBg(level)} ${
-        selected ? "ring-2 ring-glow-cyan" : ""
+        selected ? "ring-2 ring-glow-cyan shadow-glow-md" : ""
       }`}
     >
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="font-display font-semibold text-fg-primary">{waterbody.name}</h3>
+          <h3 className="font-display font-semibold text-fg-primary tracking-wide">{waterbody.name}</h3>
           <p className="text-xs text-fg-muted">{waterbody.region}, {waterbody.country}</p>
         </div>
-        <span className={`text-xs font-mono px-2 py-1 rounded-full ${riskColor(level)}`}>
+        <span className={`text-xs font-mono px-2 py-1 rounded-full border border-current ${riskColor(level)}`}>
           {level.toUpperCase()}
         </span>
       </div>
 
       <div className="mt-3 flex items-baseline gap-2">
-        <span className={`font-display text-3xl font-bold ${riskColor(level)}`}>
+        <motion.span
+          key={horizon + Math.round(h.p_bloom * 100)}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          className={`font-display text-3xl font-bold ${riskColor(level)}`}
+        >
           {Math.round(h.p_bloom * 100)}
           <span className="text-lg text-fg-muted">%</span>
-        </span>
+        </motion.span>
         <span className="text-xs text-fg-muted">{horizon} bloom risk</span>
       </div>
 
@@ -125,14 +148,20 @@ export function ForecastCard({
 
       <div className="mt-3 space-y-1">
         <p className="text-xs uppercase tracking-wider text-fg-muted">Why this forecast</p>
-        {(h.shap_top_features ?? []).slice(0, 3).map((f: any) => (
-          <div key={f.feature} className="flex items-center gap-2 text-sm">
+        {(h.shap_top_features ?? []).slice(0, 3).map((f: any, i: number) => (
+          <motion.div
+            key={f.feature}
+            initial={{ opacity: 0, x: -8 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.08 }}
+            className="flex items-center gap-2 text-sm"
+          >
             <span className="font-mono">{f.shap_value > 0 ? "▲" : "▼"}</span>
             <span className="text-fg-secondary flex-1">{f.human}</span>
             <span className={`font-mono ${f.shap_value > 0 ? "text-glow-orange" : "text-glow-green"}`}>
               {f.shap_value > 0 ? "+" : ""}{(f.shap_value * 100).toFixed(0)}%
             </span>
-          </div>
+          </motion.div>
         ))}
       </div>
 

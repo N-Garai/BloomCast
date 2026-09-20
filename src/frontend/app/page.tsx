@@ -4,18 +4,22 @@ import { LandingFeatures } from "@/components/landing/LandingFeatures";
 import { LandingCTA } from "@/components/landing/LandingCTA";
 import { Footer } from "@/components/brand/Footer";
 import { SectionFilm } from "@/components/brand/SectionFilm";
+import { SectionDivider } from "@/components/brand/SectionDivider";
 
 export default function Page() {
   return (
-    <main>
+    <main className="bg-bg-abyss">
       <SectionFilm film="abyss" className="relative">
         <LandingHero />
       </SectionFilm>
+      <SectionDivider tone="cyan" />
       <LandingStats />
-      <SectionFilm film="caustic" className="mt-4">
+      <SectionDivider tone="orange" />
+      <SectionFilm film="caustic">
         <LandingFeatures />
       </SectionFilm>
-      <SectionFilm film="night" className="mt-4">
+      <SectionDivider tone="violet" />
+      <SectionFilm film="night">
         <LandingCTA />
       </SectionFilm>
       <Footer />

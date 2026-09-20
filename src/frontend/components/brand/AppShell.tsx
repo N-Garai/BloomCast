@@ -1,20 +1,34 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Loader } from "@/components/brand/Loader";
 import { BioLuminescentBackdrop } from "@/components/brand/BioLuminescentBackdrop";
+import { StarfieldBackground } from "@/components/three/StarfieldBackground";
+import { ScrollProgress } from "@/components/brand/ScrollProgress";
+import { MagneticCursor } from "@/components/brand/MagneticCursor";
+import { useKeepAlive } from "@/hooks/useKeepAlive";
+import { useLenis } from "@/lib/useLenis";
 
 function shouldBootLoader() {
   if (typeof window === "undefined") return false;
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
-  return sessionStorage.getItem("bc-booted") !== "1";
+  try {
+    return sessionStorage.getItem("bc-booted") !== "1";
+  } catch {
+    return true;
+  }
 }
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [booting, setBooting] = useState(shouldBootLoader);
 
+  useLenis(!booting);
+  useKeepAlive();
+
   const finish = () => {
-    sessionStorage.setItem("bc-booted", "1");
+    try {
+      sessionStorage.setItem("bc-booted", "1");
+    } catch {}
     setBooting(false);
   };
 
@@ -24,8 +38,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         Skip to main content
       </a>
       {booting && <Loader onDone={finish} />}
+      <ScrollProgress />
+      <MagneticCursor />
+      <StarfieldBackground />
       <BioLuminescentBackdrop />
-      <main id="main">
+      <main id="main" className="relative">
         {children}
       </main>
     </div>

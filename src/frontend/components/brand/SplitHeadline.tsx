@@ -10,9 +10,9 @@ export function SplitHeadline({
 }: {
   text: string;
   className?: string;
-  as?: "h1" | "h2" | "h3";
+  as?: "h1" | "h2" | "h3" | "span" | "div";
 }) {
-  const ref = useRef<HTMLHeadingElement>(null);
+  const ref = useRef<any>(null);
   const inView = useInView(ref, { once: true, margin: "-10% 0px" });
   const words = text.split(" ");
 

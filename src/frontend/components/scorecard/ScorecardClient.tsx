@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-
-const API = process.env.NEXT_PUBLIC_API_BASE ?? "/v1";
+import { API } from "@/lib/api";
+import { Spinner } from "@/components/ui/Spinner";
+import { ErrorBanner } from "@/components/ui/ErrorBanner";
 
 interface Scorecard {
   model_version: string;
@@ -21,39 +22,60 @@ interface Scorecard {
   limitations: string;
 }
 
-function Metric({ label, value, hint }: { label: string; value: string; hint?: string }) {
+function Metric({ label, value, hint, delay = 0 }: { label: string; value: string; hint?: string; delay?: number }) {
   return (
-    <div className="glass rounded-xl p-5 border border-border-subtle">
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ delay, duration: 0.5 }}
+      className="glass rounded-xl p-5 border border-border-subtle relative overflow-hidden"
+    >
       <div className="text-xs uppercase tracking-wider text-fg-muted">{label}</div>
-      <div className="font-display text-3xl font-bold text-glow-cyan mt-1">{value}</div>
+      <div className="font-display text-3xl font-bold text-glow-cyan mt-1 tabular">{value}</div>
       {hint && <div className="text-xs text-fg-faint mt-1">{hint}</div>}
-    </div>
+    </motion.div>
   );
 }
 
 export function ScorecardClient() {
   const [sc, setSc] = useState<Scorecard | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = () => {
+    setLoading(true);
+    setError(null);
+    fetch(`${API}/v1/scorecard`)
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status} on /v1/scorecard`);
+        return r.json();
+      })
+      .then(d => { setSc(d); setLoading(false); })
+      .catch((e) => { setLoading(false); setError(String(e?.message ?? e)); });
+  };
 
   useEffect(() => {
-    fetch(`${API}/v1/scorecard`)
-      .then((r) => r.json())
-      .then(d => setSc(d))
-      .catch(() => setSc(null));
+    load();
   }, []);
 
-  if (!sc) return <div className="text-fg-muted">Loading scorecard…</div>;
+  if (loading && !sc) return <Spinner label="Loading integrity scorecard" />;
+  if ((error && !sc) || (!loading && !sc)) {
+    return <ErrorBanner message={error ?? "Scorecard unavailable."} onRetry={load} />;
+  }
+  if (!sc) return null;
 
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Metric label="Brier score" value={sc.brier.toFixed(3)} hint="lower is better" />
-        <Metric label="ROC-AUC" value={sc.auc.toFixed(3)} hint="discrimination" />
-        <Metric label="Hit rate" value={`${(sc.hit_rate * 100).toFixed(0)}%`} hint="predicted | observed" />
-        <Metric label="False alarm" value={`${(sc.false_alarm_rate * 100).toFixed(0)}%`} hint="predicted | not observed" />
+        <Metric label="Brier score" value={sc.brier.toFixed(3)} hint="lower is better" delay={0} />
+        <Metric label="ROC-AUC" value={sc.auc.toFixed(3)} hint="discrimination" delay={0.08} />
+        <Metric label="Hit rate" value={`${(sc.hit_rate * 100).toFixed(0)}%`} hint="predicted | observed" delay={0.16} />
+        <Metric label="False alarm" value={`${(sc.false_alarm_rate * 100).toFixed(0)}%`} hint="predicted | not observed" delay={0.24} />
       </div>
 
       <div className="glass rounded-2xl p-8 border border-border-subtle">
-        <h3 className="font-display text-lg font-semibold mb-6">Reliability diagram</h3>
+        <h3 className="font-display text-lg font-semibold mb-6 tracking-wide">Reliability diagram</h3>
         <div className="relative h-56 bg-bg-abyss rounded-xl border border-border-faint">
           <svg viewBox="0 0 400 200" className="w-full h-full">
             <line x1="20" y1="180" x2="380" y2="180" stroke="#3d5666" strokeWidth="1" />
@@ -113,9 +135,9 @@ export function ScorecardClient() {
         </div>
         <div className="mt-6 grid md:grid-cols-3 gap-4 text-sm">
           {[
-            ["Δ vs climatology", sc.delta_vs_climatology],
-            ["Δ vs persistence", sc.delta_vs_persistence],
-            ["Δ vs weather-only", sc.delta_vs_weather_only],
+            ["vs climatology", sc.delta_vs_climatology],
+            ["vs persistence", sc.delta_vs_persistence],
+            ["vs weather-only", sc.delta_vs_weather_only],
           ].map(([label, d]: any) => (
             <div key={label} className="rounded-lg bg-bg-deep/60 p-4 border border-border-faint">
               <div className="text-xs text-fg-muted mb-1">{label}</div>
@@ -133,7 +155,7 @@ export function ScorecardClient() {
         <h3 className="font-display text-lg font-semibold mb-3 text-glow-yellow">Honest limitations</h3>
         <p className="text-sm text-fg-secondary leading-relaxed">{sc.limitations}</p>
         <div className="mt-6 text-xs text-fg-muted">
-          Calibration: {sc.calibration_method} · Model version: <span className="font-mono">{sc.model_version}</span> · n={sc.sample_size}
+          Calibration: {sc.calibration_method} · n={sc.sample_size}
         </div>
       </div>
     </div>

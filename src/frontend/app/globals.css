@@ -14,6 +14,7 @@
   --fg-faint: #3d5666;
   --glow-cyan: #00f0d4;
   --glow-green: #00ff88;
+  --glow-violet: #8b5cf6;
   --glow-yellow: #ffcc00;
   --glow-orange: #ff8800;
   --glow-red: #ff3355;
@@ -228,6 +229,56 @@ textarea {
 
 .animate-shimmer {
   animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes orbA {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(6vw, -4vh) scale(1.15); }
+  66% { transform: translate(-4vw, 5vh) scale(0.92); }
+}
+
+@keyframes orbB {
+  0%, 100% { transform: translate(0, 0) scale(1.05); }
+  50% { transform: translate(-7vw, 6vh) scale(1.2); }
+}
+
+.animate-orb-a {
+  animation: orbA 22s ease-in-out infinite;
+  will-change: transform;
+}
+
+.animate-orb-b {
+  animation: orbB 26s ease-in-out infinite;
+  will-change: transform;
+}
+
+.scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  z-index: 60;
+  background: linear-gradient(90deg, var(--glow-cyan), var(--glow-violet), var(--glow-orange));
+  width: 0%;
+  box-shadow: 0 0 12px var(--glow-cyan);
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+
+/* Section-to-section cinematic fade: each film section cross-fades edges */
+.section-fade {
+  animation: sectionIn 0.9s ease-out both;
+}
+
+@keyframes sectionIn {
+  from { opacity: 0.4; }
+  to { opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
