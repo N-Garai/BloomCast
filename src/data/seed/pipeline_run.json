@@ -1,14 +1,15 @@
 {
-  "run_at": "2026-09-19T06:06:07Z",
+  "run_at": "2026-09-20T07:12:06Z",
   "steps": [
     {
       "name": "ingest",
       "status": "skipped",
-      "reason": "Server error '503 Service Unavailable' for url 'https://api.open-meteo.com/v1/forecast?latitude=44.5&longitude=-87.9&hourly=temperature_2m%2Crelativehumidity_2m%2Cdewpoint_2m%2Cwind_speed_10m%2Cwind_direction_10m%2Cprecipitation%2Cshortwave_radiation%2Ccloud_cover%2Cpressure_msl%2Csoil_temperature_0cm%2Ctemperature_80m%2Cwind_speed_80m&forecast_days=14&timezone=UTC&temperature_unit=celsius&wind_speed_unit=ms&precipitation_unit=mm'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/503"
+      "reason": ""
     },
     {
       "name": "seed",
-      "status": "ok"
+      "status": "skipped",
+      "reason": "Command '['/opt/hostedtoolcache/Python/3.11.16/x64/bin/python', '/home/runner/work/BloomCast/BloomCast/scripts/generate_seed.py']' returned non-zero exit status 1."
     }
   ]
 }
