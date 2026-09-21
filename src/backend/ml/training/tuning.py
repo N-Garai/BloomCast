@@ -72,7 +72,8 @@ def tune_lightgbm(X: np.ndarray, y: np.ndarray, n_trials: int = 30,
             "n_trials": n_trials}
 
 
-def train_quantiles(X: np.ndarray, y: np.ndarray, params: dict | None = None):
+def train_quantiles(X: np.ndarray, y: np.ndarray, params: dict | None = None,
+                    sample_weight=None):
     """Quantile LightGBM regressors (α=0.05/0.95) for prediction intervals.
 
     PRD §7.5: intervals widen with horizon and feature uncertainty. Trained on
@@ -89,6 +90,7 @@ def train_quantiles(X: np.ndarray, y: np.ndarray, params: dict | None = None):
         p.update({"objective": "quantile", "alpha": alpha})
         reg = lgb.LGBMRegressor(**{k: v for k, v in p.items()
                                    if k in lgb.LGBMRegressor().get_params()})
-        reg.fit(np.asarray(X, dtype=np.float64), np.asarray(y, dtype=float))
+        reg.fit(np.asarray(X, dtype=np.float64), np.asarray(y, dtype=float),
+                sample_weight=sample_weight)
         models[name] = reg
     return models

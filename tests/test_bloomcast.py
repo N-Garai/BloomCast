@@ -605,5 +605,67 @@ def test_optuna_resume(tmp_path):
     assert set(r2["params"]) >= {"n_estimators", "learning_rate", "num_leaves"}
 
 
+# --- polite fetcher: Retry-After, backoff, progress ---------------------------
+
+def test_fetch_honors_retry_after(monkeypatch):
+    import httpx
+    from ml.training import real_labels as rl
+
+    calls = []
+
+    class R429:
+        status_code = 429
+        headers = {"retry-after": "0"}
+
+        def raise_for_status(self):
+            raise httpx.HTTPStatusError("throttled", request=None, response=self)
+
+    class R200:
+        headers = {}
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"hourly": {}}
+
+    def fake_get(*a, **k):
+        calls.append(1)
+        if len(calls) < 3:
+            return R429()
+        return R200()
+
+    monkeypatch.setattr(httpx, "get", fake_get)
+    out = rl._default_fetch(47.0, 8.0, "2016-06-01", "2016-07-01")
+    assert out == {"hourly": {}} and len(calls) == 3
+
+
+def test_fetch_gives_up(monkeypatch):
+    import httpx
+    from ml.training import real_labels as rl
+
+    def always_fail(*a, **k):
+        raise httpx.ConnectError("down")
+
+    monkeypatch.setattr(httpx, "get", always_fail)
+    monkeypatch.setattr("time.sleep", lambda *a: None)
+    try:
+        rl._default_fetch(47.0, 8.0, "2016-06-01", "2016-07-01", retries=1)
+        raise AssertionError("should have raised")
+    except httpx.ConnectError:
+        pass
+
+
+def test_frame_progress_prints(tmp_path, capsys):
+    import ml.training.real_labels as rl
+    from ingestion.drivendata_loader import load_training_frame
+
+    rows = load_training_frame(ROOT / "tests" / "fixtures" / "ticktickbloom_mini")
+    rl.build_weather_frame(rows[:4], cache_path=None, fetch_fn=_stub_archive,
+                           max_workers=2, progress_every=2)
+    out = capsys.readouterr().out
+    assert "weather join" in out
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

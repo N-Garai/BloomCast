@@ -41,7 +41,13 @@ def main() -> int:
         print("or re-run with --allow-synthetic for a local-only smoke test.")
         return 2
 
-    quantiles = train_quantiles(bundle["frame"]["X"], bundle["frame"]["y"])
+    sev = bundle["frame"].get("severity")
+    sw_exp = None
+    if sev is not None:
+        import numpy as _np
+        sw_exp = 0.5 + _np.asarray(sev, dtype=float) / 5.0
+    quantiles = train_quantiles(bundle["frame"]["X"], bundle["frame"]["y"],
+                                sample_weight=sw_exp)
     base = bundle["base"]
     raw_head = float(bundle["lgbm"].model.predict_proba(
         base.reshape(1, -1).astype(np.float64))[0][1])

@@ -93,12 +93,15 @@ def _sample_weather(lat: float, lon: float, date: str, fetch_fn) -> dict:
 
 
 def _default_fetch(lat: float, lon: float, start: str, end: str,
-                   retries: int = 3) -> dict:
-    """Live Open-Meteo archive fetch (network) with bounded retries.
+                   retries: int = 4) -> dict:
+    """Live Open-Meteo archive fetch (network) with polite retries.
 
-    A 23k-sample join makes thousands of calls — without retries the normal
-    background rate of transient 5xx/timeouts silently eats rows as skips.
+    A 23k-sample join makes thousands of calls. Lessons from a throttled
+    10-hour run: honor Retry-After on 429/503, add jitter so parallel
+    workers don't retry in lockstep, and back off exponentially. Without
+    this, throttling turns into mass skips.
     """
+    import random
     import time
 
     import httpx
@@ -123,10 +126,28 @@ def _default_fetch(lat: float, lon: float, start: str, end: str,
             )
             r.raise_for_status()
             return r.json()
-        except Exception as exc:  # noqa: BLE001 - retry, then propagate
+        except httpx.HTTPStatusError as exc:
             last = exc
-            time.sleep(2.0 * (attempt + 1))
+            if exc.response.status_code not in (429, 500, 502, 503, 504):
+                raise
+            wait = _retry_wait(exc.response, attempt)
+            time.sleep(wait)
+        except Exception as exc:  # noqa: BLE001 - timeouts/transports retry too
+            last = exc
+            time.sleep(2.0 * (attempt + 1) + random.uniform(0, 1))
     raise last  # type: ignore[misc]
+
+
+def _retry_wait(response, attempt: int) -> float:
+    """Honor the server's Retry-After header when present, else backoff+jitter."""
+    import random
+
+    try:
+        asked = float(response.headers.get("retry-after", ""))
+        return max(0.0, min(asked, 120.0))
+    except (TypeError, ValueError):
+        pass
+    return min(2.0 * (2 ** attempt), 60.0) + random.uniform(0, 1)
 
 
 def _cache_key(lat: float, lon: float, date: str) -> str:
@@ -134,13 +155,17 @@ def _cache_key(lat: float, lon: float, date: str) -> str:
 
 
 def build_weather_frame(rows: list, cache_path: str | Path | None = None,
-                        fetch_fn=None, max_workers: int = 8) -> dict:
+                        fetch_fn=None, max_workers: int = 4,
+                        progress_every: int = 2000) -> dict:
     """Build (X_tab, X_seq, y, doy, wb_ids, dates) from labeled rows.
 
     Skips rows whose weather cannot be fetched (logged count in meta).
     Spectral/citizen blocks are zeros; static block carries lat/lon.
     Uncached fetches run in a thread pool (network-bound) while result order
     follows the input rows, so date-sorted training output is preserved.
+    Concurrency defaults to 4: higher rates get throttled by the upstream
+    API, which costs more time than it saves. Progress prints keep
+    long Kaggle runs observable.
     """
     import json as _json
     from concurrent.futures import ThreadPoolExecutor
@@ -203,7 +228,12 @@ def build_weather_frame(rows: list, cache_path: str | Path | None = None,
 
     todo_idx = [i for i, r in enumerate(rows)
                 if _cache_key(r["lat"], r["lon"], r["date"]) not in cache]
+    if todo_idx:
+        print(f"weather join: {len(todo_idx)}/{len(rows)} to fetch "
+              f"({len(rows) - len(todo_idx)} cached)", flush=True)
     fetched_parts: dict = {}
+    fetched_so_far = len(rows) - len(todo_idx)
+    printed_marks = fetched_so_far // max(1, progress_every)
     for c in range(0, len(todo_idx), FLUSH_EVERY):
         chunk = todo_idx[c:c + FLUSH_EVERY]
         fresh_batch = []
@@ -225,6 +255,12 @@ def build_weather_frame(rows: list, cache_path: str | Path | None = None,
                 if header:
                     dw.writeheader()
                 dw.writerows(fresh_batch)
+        fetched_so_far += len(chunk)
+        if progress_every and fetched_so_far // progress_every > printed_marks:
+            printed_marks = fetched_so_far // progress_every
+            n_skip = sum(1 for v in fetched_parts.values() if v is None)
+            print(f"weather join: {fetched_so_far}/{len(rows)} "
+                  f"({n_skip} skipped so far)", flush=True)
 
     for i, r in enumerate(rows):
         if i in fetched_parts:
