@@ -1,5 +1,5 @@
 {
-  "run_at": "2026-09-20T07:12:06Z",
+  "run_at": "2026-09-21T07:21:22Z",
   "steps": [
     {
       "name": "ingest",
@@ -8,8 +8,7 @@
     },
     {
       "name": "seed",
-      "status": "skipped",
-      "reason": "Command '['/opt/hostedtoolcache/Python/3.11.16/x64/bin/python', '/home/runner/work/BloomCast/BloomCast/scripts/generate_seed.py']' returned non-zero exit status 1."
+      "status": "ok"
     }
   ]
 }

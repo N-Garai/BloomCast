@@ -3,10 +3,10 @@
   "name": "Seixal Stream",
   "city": "Lisbon",
   "country": "PT",
-  "risk_score": 0.94,
-  "risk_level": "critical",
-  "rainfall_48h_mm": 51.0,
-  "dry_days_antecedent": 11.0,
+  "risk_score": 0.47,
+  "risk_level": "low",
+  "rainfall_48h_mm": 24.0,
+  "dry_days_antecedent": 4.0,
   "impervious_proxy": 0.84,
   "updated_at": "2026-09-18T02:00:00Z"
 }

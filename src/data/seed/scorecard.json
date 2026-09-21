@@ -18,7 +18,7 @@
       0.7890295358649789
     ],
     "prob_pred": [
-      0.08102079010259133,
+      0.08102079010259132,
       0.19001957093663077,
       0.3129728710812626,
       0.4377083161322979,
@@ -37,13 +37,13 @@
     },
     "persistence": {
       "auc": 0.6133794337341325,
-      "brier": 0.28805513698171675,
+      "brier": 0.2880551517009735,
       "hit_rate": 0.5758176412289395,
       "false_alarm_rate": 0.42330978809283554
     },
     "weather_only": {
-      "auc": 0.6764885455721914,
-      "brier": 0.22621056358772307,
+      "auc": 0.6764886705823172,
+      "brier": 0.2262105643749237,
       "hit_rate": 0.6352824578790882,
       "false_alarm_rate": 0.37235116044399597
     }
@@ -53,12 +53,12 @@
     "auc": -0.31338425912498924
   },
   "delta_vs_persistence": {
-    "brier": -0.05457495180788821,
+    "brier": -0.05457496652714497,
     "auc": 0.055885776747916505
   },
   "delta_vs_weather_only": {
-    "brier": 0.007269621586105474,
-    "auc": -0.007223335090142391
+    "brier": 0.007269620798904836,
+    "auc": -0.0072234601002681975
   },
   "calibration_method": "Isotonic regression on out-of-fold predictions, refit on full data",
   "limitations": "Trained and evaluated on SYNTHETIC labels (physically-motivated rule + noise, n=4000) \u2014 these metrics describe the generator, not real-lake skill. Add Tick Tick Bloom labels (docs/training-data.md) to train on real in-situ observations.",
