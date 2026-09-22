@@ -667,5 +667,96 @@ def test_frame_progress_prints(tmp_path, capsys):
     assert "weather join" in out
 
 
+def test_interrupt_cancels_pending_futures(tmp_path):
+    """Simulated Ctrl+C mid-join: KeyboardInterrupt surfaces promptly and no
+    hang on pool shutdown."""
+    import time
+    import ml.training.real_labels as rl
+    from ingestion.drivendata_loader import load_training_frame
+
+    calls = []
+
+    def boom(*a):
+        calls.append(1)
+        if len(calls) == 2:
+            raise KeyboardInterrupt()
+        time.sleep(0.01)
+        return _stub_archive(*a)
+
+    rows = load_training_frame(ROOT / "tests" / "fixtures" / "ticktickbloom_mini")
+    t = time.time()
+    try:
+        rl.build_weather_frame(rows, cache_path=None, fetch_fn=boom, max_workers=2)
+        raise AssertionError("should have raised KeyboardInterrupt")
+    except KeyboardInterrupt:
+        pass
+    assert time.time() - t < 30, "interrupt must not hang on shutdown"
+
+
+# --- join crash-safety: bad rows, corrupt cache, empty frame ---------------
+
+def test_bad_rows_become_skips_not_crashes(monkeypatch, tmp_path):
+    import ml.training.real_labels as rl
+
+    def stub(lat, lon, start, end):
+        hours = 30 * 24
+        return {"hourly": {
+            "temperature_2m": [20.0] * hours,
+            "wind_speed_10m": [3.0] * hours,
+            "precipitation": [0.0] * hours,
+            "shortwave_radiation": [200.0] * hours,
+            "cloud_cover": [20.0] * hours,
+            "dewpoint_2m": [12.0] * hours,
+            "pressure_msl": [1013.0] * hours,
+        }}
+
+    rows = [
+        {"uid": "ok1", "lat": 47.3, "lon": 8.5, "date": "2016-06-01",
+         "region": "midwest", "severity": 1, "y": 0},
+        {"uid": "baddate", "lat": 47.3, "lon": 8.5, "date": "not-a-date",
+         "region": "midwest", "severity": 4, "y": 1},
+        {"uid": "ok2", "lat": 41.9, "lon": -83.1, "date": "2016-07-01",
+         "region": "midwest", "severity": 5, "y": 1},
+    ]
+    frame = rl.build_weather_frame(rows, cache_path=None, fetch_fn=stub)
+    assert len(frame["y"]) == 2 and frame["skipped"] == 1
+    assert frame["dates"] == ["2016-06-01", "2016-07-01"]
+
+
+def test_corrupt_cache_row_is_skipped(tmp_path):
+    import ml.training.real_labels as rl
+    from ingestion.drivendata_loader import load_training_frame
+
+    cache = tmp_path / "wc.csv"
+    cache.write_text(
+        "key,weather,sequence\n"
+        "deadbeef,\"{not json\",\"[]\"\n",
+        encoding="utf-8",
+    )
+    rows = load_training_frame(ROOT / "tests" / "fixtures" / "ticktickbloom_mini")
+
+    def boom(*a):
+        raise AssertionError("network must not be touched")
+
+    # Corrupt entry matches nothing: rows miss cache, boom raises inside
+    # _one (caught per-row), frame ends empty with a clear error — no crash
+    # during cache load itself.
+    try:
+        rl.build_weather_frame(rows, cache_path=cache, fetch_fn=boom)
+        raise AssertionError("expected empty-frame ValueError")
+    except ValueError as e:
+        assert "no usable rows" in str(e)
+
+
+def test_empty_frame_raises_clearly():
+    import ml.training.real_labels as rl
+
+    try:
+        rl.build_weather_frame([], cache_path=None, fetch_fn=lambda *a: {})
+        raise AssertionError("should have raised ValueError")
+    except ValueError as e:
+        assert "no usable rows" in str(e)
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

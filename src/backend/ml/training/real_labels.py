@@ -122,7 +122,9 @@ def _default_fetch(lat: float, lon: float, start: str, end: str,
             r = httpx.get(
                 "https://archive-api.open-meteo.com/v1/archive",
                 params=params,
-                timeout=45.0,
+                # 30-day archive payloads are small; 30s bounds a hung socket
+                # so one bad connection cannot stall a whole worker pool.
+                timeout=30.0,
             )
             r.raise_for_status()
             return r.json()
@@ -156,7 +158,7 @@ def _cache_key(lat: float, lon: float, date: str) -> str:
 
 def build_weather_frame(rows: list, cache_path: str | Path | None = None,
                         fetch_fn=None, max_workers: int = 4,
-                        progress_every: int = 2000) -> dict:
+                        progress_every: int = 500) -> dict:
     """Build (X_tab, X_seq, y, doy, wb_ids, dates) from labeled rows.
 
     Skips rows whose weather cannot be fetched (logged count in meta).
@@ -168,15 +170,19 @@ def build_weather_frame(rows: list, cache_path: str | Path | None = None,
     long Kaggle runs observable.
     """
     import json as _json
-    from concurrent.futures import ThreadPoolExecutor
+    from concurrent.futures import ThreadPoolExecutor, as_completed
 
     fetch_fn = fetch_fn or _default_fetch
     cache: dict = {}
     cache_path = Path(cache_path) if cache_path else None
     if cache_path and cache_path.exists():
-        with open(cache_path, newline="") as f:
-            for r in csv.DictReader(f):
-                cache[r["key"]] = r
+        try:
+            with open(cache_path, newline="") as f:
+                for r in csv.DictReader(f):
+                    if r.get("key"):
+                        cache[r["key"]] = r
+        except Exception:
+            cache = {}  # corrupt cache file: refetch rather than crash
 
     regions = sorted({r["region"] for r in rows})
     reg_id = {name: i for i, name in enumerate(regions)}
@@ -226,6 +232,17 @@ def build_weather_frame(rows: list, cache_path: str | Path | None = None,
     sev_list = []
     skipped = 0
 
+    def safe_assemble(r, w, seq):
+        """Assemble one row, returning None instead of raising.
+
+        A single malformed row (bad date, short series, odd region) must
+        degrade to a skip — never abort a 23k-row join at 3am.
+        """
+        try:
+            return assemble_parts(r, w, seq)
+        except Exception:
+            return None
+
     todo_idx = [i for i, r in enumerate(rows)
                 if _cache_key(r["lat"], r["lon"], r["date"]) not in cache]
     if todo_idx:
@@ -238,15 +255,27 @@ def build_weather_frame(rows: list, cache_path: str | Path | None = None,
         chunk = todo_idx[c:c + FLUSH_EVERY]
         fresh_batch = []
         if chunk:
+            # submit/as_completed (not pool.map): on KeyboardInterrupt the
+            # pending futures are cancelled instead of lingering as zombie
+            # threads that double upstream load on the next run.
             with ThreadPoolExecutor(max_workers=max(1, max_workers)) as pool:
-                for i, res in zip(chunk, pool.map(lambda i: _one(rows[i]), chunk)):
-                    status, _, w, seq, fresh = res
-                    if status != "ok":
-                        fetched_parts[i] = None
-                        continue
-                    fetched_parts[i] = assemble_parts(rows[i], w, seq)
-                    if fresh:
-                        fresh_batch.append(fresh)
+                futs = {pool.submit(_one, rows[i]): i for i in chunk}
+                try:
+                    for fut in as_completed(futs):
+                        i = futs[fut]
+                        res = fut.result()
+                        status, _, w, seq, fresh = res
+                        if status != "ok":
+                            fetched_parts[i] = None
+                            continue
+                        fetched_parts[i] = safe_assemble(rows[i], w, seq)
+                        if fresh:
+                            fresh_batch.append(fresh)
+                except BaseException:
+                    for f in futs:
+                        f.cancel()
+                    pool.shutdown(wait=False, cancel_futures=True)
+                    raise
         if cache_path and fresh_batch:
             cache_path.parent.mkdir(parents=True, exist_ok=True)
             header = not cache_path.exists() or cache_path.stat().st_size == 0
@@ -274,7 +303,11 @@ def build_weather_frame(rows: list, cache_path: str | Path | None = None,
             if status != "ok":
                 skipped += 1
                 continue
-            x, s_row, yy, sev, dd, wid, date = assemble_parts(r, w, seq)
+            parts = safe_assemble(r, w, seq)
+            if parts is None:
+                skipped += 1
+                continue
+            x, s_row, yy, sev, dd, wid, date = parts
         X.append(x)
         S.append(s_row)
         y.append(yy)
@@ -282,6 +315,12 @@ def build_weather_frame(rows: list, cache_path: str | Path | None = None,
         doy.append(dd)
         wids.append(wid)
         dates.append(date)
+
+    if not y:
+        raise ValueError(
+            f"no usable rows: {len(rows)} input, {skipped} skipped "
+            "(upstream outage? check network, then rerun — cache resumes)"
+        )
 
     return {
         "X": np.asarray(X, dtype=np.float32),

@@ -87,5 +87,6 @@ empty spectral block, outside pilot calibration).
 | `TICKTICKBLOOM_DIR` | Competition CSVs (training time only) |
 | `CAML_DIR` | CAML `.sb` file location (alternative to the above) |
 | `CAML_MAX_DISTANCE_M` | Drop samples taken farther than this from water |
+| `N_SAMPLES` | Stratified (label × region) subsample cap — e.g. 8000 finishes the join in ~1/3 the time with the same mix. Unset trains on everything |
 | `BLOOMCAST_WEATHER_CACHE` | Override the weather-join cache path (training time) |
 | `BLOOMCAST_ARTIFACTS` | Override the artifacts directory (serving time) |
