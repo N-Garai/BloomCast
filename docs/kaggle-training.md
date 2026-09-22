@@ -30,10 +30,16 @@ them — the backend and nightly job then do pure inference.**
      read-only on this repo), or upload `src/backend/{ml,features,ingestion,shared}`
      once as a second input dataset — the notebook detects and uses it, no
      git involved. **Revoke the token when done** — it exists only for the clone.
-4. **Run the notebook** `src/backend/ml/training/kaggle_train.ipynb` on Kaggle
-   (GPU accelerator, internet ON). It trains, exports, and self-verifies.
-   Expected final line: `reload OK — download /kaggle/working/bloomcast_artifacts …`
-   (source=tick-tick-bloom)` plus OOF AUC/Brier printed by the trainer.
+4. **Run the notebook** `src/backend/ml/training/bloomcast-model.ipynb` —
+   same file on both platforms (it detects Colab vs Kaggle itself):
+   - *Kaggle:* GPU accelerator, internet ON.
+   - *Colab:* GPU runtime (Runtime → Change runtime type → T4), **mount Drive
+     when asked** (run cells top to bottom — the auth popup is mandatory),
+     add the `GITHUB_TOKEN` secret via the key icon only if the repo is
+     private, and put the dataset in Drive `bloomcast/data/` or upload it to
+     the session `/content/` (Drive survives disconnects, session files don't).
+   It trains, exports, and self-verifies. Expected final line: `reload OK …`
+   plus OOF AUC/Brier printed by the trainer.
 3. **Download** `bloomcast_artifacts/` (7 files) from the notebook output.
 4. **Commit them** to the repo. CI enforces the honesty rule:
    `test_committed_artifacts_are_real` fails the build if committed artifacts
@@ -42,6 +48,21 @@ them — the backend and nightly job then do pure inference.**
    model and runs inference only — no training, no labels, no weather join.
    `train_and_predict()` falls back to in-process training automatically if
    the artifacts are ever removed or become feature-incompatible.
+
+## Background runs: Kaggle vs Colab (read this before a 2-hour run)
+
+- **Kaggle:** *Save & Run All* executes headless as a committed version —
+  closing the laptop is safe.
+- **Colab free: no background execution.** The tab must stay open; an idle
+  timeout (tens of minutes, varies) kills the kernel. Mitigations, all built
+  in: progress lines print continuously (activity helps), the weather cache
+  flushes every 500 rows, Optuna resumes its study — a re-run continues where
+  the dead one stopped as long as Drive files persist. Colab Pro ($10/mo) is
+  the only way to close the tab.
+- **Never re-download work already done:** cache (`weather_cache.csv`),
+  Optuna DB (`optuna.db`), and artifacts all live in the platform work dir
+  (`/kaggle/working` or Drive `bloomcast/`). Delete those files only to force
+  a clean rerun.
 
 ## Realtime prediction from live weather
 
