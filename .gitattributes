@@ -1,0 +1,6 @@
+# Model artifacts and data files must round-trip byte-exact: LightGBM's
+# model parser aborts the whole process on stray CR bytes, so Git must
+# never perform line-ending conversion inside these paths.
+src/backend/ml/artifacts/** -text
+*.npz -text
+*.sb -text
