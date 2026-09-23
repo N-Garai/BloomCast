@@ -1,0 +1,186 @@
+{
+  "feature_names": [
+    "temp_mean_3d",
+    "temp_mean_7d",
+    "temp_anomaly_7d",
+    "wind_speed_mean_3d",
+    "wind_speed_max_3d",
+    "wind_dir_variance_3d",
+    "precip_sum_7d",
+    "precip_sum_3d",
+    "dry_days_7d",
+    "solar_mean_3d",
+    "cloud_cover_mean_3d",
+    "dewpoint_mean_3d",
+    "pressure_trend_3d",
+    "growing_degree_days",
+    "heat_wave_flag",
+    "ndci_mean",
+    "ndci_trend_5d",
+    "ndci_max",
+    "chlorophyll_a_mean",
+    "chlorophyll_a_trend_5d",
+    "ndvi_mean",
+    "fai_mean",
+    "ndci_std_7d",
+    "citizen_reports_7d",
+    "citizen_color_green_ratio",
+    "citizen_scum_reports_7d",
+    "citizen_consensus_severity",
+    "citizen_report_density",
+    "area_km2",
+    "latitude",
+    "longitude",
+    "impervious_proxy"
+  ],
+  "model_version": "v2.2.0-kaggle-labels",
+  "training_source": "tick-tick-bloom",
+  "training_note": "Kaggle-trained on 23570 Tick Tick Bloom samples; Optuna-tuned LightGBM + GPU CNN + quantiles.",
+  "exported_at": "2026-09-23T11:06:01.144035+00:00",
+  "ci_half": 0.3,
+  "oof_auc": 0.7590639102271942,
+  "oof_brier": 0.1735247681642598,
+  "optuna_params": {
+    "n_estimators": 330,
+    "max_depth": 9,
+    "learning_rate": 0.010357836161173629,
+    "num_leaves": 27,
+    "subsample": 0.6492979320311134,
+    "colsample_bytree": 0.9081186972596855,
+    "min_child_samples": 98,
+    "reg_alpha": 0.04064869980417834,
+    "reg_lambda": 0.5669731431418367,
+    "random_state": 42,
+    "verbose": -1
+  },
+  "scorecard": {
+    "model_version": "v2.2.0-kaggle-labels",
+    "horizon_days": 5,
+    "sample_size": 23570,
+    "brier": 0.1735247681642598,
+    "auc": 0.7590639102271942,
+    "hit_rate": 0.5932551922681473,
+    "false_alarm_rate": 0.07013868824039295,
+    "reliability_diagram": {
+      "prob_true": [
+        0.2803831855876466,
+        0.14242424242424243,
+        0.24330042313117067,
+        0.3642908567314615,
+        0.5503533568904594,
+        0.6510638297872341,
+        0.7021276595744681,
+        0.9855660802886784
+      ],
+      "prob_pred": [
+        0.035899284294430824,
+        0.18383905874333947,
+        0.3041388067635989,
+        0.42924808256856645,
+        0.5617490960306031,
+        0.6795169179564344,
+        0.7777800421610531,
+        0.9781396182736662
+      ]
+    },
+    "baselines": {
+      "climatology": {
+        "auc": 0.8989735540875761,
+        "brier": 0.11614685403633382,
+        "hit_rate": 0.6994653506066214,
+        "false_alarm_rate": 0.06212077434267553
+      },
+      "persistence": {
+        "auc": 0.5,
+        "brier": 0.25,
+        "hit_rate": 1.0,
+        "false_alarm_rate": 1.0
+      },
+      "weather_only": {
+        "auc": 0.7368742500004308,
+        "brier": 0.19905971692326638,
+        "hit_rate": 0.51326341764343,
+        "false_alarm_rate": 0.15226813059809305
+      }
+    },
+    "delta_vs_climatology": {
+      "brier": 0.05737791412792598,
+      "auc": -0.13990964386038185
+    },
+    "delta_vs_persistence": {
+      "brier": -0.0764752318357402,
+      "auc": 0.2590639102271942
+    },
+    "delta_vs_weather_only": {
+      "brier": -0.02553494875900658,
+      "auc": 0.022189660226763386
+    },
+    "calibration_method": "Isotonic regression on out-of-fold predictions, refit on full data",
+    "limitations": "BloomCast's verification uses a held-out test set of 5 EU lakes never seen during training. Sample size is small (n=23570 bloom events). Metrics should be interpreted as preliminary until additional seasons of data are collected. The Scorecard is updated nightly as new observations arrive.",
+    "per_region": {
+      "midwest": {
+        "auc": 0.7742902868943137,
+        "brier": 0.18555684588687296,
+        "n": 3765,
+        "positive_rate": 0.3958
+      },
+      "northeast": {
+        "auc": 0.7040237145590066,
+        "brier": 0.16881031562222507,
+        "n": 2190,
+        "positive_rate": 0.2447
+      },
+      "south": {
+        "auc": 0.6328396571265535,
+        "brier": 0.13973446096722747,
+        "n": 11459,
+        "positive_rate": 0.1678
+      },
+      "west": {
+        "auc": 0.7541049645053194,
+        "brier": 0.23074163116169497,
+        "n": 6156,
+        "positive_rate": 0.9384
+      }
+    }
+  },
+  "headline": {
+    "p_bloom": 0.2177019539224263,
+    "ci_lo": 0.2177019539224263,
+    "ci_hi": 1.0,
+    "shap_top_features": [
+      {
+        "feature": "longitude",
+        "human": "Longitude",
+        "shap_value": -1.0668,
+        "method": "shap"
+      },
+      {
+        "feature": "temp_mean_7d",
+        "human": "Sustained warm week",
+        "shap_value": -0.3331,
+        "method": "shap"
+      },
+      {
+        "feature": "temp_mean_3d",
+        "human": "Recent warm temperatures",
+        "shap_value": -0.2168,
+        "method": "shap"
+      },
+      {
+        "feature": "latitude",
+        "human": "Latitude",
+        "shap_value": 0.1392,
+        "method": "shap"
+      },
+      {
+        "feature": "solar_mean_3d",
+        "human": "Solar radiation",
+        "shap_value": 0.0797,
+        "method": "shap"
+      }
+    ],
+    "baseline_climatology": 0.0
+  },
+  "has_quantiles": true
+}
