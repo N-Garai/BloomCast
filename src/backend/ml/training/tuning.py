@@ -79,18 +79,40 @@ def train_quantiles(X: np.ndarray, y: np.ndarray, params: dict | None = None,
     PRD §7.5: intervals widen with horizon and feature uncertainty. Trained on
     the binary labels as pseudo-continuous targets — a standard cheap
     approximation; the served CI is clipped to always bracket p_bloom.
+
+    Uses the native booster API deliberately: the sklearn wrapper has no
+    `alpha` parameter, so passing it through get_params() filtering silently
+    trained two identical L2 regressors (found by byte-comparing outputs).
+    Native params make objective/alpha explicit and testable.
     """
     import lightgbm as lgb
 
+    X = np.asarray(X, dtype=np.float64)
+    y = np.asarray(y, dtype=float)
+    w = None if sample_weight is None else np.asarray(sample_weight, dtype=float)
     base = dict(params or {})
-    base.update({"random_state": 42, "verbose": -1})
+    n_rounds = int(base.pop("n_estimators", 200))
+    native_params = {
+        "objective": "quantile",
+        "verbosity": -1,
+        "seed": 42,
+        "deterministic": True,
+        "num_leaves": int(base.get("num_leaves", 31)),
+        "max_depth": int(base.get("max_depth", -1)),
+        "learning_rate": float(base.get("learning_rate", 0.05)),
+        "feature_fraction": float(base.get("colsample_bytree", 0.8)),
+        "bagging_fraction": float(base.get("subsample", 0.8)),
+        "bagging_freq": 1,
+        "min_data_in_leaf": int(base.get("min_child_samples", 20)),
+        "lambda_l1": float(base.get("reg_alpha", 0.0)),
+        "lambda_l2": float(base.get("reg_lambda", 0.0)),
+    }
     models = {}
     for name, alpha in (("q05", 0.05), ("q95", 0.95)):
-        p = dict(base)
-        p.update({"objective": "quantile", "alpha": alpha})
-        reg = lgb.LGBMRegressor(**{k: v for k, v in p.items()
-                                   if k in lgb.LGBMRegressor().get_params()})
-        reg.fit(np.asarray(X, dtype=np.float64), np.asarray(y, dtype=float),
-                sample_weight=sample_weight)
-        models[name] = reg
+        train_set = lgb.Dataset(X, label=y, weight=w)
+        models[name] = lgb.train(
+            {**native_params, "alpha": alpha},
+            train_set,
+            num_boost_round=n_rounds,
+        )
     return models

@@ -42,14 +42,19 @@ def default_dir() -> Path:
     return Path("ml-artifacts")
 
 
+def _as_booster(model):
+    """Unwrap sklearn wrappers to the native booster (native passes through)."""
+    return getattr(model, "booster_", model)
+
+
 def save_artifacts(path: str | Path, *, lgbm_branch, calibrator, ensemble, cnn,
                    feature_names: list, meta: dict, quantiles: dict | None = None) -> Path:
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
-    lgbm_branch.model.booster_.save_model(str(path / MODEL_FILE))
+    _as_booster(lgbm_branch.model).save_model(str(path / MODEL_FILE))
     if quantiles:
-        quantiles["q05"].booster_.save_model(str(path / Q05_FILE))
-        quantiles["q95"].booster_.save_model(str(path / Q95_FILE))
+        _as_booster(quantiles["q05"]).save_model(str(path / Q05_FILE))
+        _as_booster(quantiles["q95"]).save_model(str(path / Q95_FILE))
         meta = {**meta, "has_quantiles": True}
     else:
         meta = {**meta, "has_quantiles": False}

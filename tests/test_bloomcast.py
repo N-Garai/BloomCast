@@ -758,5 +758,49 @@ def test_empty_frame_raises_clearly():
         assert "no usable rows" in str(e)
 
 
+# --- quantile regressors are distinct and ordered ----------------------------
+
+def test_quantile_models_differ_and_order(tmp_path):
+    import numpy as np
+    from ml.training.tuning import train_quantiles
+    from ml.training.artifacts import save_artifacts, load_artifacts
+    from features.feature_store import FEATURE_NAMES
+
+    rng = np.random.default_rng(0)
+    X = rng.normal(0, 1, (200, 32))
+    y = (rng.random(200) > 0.5).astype(int)
+    q = train_quantiles(X, y, {"n_estimators": 30})
+    p05 = np.asarray(q["q05"].predict(X[:20])).ravel()
+    p95 = np.asarray(q["q95"].predict(X[:20])).ravel()
+    assert (p05 <= p95 + 1e-9).all(), "5th percentile must not exceed 95th"
+    assert q["q05"].model_to_string() != q["q95"].model_to_string()
+
+    # native boosters survive the artifact round-trip
+    from ml.training.lightgbm_branch import LightGBMBranch
+    from sklearn.isotonic import IsotonicRegression
+    from ml.training.ensemble import Ensemble
+    from ml.training.cnn_branch import BloomCNN
+
+    lgbm = LightGBMBranch().fit(X, y)
+    cal = IsotonicRegression(out_of_bounds="clip", y_min=0, y_max=1)
+    cal.fit(lgbm.model.predict_proba(X)[:, 1], y)
+    ens = Ensemble().fit(
+        lgbm.model.predict_proba(X)[:, 1],
+        rng.normal(0, 1, (200, 16)), X, y)
+    cnn = BloomCNN()
+    out = tmp_path / "art"
+    save_artifacts(out, lgbm_branch=lgbm, calibrator=cal, ensemble=ens, cnn=cnn,
+                   feature_names=FEATURE_NAMES,
+                   meta={"model_version": "t", "training_source": "t",
+                         "training_note": "t", "ci_half": 0.3,
+                         "oof_auc": 0.5, "oof_brier": 0.25,
+                         "scorecard": {}, "headline": {}},
+                   quantiles=q)
+    loaded = load_artifacts(out, FEATURE_NAMES)
+    assert loaded is not None and loaded["meta"]["has_quantiles"] is True
+    r05 = np.asarray(loaded["quantiles"]["q05"].predict(X[:20])).ravel()
+    assert np.allclose(p05, r05, atol=1e-9)
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

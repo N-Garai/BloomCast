@@ -35,7 +35,7 @@
   ],
   "model_version": "v2.2.0-kaggle-labels",
   "training_source": "tick-tick-bloom",
-  "training_note": "Kaggle-trained on 23570 Tick Tick Bloom samples; Optuna-tuned LightGBM + GPU CNN + quantiles.",
+  "training_note": "Colab-trained on 23570 Tick Tick Bloom samples; Optuna-tuned LightGBM + GPU CNN + quantiles.",
   "exported_at": "2026-09-23T11:06:01.144035+00:00",
   "ci_half": 0.3,
   "oof_auc": 0.7590639102271942,
