@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-22T07:00:19.251640+00:00",
+  "generated_at": "2026-09-23T06:54:45.208848+00:00",
   "model_version": "v2.1.0-synthetic-seed",
   "training_source": "synthetic-seed",
   "training_note": "Synthetic stand-in: labels from a physically-motivated rule (warm + calm + rising chlorophyll), not real bloom observations. Add train_labels.csv + metadata.csv (docs/training-data.md) to train on real labels.",
