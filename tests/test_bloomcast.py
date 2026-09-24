@@ -1418,5 +1418,34 @@ def test_report_validation_accepts_honest_paraphrase(monkeypatch):
     assert R.validation_feedback("", context) == ["empty response"]
 
 
+def test_upstream_throttle_surfaces_as_429(monkeypatch):
+    """Upstream throttling must reach the client as 429 + Retry-After, never
+    503: the frontend auto-retry, proxies, and backoff logic key off 429.
+    (A 503 here once hid every throttling event as a server failure.)"""
+    import api.infer as infer
+    from fastapi.testclient import TestClient
+    from api.main import app
+
+    async def throttled(lat, lon):
+        # What the real _fetch_windows raises after Open-Meteo answers 429
+        # past every retry (it maps UpstreamRateLimited to this internally).
+        raise infer.UpstreamBusy(
+            "The weather service is busy right now.", 7)
+
+    monkeypatch.setattr(infer, "_fetch_windows", throttled)
+    monkeypatch.setattr(infer, "_load_serving_artifacts", lambda: None)
+    infer.configure_cache(0)
+    try:
+        client = TestClient(app, raise_server_exceptions=False)
+        first = client.get("/v1/infer?lat=47.0&lon=8.0")
+        assert first.status_code == 429
+        assert first.headers.get("retry-after") == "7"
+        assert first.json()["kind"] == "upstream-busy"
+        second = client.get("/v1/explore?lat=47.0&lon=8.0")
+        assert second.status_code == 429
+    finally:
+        infer.configure_cache(900)
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

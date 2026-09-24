@@ -306,10 +306,16 @@ class InvalidLocation(AssessError):
 
 
 class UpstreamBusy(AssessError):
-    """Upstream rate-limited us. Message is written for a human, not a log."""
+    """Upstream rate-limited us. Message is written for a human, not a log.
+
+    Status is 429, not 503, on purpose: 503 means "we are broken, try
+    elsewhere", 429 means "slow down and retry" — browsers, proxies, and our
+    own frontend backoff key off the difference (the auto-retry path only
+    fires on 429 with a Retry-After header).
+    """
 
     kind = "upstream-busy"
-    status_code = 503
+    status_code = 429
 
 
 class UpstreamUnavailable(AssessError):
