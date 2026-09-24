@@ -141,6 +141,51 @@ def _background(context):
 REPORT_KEYS = ("what", "why", "cause_effect", "check_next", "disclaimer",
                "p_bloom_cited", "ci_lo_cited", "ci_hi_cited")
 
+# Sections are generated as SEPARATE small LLM calls (in parallel): each is
+# a tiny constrained task — describe one thing, cite its numbers — so a
+# failure retries one paragraph instead of the whole report, and validation
+# is per-section data instead of whole-prose wording. The disclaimer is a
+# fixed legal line and is never generated.
+SECTION_SPECS = {
+    "what": ("Summarize what was assessed (location, data time) and state "
+             "the headline estimate with its exact decimals.", True),
+    "why": ("Explain in plain words why the model leans this way, using "
+            "only the supplied drivers and signals.", False),
+    "cause_effect": ("Lay out the cause-and-effect chain, naming every "
+                     "supplied driver by name.", False),
+    "check_next": ("Say concretely what to check next before acting on "
+                   "this estimate.", False),
+}
+
+
+def _measured_block(context):
+    measured = json.dumps(context, sort_keys=True, separators=(",", ":"))
+    return ("MEASURED_AND_COMPUTED\n" + measured + "\n\n"
+            "GENERAL_BACKGROUND\n" + _background(context))
+
+
+def build_section_prompt(context, key):
+    instruction, needs_numbers = SECTION_SPECS[key]
+    keys = '{"text": "..."'
+    if needs_numbers:
+        keys += (', "p_bloom_cited": <exact p_bloom decimal, e.g. 0.6992>, '
+                 '"ci_lo_cited": <exact ci_lo decimal>, '
+                 '"ci_hi_cited": <exact ci_hi decimal>')
+    keys += '}'
+    return (
+        "You are BloomCast's grounded report writer.\n"
+        "Use only the MEASURED_AND_COMPUTED values and the GENERAL_BACKGROUND "
+        "snippet below. Keep it at an eighth-grade reading level. "
+        "Do not add local facts, measurements, names, causes, or recommendations "
+        "that are not present in those two sections. Never invent a number: "
+        "every number you write must already appear in MEASURED_AND_COMPUTED "
+        "(small day-counts aside). "
+        + instruction + "\n"
+        "Respond with a single JSON object and nothing else — no markdown "
+        "fences, no prose outside the JSON — with exactly these keys:\n"
+        + keys + "\n\n" + _measured_block(context)
+    )
+
 
 def build_prompt(context):
     measured = json.dumps(context, sort_keys=True, separators=(",", ":"))
@@ -369,9 +414,55 @@ def _mentions_driver(cause, feature, human):
     return False
 
 
-def _parse_json_report(text):
-    """Parse the provider's JSON reply (tolerating markdown fences). Returns
-    the dict, or None when it is not usable JSON with all required keys."""
+def _context_numbers(context):
+    """Every numeric value anywhere in the measured context (plus small day
+    counts, which prose legitimately uses). A section may only cite these."""
+    nums = set()
+
+    def walk(node):
+        if isinstance(node, bool):
+            return
+        if isinstance(node, (int, float)):
+            nums.add(float(node))
+            return
+        if isinstance(node, str):
+            for match in re.finditer(r"(\d+(?:\.\d+)?)\s*(%)?", node):
+                value = float(match.group(1))
+                nums.add(value / 100.0 if match.group(2) else value)
+            return
+        if isinstance(node, dict):
+            for value in node.values():
+                walk(value)
+            return
+        if isinstance(node, (list, tuple)):
+            for value in node:
+                walk(value)
+
+    walk(context)
+    return nums
+
+
+def _prose_numbers_ok(text, allowed):
+    """Every number in the prose must be an allowed one (exact decimal or
+    its percentage, small tolerance). Small integers (day counts, "8th
+    grade") are always fine; anything else must match the context."""
+    for match in re.finditer(r"(\d+(?:\.\d+)?)\s*(%)?", text or ""):
+        value = float(match.group(1))
+        if match.group(2):
+            value /= 100.0
+        if value.is_integer() and 0 <= value <= 31:
+            continue
+        if any(abs(value - known) <= max(0.005, abs(known) * 1e-3)
+               for known in allowed):
+            continue
+        return False
+    return True
+
+
+def _parse_json_object(text, required_keys):
+    """Parse a provider JSON reply (tolerating markdown fences). Returns the
+    dict when every required key holds a string or number and the text fields
+    are non-empty — else None."""
     if not text or not text.strip():
         return None
     cleaned = text.strip()
@@ -385,7 +476,16 @@ def _parse_json_report(text):
     if not isinstance(parsed, dict):
         return None
     if any(not isinstance(parsed.get(key), (str, int, float))
-           for key in REPORT_KEYS):
+           for key in required_keys):
+        return None
+    return parsed
+
+
+def _parse_json_report(text):
+    """Parse a whole-report reply under the full contract (kept for the
+    contract test; generation itself is section-by-section)."""
+    parsed = _parse_json_object(text, REPORT_KEYS)
+    if parsed is None:
         return None
     if not all(str(parsed[key]).strip() for key in
                ("what", "why", "cause_effect", "check_next")):
@@ -539,7 +639,75 @@ def _template_report(context):
     return f"{what}\n\n{why}\n\n{cause}\n\n{check}\n\nDisclaimer\n{DISCLAIMER}\n"
 
 
+def _validate_section(key, parsed, context):
+    """Validate one generated section's DATA. Returns a list of problems
+    (empty when valid) so the retry can demand exactly what's missing."""
+    problems = []
+    text = str(parsed.get("text", "") or "")
+    if not text.strip():
+        return [f"{key}: empty text"]
+    if len(text) > 2000:
+        problems.append(f"{key}: too long, be concise")
+    if key == "what":
+        model = context.get("model_estimate") or {}
+        for name in ("p_bloom", "ci_lo", "ci_hi"):
+            value = model.get(name)
+            if value is None:
+                continue
+            try:
+                cited = float(parsed.get(f"{name}_cited"))
+            except (TypeError, ValueError):
+                problems.append(f"{key}: {name}_cited must equal exactly {value}")
+                continue
+            if abs(cited - float(value)) > 0.0005:
+                problems.append(f"{key}: {name}_cited must equal exactly {value}")
+    if key == "cause_effect":
+        for driver in context.get("drivers") or []:
+            if not isinstance(driver, dict) or not driver.get("feature"):
+                continue
+            if not _mentions_driver(text, driver["feature"],
+                                    driver.get("human", "")):
+                problems.append(f"{key}: must name driver {driver['feature']}")
+    if not _prose_numbers_ok(text, _context_numbers(context)):
+        problems.append(f"{key}: cites a number not present in the inputs")
+    return problems
+
+
+async def _generate_section(key, context):
+    """Generate and validate one section (provider fallback included).
+    Returns (text, provider, cited_dict). Raises RuntimeError naming the
+    failed checks when the section cannot be produced honestly."""
+    prompt = build_section_prompt(context, key)
+    last_problems: list = ["no attempt yet"]
+    provider = "template"
+    for attempt in ("initial", "correction"):
+        if attempt == "correction":
+            prompt = prompt + (
+                "\n\nSTRICT CORRECTION — your previous draft failed "
+                "validation for these reasons; fix every one, keep "
+                "everything else:\n- " + "\n- ".join(last_problems)
+            )
+        try:
+            raw, provider = await asyncio.wait_for(
+                _generate_with_fallback(prompt), timeout=14.0)
+        except Exception as exc:  # noqa: BLE001 - provider errors, retry/caller decides
+            last_problems = [f"provider error: {sanitize_error(exc)}"]
+            continue
+        parsed = _parse_json_object(raw, ("text",))
+        if parsed is None or not str(parsed.get("text", "")).strip():
+            last_problems = ["respond with a single JSON object with a "
+                             "non-empty text field"]
+            continue
+        last_problems = _validate_section(key, parsed, context)
+        if not last_problems:
+            cited = {name: parsed.get(f"{name}_cited")
+                     for name in ("p_bloom", "ci_lo", "ci_hi")}
+            return str(parsed["text"]).strip(), provider, cited
+    raise RuntimeError(f"section {key}: " + "; ".join(last_problems))
 async def generate_report(body, assessment):
+    """Assemble the report section by section (in parallel): each section is
+    generated and validated on its own, so one bad paragraph retries alone
+    instead of sinking the whole report into the template fallback."""
     keys = _provider_keys()
     if not any(keys.values()):
         raise NoKeyError("AI reports are not configured on this deployment")
@@ -548,35 +716,29 @@ async def generate_report(body, assessment):
                                 assessment.get("latitude"),
                                 assessment.get("longitude"))
     context["area_validation"] = area
-    prompt = build_prompt(context)
+    order = tuple(SECTION_SPECS)
     try:
-        text, provider = await asyncio.wait_for(_generate_with_fallback(prompt), timeout=14.0)
+        sections = await asyncio.wait_for(
+            asyncio.gather(*(_generate_section(key, context) for key in order)),
+            timeout=25.0,
+        )
     except Exception as exc:  # noqa: BLE001 - degrade to template
         return _template_report(context), "template", context, area, {
             "degraded": True,
             "reason": f"LLM generation timed out or failed: {sanitize_error(exc)}",
         }
-    if not _is_valid_report(text, context):
-        # Retry once with the exact failures spelled out — a second identical
-        # prompt usually fails the identical way; a correction prompt that
-        # names the missing numbers/sections typically passes.
-        correction = (
-            "\n\nSTRICT CORRECTION — your previous draft failed validation "
-            "for these reasons; fix every one, keep everything else:\n- "
-            + "\n- ".join(validation_feedback(text, context))
-        )
-        try:
-            text, provider = await asyncio.wait_for(
-                _generate_with_fallback(prompt + correction), timeout=14.0)
-        except Exception as exc:  # noqa: BLE001 - one retry then template
-            return _template_report(context), "template", context, area, {
-                "degraded": True,
-                "reason": f"Report number check failed and retry failed: {sanitize_error(exc)}",
-            }
-    if not _is_valid_report(text, context):
-        return _template_report(context), "template", context, area, {
-            "degraded": True,
-            "reason": "Report number check failed; template report used",
-        }
-    parsed = _parse_json_report(text)
-    return _render_report_text(parsed), provider, context, area, {"degraded": False, "reason": None}
+    texts = dict(zip(order, sections, strict=False))
+    parsed = {
+        "what": texts["what"][0],
+        "why": texts["why"][0],
+        "cause_effect": texts["cause_effect"][0],
+        "check_next": texts["check_next"][0],
+        "disclaimer": DISCLAIMER,
+        "p_bloom_cited": texts["what"][2].get("p_bloom"),
+        "ci_lo_cited": texts["what"][2].get("ci_lo"),
+        "ci_hi_cited": texts["what"][2].get("ci_hi"),
+    }
+    providers = {text[1] for text in texts.values()}
+    provider = texts["what"][1] if len(providers) == 1 else "+".join(sorted(providers))
+    return (_render_report_text(parsed), provider, context, area,
+            {"degraded": False, "reason": None})

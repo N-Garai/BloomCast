@@ -470,11 +470,7 @@ def test_report_uses_server_assessment_and_verified_provider(monkeypatch):
         assert "feature_0" in prompt
         import json as _json
         return _json.dumps({
-            "what": "The model estimate is 0.42 with interval 0.25 to 0.6.",
-            "why": "The supplied features explain the result.",
-            "cause_effect": "Feature 0 changed.",
-            "check_next": "Check the next weather window.",
-            "disclaimer": "Advisory only \u2014 not a safety determination.",
+            "text": "Feature 0 notes 0.42, interval 0.25 to 0.6.",
             "p_bloom_cited": 0.42,
             "ci_lo_cited": 0.25,
             "ci_hi_cited": 0.6,
@@ -530,7 +526,9 @@ def test_report_retries_once_then_uses_template(monkeypatch):
     assert payload["provider"] == "template"
     assert payload["degraded"]["degraded"] is True
     assert "0.4" in payload["report"]
-    assert calls == 2
+    # 4 sections, each tried twice (initial + correction): per-section
+    # retries replace the old single whole-report retry.
+    assert calls == 8
 
 
 def test_explore_live_row_and_estimate():
