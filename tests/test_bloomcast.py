@@ -1354,5 +1354,41 @@ def test_report_reason_never_leaks_keys(monkeypatch):
     assert fake_groq not in degradation["reason"]
 
 
+def test_report_tries_gemini_first_then_groq(monkeypatch):
+    """Provider order is contractual: Gemini primary, Groq fallback. Both
+    errors must surface (the old code showed only the last one, hiding a
+    dead primary behind the fallback's error)."""
+    import asyncio
+    import api.report as R
+
+    calls = []
+
+    async def flaky(name, key, prompt):
+        calls.append(name)
+        if name == "gemini":
+            raise RuntimeError("gemini 404 shut down")
+        return "groq text", "groq"
+
+    monkeypatch.setattr(R, "_call_provider", flaky)
+    monkeypatch.setattr(R, "_provider_keys",
+                        lambda: {"gemini": "gk", "groq": "qk"})
+    text, provider = asyncio.run(R._generate_with_fallback("prompt"))
+    assert calls == ["gemini", "groq"]
+    assert text == ("groq text", "groq") and provider == "groq"
+
+    async def both_dead(name, key, prompt):
+        calls.append(name)
+        raise RuntimeError(f"{name} down")
+
+    monkeypatch.setattr(R, "_call_provider", both_dead)
+    calls.clear()
+    try:
+        asyncio.run(R._generate_with_fallback("prompt"))
+        raise AssertionError("expected RuntimeError")
+    except RuntimeError as exc:
+        message = R.sanitize_error(exc)
+        assert "gemini failed" in message and "groq failed" in message
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

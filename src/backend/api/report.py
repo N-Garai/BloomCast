@@ -12,8 +12,13 @@ from api.infer import assess_location as _infer_assess_location
 from features.feature_store import humanize_feature
 
 DISCLAIMER = "Advisory only — not a safety determination."
-GEMINI_MODEL = "gemini-2.0-flash"
-GROQ_MODEL = "llama-3.1-8b-instant"
+# Model IDs are env-overridable so the next vendor retirement is a config
+# change, not a code change. Defaults verified September 2026:
+# - gemini-2.0-flash was shut down June 1, 2026 (use 3.5-flash).
+# - llama-3.1-8b-instant deprecation announced June 17, 2026
+#   (use openai/gpt-oss-120b).
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 SYSTEM = (
     "You are BloomCast's grounded report writer. Use only supplied measured or "
     "computed values and verified background. Do not invent facts or numbers. "
@@ -201,8 +206,14 @@ async def _call_provider(name, key, prompt):
 
 
 async def _generate_with_fallback(prompt):
+    """Gemini first (primary), Groq second (fallback) — in that order.
+
+    Every provider's error is collected, not just the last: the surfaced
+    message names each failure, so a dead primary can no longer hide behind
+    the fallback's error.
+    """
     keys = _provider_keys()
-    last_error = None
+    errors = {}
     for name in ("gemini", "groq"):
         key = keys.get(name, "")
         if not key:
@@ -210,9 +221,11 @@ async def _generate_with_fallback(prompt):
         try:
             return await _call_provider(name, key, prompt), name
         except Exception as exc:  # noqa: BLE001 - try the next provider
-            last_error = exc
-    if last_error is not None:
-        raise RuntimeError(f"all configured providers failed: {last_error}")
+            errors[name] = exc
+    if errors:
+        detail = "; ".join(f"{name} failed: {error}"
+                           for name, error in errors.items())
+        raise RuntimeError(f"all configured providers failed: {detail}")
     raise NoKeyError(
         "AI reports are not configured on this deployment "
         "(set GEMINI_API_KEY or GROQ_API_KEY)"
