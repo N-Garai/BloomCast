@@ -116,11 +116,12 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
         return;
       }
       const data = await response.json();
-      if (!response.ok) throw new Error(data?.detail ?? `HTTP ${response.status}`);
+      if (!response.ok) throw new Error(data?.detail ? `${data.detail} [HTTP ${response.status}]` : `HTTP ${response.status}`);
       setResult(data as ExploreResult);
       setPhase("done");
     } catch (e) {
       if (e instanceof DOMException && e.name === "AbortError") return;
+      console.error("[explore] live fetch failed:", e);
       setError(friendlyError(e, "weather"));
       setPhase("error");
     }

@@ -225,10 +225,11 @@ export default function DashboardPage() {
     try {
       const response = await fetch(`${API}/v1/explore?lat=${latitude}&lon=${longitude}`, { signal: ctrl.signal });
       const data = await response.json();
-      if (!response.ok) throw new Error(data?.detail ?? `HTTP ${response.status}`);
+      if (!response.ok) throw new Error(data?.detail ? `${data.detail} [HTTP ${response.status}]` : `HTTP ${response.status}`);
       setDropResult(data as ExploreResult);
     } catch (e) {
       if (e instanceof DOMException && (e as DOMException).name === "AbortError") return;
+      console.error("[dashboard] live fetch failed:", e);
       setDropError(friendlyError(e, "weather"));
     } finally {
       setDropLoading(false);
@@ -248,20 +249,20 @@ export default function DashboardPage() {
   }, [mappable, picked, selected]);
 
   return (
-    <div className="min-h-screen flex flex-col">
+    <div className="min-h-screen flex flex-col overflow-x-clip">
       <Navbar />
       <div className="flex-1 flex flex-col lg:flex-row pt-16">
-        <aside className="w-full border-b border-border-subtle bg-bg-deep/60 backdrop-blur-xl lg:w-[240px] lg:flex-1 lg:max-h-[calc(100vh-4rem)] lg:sticky lg:top-16 lg:border-b-0 lg:border-r lg:flex lg:flex-col">
+        <aside className="w-full border-b border-border-subtle bg-bg-deep/60 backdrop-blur-xl lg:w-[192px] lg:shrink-0 lg:max-h-[calc(100vh-4rem)] lg:sticky lg:top-16 lg:border-b-0 lg:border-r lg:flex lg:flex-col">
           <div className="shrink-0 border-b border-border-subtle p-4 mx-auto w-full max-w-2xl lg:mx-0 lg:max-w-none">
             <ScrollReveal><p className="font-mono text-[11px] uppercase tracking-[0.3em] text-glow-cyan">Live outlook</p><h2 className="font-display text-2xl font-semibold mt-1">Forecast Map</h2><p className="text-xs text-fg-muted mt-1">Pilot waterbodies · markers live, outlook nightly</p></ScrollReveal>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3 lg:max-h-none w-[80%]" aria-live="polite">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3 lg:max-h-none w-full" aria-live="polite">
             {loading && <div className="space-y-3">{[0, 1, 2, 3].map((item) => <div key={item} className="rounded-xl border border-border-subtle bg-bg-deep/40 p-4"><div className="h-3 w-24 rounded bg-bg-elevated mb-3" /><div className="h-8 w-20 rounded bg-bg-elevated" /><div className="mt-3 h-2 w-full rounded bg-bg-elevated/70" /><div className="mt-2 h-2 w-2/3 rounded bg-bg-elevated/70" /></div>)}</div>}
             {error && !loading && <ErrorState title="Forecast map unavailable" message={error} onRetry={load} />}
             {!loading && !error && waterbodies.length === 0 && <ErrorState title="No waterbodies here yet" message="The service has no pilot sites for this deployment. Try again after the next refresh." onRetry={load} />}
             {!loading && !error && waterbodies.map((waterbody, index) => <motion.div key={waterbody.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index * 0.03, 0.3) }}><ForecastCard waterbody={waterbody} selected={selected === waterbody.id} onClick={() => setSelected(waterbody.id)} /></motion.div>)}
           </div>
-          <div className="shrink-0 border-t border-border-subtle p-4 space-y-4 max-h-[32vh] overflow-y-auto w-[80%]">
+          <div className="shrink-0 border-t border-border-subtle p-4 space-y-4 max-h-[32vh] overflow-y-auto w-full">
             <RiskLegend />
             <NdciExplainer waterbodyId={selected} waterbodyName={selectedWb?.name} />
           </div>
@@ -271,8 +272,8 @@ export default function DashboardPage() {
           <div className="absolute inset-0">
             {showGlobe ? <DotMatrixGlobe waterbodies={mappable} selected={selected ?? undefined} onSelect={setSelected} onPick={runExplore} picked={picked} /> : <div className="h-full w-full bg-bg-abyss"><VectorMap fill points={mapPoints} selectedId={picked ? "__picked__" : (selected ?? undefined)} onPick={(latitude, longitude) => runExplore(latitude, longitude)} /></div>}
           </div>
-          <div className="absolute top-4 right-4 z-10 flex gap-2"><button onClick={() => setShowGlobe((current) => !current)} className="px-3 py-2 rounded-lg glass border border-border-subtle text-xs text-fg-secondary hover:text-fg-primary">{' '}{showGlobe ? "Flat Map" : "3D Globe"}</button></div>
-          <div className="absolute left-4 top-4 bottom-4 z-10 w-[330px] max-w-[calc(100%-2rem)] flex flex-col gap-3 overflow-y-auto pr-1">
+          <div className="absolute top-4 left-4 z-10 flex gap-2"><button onClick={() => setShowGlobe((current) => !current)} className="px-3 py-2 rounded-lg glass border border-border-subtle text-xs text-fg-secondary hover:text-fg-primary">{' '}{showGlobe ? "Flat Map" : "3D Globe"}</button></div>
+          <div className="absolute right-4 top-4 bottom-4 z-10 w-[330px] max-w-[calc(100%-2rem)] flex flex-col gap-3 overflow-y-auto pr-1">
             {selectedWb && <div className="shrink-0"><ForecastPipeline key={selectedWb.id} waterbodyId={selectedWb.id} waterbodyName={selectedWb.name} onDone={handleForecastDone} /><div className="mt-3 rounded-xl border border-border-subtle bg-bg-deep/80 p-4 backdrop-blur-xl"><div className="flex items-start justify-between gap-3"><div><div className="text-xs font-mono text-fg-muted">{selectedWb.name}</div><div className="mt-1 font-display text-xl font-semibold text-fg-primary">{selectedForecast ? `${Math.round((selectedForecast.horizons?.["5d"]?.p_bloom ?? selectedForecast.p_bloom ?? 0) * 100)}%` : "Loading outlook"}</div></div>{selectedForecast && <span className={`text-xs font-mono px-2 py-1 rounded-full border border-current ${riskColor(riskOf(selectedForecast.horizons?.["5d"]?.p_bloom ?? selectedForecast.p_bloom ?? 0))}`}>{riskOf(selectedForecast.horizons?.["5d"]?.p_bloom ?? selectedForecast.p_bloom ?? 0).toUpperCase()}</span>}</div><p className="mt-2 text-xs text-fg-muted">Model-backed pilot forecast · confidence interval and drivers are available in the sidebar card.</p><a href="/report" className="mt-3 inline-flex items-center gap-2 text-xs text-glow-cyan">Open full report →</a></div></div>}
             {dropLoading && !dropResult && <div className="shrink-0 rounded-xl border border-border-subtle bg-bg-deep/90 p-4 text-xs text-fg-secondary">Fetching live assessment…</div>}
             {dropResult && <div className="shrink-0 rounded-xl border border-glow-cyan/30 bg-bg-deep/90 p-4 backdrop-blur-xl"><div className="flex items-start justify-between gap-3"><div><div className="font-mono text-[10px] uppercase tracking-widest text-glow-cyan">Open-water assessment</div><div className="mt-0.5 font-mono text-[11px] text-fg-muted">{dropResult.latitude.toFixed(2)}°, {dropResult.longitude.toFixed(2)}°{dropLoading ? ' · updating…' : ''}</div><div className="mt-1 font-display text-xl font-semibold text-fg-primary">{Math.round(dropResult.wash_off.risk_score * 100)}% wash-off risk</div></div><span className={`text-xs font-mono px-2 py-1 rounded-full border border-current ${riskColor(dropResult.wash_off.risk_level)}`}>{dropResult.wash_off.risk_level.toUpperCase()}</span></div><div className="mt-3 text-xs text-fg-secondary">{dropResult.signals?.slice(0, 3).map((signal) => `${signal} · `).join("") || "Live weather and wash-off signals loaded."}</div>{dropResult.model_estimate && <div className="mt-3 rounded-lg border border-glow-violet/30 bg-glow-violet/5 p-3 text-xs text-fg-secondary">Model estimate: <span className="font-mono text-glow-violet">{Math.round(dropResult.model_estimate.p_bloom * 100)}%</span> · CI {Math.round(dropResult.model_estimate.ci_lo * 100)}–{Math.round(dropResult.model_estimate.ci_hi * 100)}%</div>}{!dropResult.model_estimate && <div className="mt-3 text-[11px] text-fg-faint">Model estimate unavailable{dropResult.model_status?.reason ? ` — ${dropResult.model_status.reason}` : ""}.</div>}</div>}

@@ -7,8 +7,12 @@ export const ADVISORY = "BloomCast outputs are advisory support and never a safe
 
 export function friendlyError(error: unknown, kind: "weather" | "forecast" | "data" = "data") {
   const message = typeof error === "object" && error !== null && "message" in error ? String((error as { message?: unknown }).message ?? error) : String(error);
+  // Preserve the HTTP status for diagnostics (proved decisive more than
+  // once: 429 vs 502 vs backend-down need different responses).
+  const code = message.match(/HTTP (\d{3})/)?.[1];
+  const suffix = code ? ` (HTTP ${code})` : "";
   if (message.includes("429") || message.includes("Retry-After") || message.includes("Too Many Requests")) {
-    return "The service is busy right now. Wait a moment, then try again.";
+    return `The service is busy right now. Wait a moment, then try again.${suffix}`;
   }
   // fetch() throws TypeError ("Failed to fetch") when the backend itself is
   // unreachable — blaming the weather service for that misdiagnoses every
@@ -20,11 +24,11 @@ export function friendlyError(error: unknown, kind: "weather" | "forecast" | "da
     return "You are offline. Reconnect, then try again.";
   }
   if (/HTTP 5\d\d/.test(message)) {
-    return "The service hit a problem responding — try again in a minute.";
+    return `The service hit a problem responding — try again in a minute.${suffix}`;
   }
-  if (kind === "weather") return "Weather data is unavailable right now — try again in a minute.";
-  if (kind === "forecast") return "Forecast data is unavailable right now.";
-  return "This data is unavailable right now. Try again.";
+  if (kind === "weather") return `Weather data is unavailable right now — try again in a minute.${suffix}`;
+  if (kind === "forecast") return `Forecast data is unavailable right now.${suffix}`;
+  return `This data is unavailable right now. Try again.${suffix}`;
 }
 
 export function OfflineBanner() {
