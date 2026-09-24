@@ -255,13 +255,13 @@ export default function DashboardPage() {
           <div className="shrink-0 border-b border-border-subtle p-4 mx-auto w-full max-w-2xl lg:mx-0 lg:max-w-none">
             <ScrollReveal><p className="font-mono text-[11px] uppercase tracking-[0.3em] text-glow-cyan">Live outlook</p><h2 className="font-display text-2xl font-semibold mt-1">Forecast Map</h2><p className="text-xs text-fg-muted mt-1">Pilot waterbodies · markers live, outlook nightly</p></ScrollReveal>
           </div>
-          <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3 lg:max-h-none mx-auto w-full max-w-2xl lg:mx-0 lg:max-w-none" aria-live="polite">
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3 lg:max-h-none w-[80%]" aria-live="polite">
             {loading && <div className="space-y-3">{[0, 1, 2, 3].map((item) => <div key={item} className="rounded-xl border border-border-subtle bg-bg-deep/40 p-4"><div className="h-3 w-24 rounded bg-bg-elevated mb-3" /><div className="h-8 w-20 rounded bg-bg-elevated" /><div className="mt-3 h-2 w-full rounded bg-bg-elevated/70" /><div className="mt-2 h-2 w-2/3 rounded bg-bg-elevated/70" /></div>)}</div>}
             {error && !loading && <ErrorState title="Forecast map unavailable" message={error} onRetry={load} />}
             {!loading && !error && waterbodies.length === 0 && <ErrorState title="No waterbodies here yet" message="The service has no pilot sites for this deployment. Try again after the next refresh." onRetry={load} />}
             {!loading && !error && waterbodies.map((waterbody, index) => <motion.div key={waterbody.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index * 0.03, 0.3) }}><ForecastCard waterbody={waterbody} selected={selected === waterbody.id} onClick={() => setSelected(waterbody.id)} /></motion.div>)}
           </div>
-          <div className="shrink-0 border-t border-border-subtle p-4 space-y-4 max-h-[32vh] overflow-y-auto mx-auto w-full max-w-2xl lg:mx-0 lg:max-w-none">
+          <div className="shrink-0 border-t border-border-subtle p-4 space-y-4 max-h-[32vh] overflow-y-auto w-[80%]">
             <RiskLegend />
             <NdciExplainer waterbodyId={selected} waterbodyName={selectedWb?.name} />
           </div>

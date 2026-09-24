@@ -125,28 +125,80 @@ export function DotMatrixGlobe({
         const zp = vec[1] * st + z * ct;
         return { x: centerX + x * radius, y: centerY - yp * radius, z: zp };
       };
+      // Deterministic hash → stable twinkle phase per dot (no per-frame RNG).
+      const hashPhase = (lat: number, lon: number) => {
+        const h = Math.sin(lat * 127.1 + lon * 311.7) * 43758.5453;
+        return (h - Math.floor(h)) * Math.PI * 2;
+      };
+      const now = performance.now();
+      // Starfield outside the disc — seeded once per draw from a fixed
+      // palette so stars never crawl while the globe spins.
+      for (let i = 0; i < 130; i++) {
+        const sx = hashPhase(i, 7) / (Math.PI * 2);
+        const sy = hashPhase(i, 91) / (Math.PI * 2);
+        const px = sx * width;
+        const py = sy * height;
+        const dist = Math.hypot(px - centerX, py - centerY) / radius;
+        if (dist < 1.15) continue;
+        const tw = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(now * 0.0009 + hashPhase(i, 13)));
+        context.beginPath();
+        context.arc(px, py, Math.max(0.6, ratio * 0.7), 0, Math.PI * 2);
+        context.fillStyle = `rgba(180, 230, 255, ${tw.toFixed(3)})`;
+        context.fill();
+      }
+      // Depth-graded disc: lit upper-left, dark limb — the ball reads as a
+      // sphere instead of a flat plate (the bioluminescent-night-earth feel).
+      const disc = context.createRadialGradient(
+        centerX - radius * 0.35, centerY - radius * 0.4, radius * 0.1,
+        centerX, centerY, radius
+      );
+      disc.addColorStop(0, "rgba(14, 52, 74, 0.62)");
+      disc.addColorStop(0.55, "rgba(6, 24, 40, 0.55)");
+      disc.addColorStop(1, "rgba(2, 6, 15, 0.9)");
+      context.beginPath();
+      context.arc(centerX, centerY, radius, 0, Math.PI * 2);
+      context.fillStyle = disc;
+      context.fill();
+      // Cyan atmosphere halo: three falling-off strokes plus a soft bleed.
+      context.save();
+      context.shadowColor = "rgba(0, 240, 212, 0.55)";
+      context.shadowBlur = 18 * ratio;
+      context.beginPath();
+      context.arc(centerX, centerY, radius * 1.001, 0, Math.PI * 2);
+      context.strokeStyle = "rgba(0, 240, 212, 0.5)";
+      context.lineWidth = Math.max(1, ratio);
+      context.stroke();
+      context.restore();
+      for (const [mult, alpha] of [[1.035, 0.22], [1.075, 0.1]] as const) {
+        context.beginPath();
+        context.arc(centerX, centerY, radius * mult, 0, Math.PI * 2);
+        context.strokeStyle = `rgba(0, 240, 212, ${alpha})`;
+        context.lineWidth = Math.max(1, ratio * 0.75);
+        context.stroke();
+      }
       const drawDots = () => {
         for (let lat = -80; lat <= 80; lat += 3) {
           for (let lon = -180; lon < 180; lon += 3) {
             const vec = latLonToVec3(lat, lon, 1.004);
             const p = project(vec);
             if (p.z < 0.06) continue;
+            const land = isLand(lat, lon);
+            // Limb darkening: dots fade toward the edge — depth cue.
+            const limb = Math.min(1, Math.max(0, (p.z - 0.06) / 0.5));
+            // Bioluminescent shimmer: each dot breathes on its own phase.
+            const tw = 0.72 + 0.28 * Math.sin(now * 0.0012 + hashPhase(lat, lon));
+            const h = hashPhase(lon, lat);
+            // Rare warm "city-light" sparks among the cyan field.
+            const warm = land && h % 1 < 0.035;
+            const base = land ? (warm ? [255, 205, 140] : [45, 255, 225]) : [10, 70, 95];
+            const alpha = ((land ? 0.6 : 0.3) * tw * (0.35 + 0.65 * limb)).toFixed(3);
             context.beginPath();
-            context.arc(p.x, p.y, Math.max(1, radius * 0.009), 0, Math.PI * 2);
-            context.fillStyle = isLand(lat, lon) ? "rgba(45, 255, 225, 0.55)" : "rgba(10, 70, 95, 0.28)";
+            context.arc(p.x, p.y, Math.max(1, radius * (land ? 0.0095 : 0.008)), 0, Math.PI * 2);
+            context.fillStyle = `rgba(${base[0]}, ${base[1]}, ${base[2]}, ${alpha})`;
             context.fill();
           }
         }
       };
-      context.beginPath();
-      context.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      context.strokeStyle = "rgba(0, 240, 212, 0.28)";
-      context.lineWidth = ratio;
-      context.stroke();
-      context.beginPath();
-      context.arc(centerX, centerY, radius, 0, Math.PI * 2);
-      context.fillStyle = "rgba(2, 6, 15, 0.28)";
-      context.fill();
       drawDots();
       for (let lat = -75; lat <= 75; lat += 15) {
         const p = project(latLonToVec3(lat, -180, 1.004));
@@ -164,6 +216,15 @@ export function DotMatrixGlobe({
         const p = project(vec);
         if (p.z < 0.08) return;
         const selectedPoint = selected === wb.id;
+        // Expanding pulse ring — hotspots breathe like the reference.
+        const pulse = (now * 0.0006 + hashPhase(wb.centroid[1], wb.centroid[0])) % 1;
+        context.beginPath();
+        context.arc(p.x, p.y, radius * (0.02 + pulse * 0.05), 0, Math.PI * 2);
+        context.strokeStyle = wb.color;
+        context.globalAlpha = 0.45 * (1 - pulse);
+        context.lineWidth = Math.max(1, ratio * 0.8);
+        context.stroke();
+        context.globalAlpha = 1;
         if (selectedPoint) {
           context.beginPath();
           context.arc(p.x, p.y, radius * 0.045, 0, Math.PI * 2);
@@ -335,6 +396,10 @@ export function DotMatrixGlobe({
           active = true;
         } else if (spin && performance.now() - state.idleAt > 2500) {
           state.angle += 0.0022;
+          active = true;
+        } else if (!reduceMotion || performance.now() - state.idleAt <= 2500) {
+          // Keep the shimmer alive: twinkle and pulse rings need continuous
+          // frames. Reduced-motion freezes 2.5 s after the last gesture.
           active = true;
         }
       } else {
