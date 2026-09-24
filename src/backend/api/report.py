@@ -138,6 +138,10 @@ def _background(context):
     return f"{name}{location}: {description}" if description else f"{name}{location}."
 
 
+REPORT_KEYS = ("what", "why", "cause_effect", "check_next", "disclaimer",
+               "p_bloom_cited", "ci_lo_cited", "ci_hi_cited")
+
+
 def build_prompt(context):
     measured = json.dumps(context, sort_keys=True, separators=(",", ":"))
     return (
@@ -146,12 +150,17 @@ def build_prompt(context):
         "snippet below. Keep the report at an eighth-grade reading level. "
         "Do not add local facts, measurements, names, causes, or recommendations "
         "that are not present in those two sections. Never invent a number. "
-        "When p_bloom, ci_lo, and ci_hi are present, cite their exact decimal "
-        "strings; do not convert them to percentages. Use only drivers present "
-        "in the scored feature row for the cause-and-effect section.\n"
-        "Return the five sections below in this order: What, Why, Cause→effect "
-        "chain, What to check next, Disclaimer. End with the Disclaimer section "
-        "whose final line is exactly: " + DISCLAIMER + "\n\n"
+        "Use only drivers present in the scored feature row for the cause-and-effect section.\n"
+        "Respond with a single JSON object and nothing else — no markdown "
+        "fences, no prose outside the JSON — with exactly these keys:\n"
+        '{"what": "...", "why": "...", "cause_effect": "...", '
+        '"check_next": "...", "disclaimer": "Advisory only — not a safety determination.", '
+        '"p_bloom_cited": <exact p_bloom decimal, e.g. 0.6992>, '
+        '"ci_lo_cited": <exact ci_lo decimal>, '
+        '"ci_hi_cited": <exact ci_hi decimal>}\n'
+        "Copy the three decimals exactly as given (do not round, do not use "
+        "percentages in these three fields); cite them again in plain words "
+        "inside the what/why text.\n\n"
         "MEASURED_AND_COMPUTED\n" + measured + "\n\n"
         "GENERAL_BACKGROUND\n" + _background(context)
     )
@@ -165,7 +174,24 @@ async def _gemini_report(key, prompt):
             json={
                 "system_instruction": {"parts": [{"text": SYSTEM}]},
                 "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"temperature": 0.25},
+                "generationConfig": {
+                    "temperature": 0.25,
+                    "responseMimeType": "application/json",
+                    "responseSchema": {
+                        "type": "OBJECT",
+                        "properties": {
+                            "what": {"type": "STRING"},
+                            "why": {"type": "STRING"},
+                            "cause_effect": {"type": "STRING"},
+                            "check_next": {"type": "STRING"},
+                            "disclaimer": {"type": "STRING"},
+                            "p_bloom_cited": {"type": "NUMBER"},
+                            "ci_lo_cited": {"type": "NUMBER"},
+                            "ci_hi_cited": {"type": "NUMBER"},
+                        },
+                        "required": list(REPORT_KEYS),
+                    },
+                },
             },
         )
         response.raise_for_status()
@@ -184,10 +210,11 @@ async def _groq_report(key, prompt):
             json={
                 "model": GROQ_MODEL,
                 "messages": [
-                    {"role": "system", "content": "Write a grounded BloomCast report using only supplied facts."},
+                    {"role": "system", "content": "Write a grounded BloomCast report using only supplied facts. Respond with a single JSON object and nothing else."},
                     {"role": "user", "content": prompt},
                 ],
-                "max_tokens": 600,
+                "response_format": {"type": "json_object"},
+                "max_tokens": 900,
                 "temperature": 0.25,
             },
         )
@@ -342,69 +369,105 @@ def _mentions_driver(cause, feature, human):
     return False
 
 
-def _is_valid_report(text, context):
+def _parse_json_report(text):
+    """Parse the provider's JSON reply (tolerating markdown fences). Returns
+    the dict, or None when it is not usable JSON with all required keys."""
     if not text or not text.strip():
-        return False
-    if not text.strip().endswith(DISCLAIMER):
-        return False
-    norm = _normalize_section_text(text)
-    required_sections = (
-        "what",
-        "why",
-        "cause effect chain",
-        "what to check next",
-        "disclaimer",
-    )
-    if not all(section in norm for section in required_sections):
-        return False
+        return None
+    cleaned = text.strip()
+    if cleaned.startswith("```"):
+        cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
+        cleaned = re.sub(r"\n?```$", "", cleaned).strip()
+    try:
+        parsed = json.loads(cleaned)
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    if any(not isinstance(parsed.get(key), (str, int, float))
+           for key in REPORT_KEYS):
+        return None
+    if not all(str(parsed[key]).strip() for key in
+               ("what", "why", "cause_effect", "check_next")):
+        return None
+    return parsed
+
+
+def _numbers_match(parsed, context):
+    """The cited decimals must equal the scored values (tight tolerance —
+    copying a number is exact work; anything else is invention)."""
     model = context.get("model_estimate") or {}
     for key in ("p_bloom", "ci_lo", "ci_hi"):
         value = model.get(key)
-        if value is not None and not _mentions_number(text, value):
+        if value is None:
+            continue
+        try:
+            cited = float(parsed.get(f"{key}_cited"))
+        except (TypeError, ValueError):
             return False
-    cause_start = norm.find("cause effect chain")
-    cause_end = norm.find("what to check next", cause_start)
-    if cause_start < 0 or cause_end < 0:
+        if abs(cited - float(value)) > 0.0005:
+            return False
+    return True
+
+
+def _is_valid_report(text, context):
+    """Validate the parsed report DATA, not its wording: correct JSON shape,
+    exact disclaimer, cited numbers equal to scored values, drivers named in
+    the cause section. Formatting can no longer fail — there is no formatting
+    for the model to get wrong."""
+    parsed = _parse_json_report(text)
+    if parsed is None:
         return False
-    cause = norm[cause_start:cause_end]
+    if str(parsed.get("disclaimer", "")).strip() != DISCLAIMER:
+        return False
+    if not _numbers_match(parsed, context):
+        return False
+    cause = str(parsed.get("cause_effect", ""))
     for driver in context.get("drivers") or []:
-        if not isinstance(driver, dict):
+        if not isinstance(driver, dict) or not driver.get("feature"):
             continue
-        feature = driver.get("feature")
-        if not feature:
-            continue
-        if not _mentions_driver(cause, feature, driver.get("human", "")):
+        if not _mentions_driver(cause, driver["feature"],
+                                driver.get("human", "")):
             return False
     return True
 
 
 def validation_feedback(text, context):
     """Name exactly which checks failed so the retry prompt can demand them."""
+    parsed = _parse_json_report(text)
+    if parsed is None:
+        return ["respond with a single JSON object containing the keys "
+                + ", ".join(REPORT_KEYS)]
     problems = []
-    if not text or not text.strip():
-        return ["empty response"]
-    if not text.strip().endswith(DISCLAIMER):
-        problems.append("must end with the exact disclaimer line")
-    norm = _normalize_section_text(text)
-    for section in ("what", "why", "cause effect chain",
-                    "what to check next", "disclaimer"):
-        if section not in norm:
-            problems.append(f"missing section: {section}")
-    model = context.get("model_estimate") or {}
-    for key in ("p_bloom", "ci_lo", "ci_hi"):
-        value = model.get(key)
-        if value is not None and not _mentions_number(text, value):
-            problems.append(f"must cite the number {value} (decimal or %)")
-    cause_start = norm.find("cause effect chain")
-    cause_end = norm.find("what to check next", cause_start)
-    cause = norm[cause_start:cause_end] if cause_start >= 0 else ""
+    if str(parsed.get("disclaimer", "")).strip() != DISCLAIMER:
+        problems.append("disclaimer field must be exactly "
+                        f'"{DISCLAIMER}"')
+    if not _numbers_match(parsed, context):
+        model = context.get("model_estimate") or {}
+        problems.append(
+            "p_bloom_cited/ci_lo_cited/ci_hi_cited must equal exactly "
+            f"{model.get('p_bloom')}/{model.get('ci_lo')}/{model.get('ci_hi')}"
+        )
+    cause = str(parsed.get("cause_effect", ""))
     for driver in context.get("drivers") or []:
         if not isinstance(driver, dict) or not driver.get("feature"):
             continue
         if not _mentions_driver(cause, driver["feature"],
                                 driver.get("human", "")):
-            problems.append(f"cause section must name driver: {driver['feature']}")
+            problems.append(f"cause_effect must name driver: {driver['feature']}")
     return problems
+
+
+def _render_report_text(parsed):
+    """Render the validated JSON into the five-section display text the UI
+    already renders — headings are ours, so they can never mismatch."""
+    return (
+        f"What\n{str(parsed['what']).strip()}\n\n"
+        f"Why\n{str(parsed['why']).strip()}\n\n"
+        f"Cause→effect chain\n{str(parsed['cause_effect']).strip()}\n\n"
+        f"What to check next\n{str(parsed['check_next']).strip()}\n\n"
+        f"Disclaimer\n{DISCLAIMER}\n"
+    )
 
 
 def _template_report(context):
@@ -515,4 +578,5 @@ async def generate_report(body, assessment):
             "degraded": True,
             "reason": "Report number check failed; template report used",
         }
-    return text, provider, context, area, {"degraded": False, "reason": None}
+    parsed = _parse_json_report(text)
+    return _render_report_text(parsed), provider, context, area, {"degraded": False, "reason": None}

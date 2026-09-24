@@ -468,13 +468,17 @@ def test_report_uses_server_assessment_and_verified_provider(monkeypatch):
         assert "GENERAL_BACKGROUND" in prompt
         assert "0.42" in prompt and "0.25" in prompt and "0.6" in prompt
         assert "feature_0" in prompt
-        return (
-            "What\nThe model estimate is 0.42 with interval 0.25 to 0.6.\n\n"
-            "Why\nThe supplied features explain the result.\n\n"
-            "Cause→effect chain\nFeature 0 changed.\n\n"
-            "What to check next\nCheck the next weather window.\n\n"
-            "Disclaimer\nAdvisory only — not a safety determination."
-        ), "gemini"
+        import json as _json
+        return _json.dumps({
+            "what": "The model estimate is 0.42 with interval 0.25 to 0.6.",
+            "why": "The supplied features explain the result.",
+            "cause_effect": "Feature 0 changed.",
+            "check_next": "Check the next weather window.",
+            "disclaimer": "Advisory only \u2014 not a safety determination.",
+            "p_bloom_cited": 0.42,
+            "ci_lo_cited": 0.25,
+            "ci_hi_cited": 0.6,
+        }), "gemini"
 
     monkeypatch.setattr(R, "_generate_with_fallback", fake_generate)
     client = TestClient(app, raise_server_exceptions=False)
@@ -1390,7 +1394,7 @@ def test_report_tries_gemini_first_then_groq(monkeypatch):
         assert "gemini failed" in message and "groq failed" in message
 
 
-def test_report_validation_accepts_honest_paraphrase(monkeypatch):
+def test_report_validation_accepts_json_contract(monkeypatch):
     """The validator must accept any honest citation (percentages, spaced
     headers, human driver names) and reject invented numbers — with feedback
     naming the failure so the retry prompt can demand it."""
@@ -1400,22 +1404,41 @@ def test_report_validation_accepts_honest_paraphrase(monkeypatch):
                                   "ci_hi": 0.9992},
                "drivers": [{"feature": "temp_mean_7d",
                             "human": "Recent warm temperatures"}]}
-    honest = (
-        "What\nAssessment of 21.63, -13.38.\n\n"
-        "Why\nWarm weather.\n\n"
-        "Cause - effect chain\nRecent warm temperatures (69.92%) drove risk; "
-        "interval 39.92% to 99.92%.\n\n"
-        "What to check next\nRecheck later.\n\n"
-        "Disclaimer\nAdvisory only — not a safety determination."
-    )
-    assert R._is_valid_report(honest, context) is True
 
-    lying = honest.replace("69.92%", "42%").replace("0.6992", "0.42")
+    def draft(**overrides):
+        base = {
+            "what": "Assessment of 21.63, -13.38 with 69.92% risk.",
+            "why": "Warm weather.",
+            "cause_effect": "Recent warm temperatures drove risk.",
+            "check_next": "Recheck later.",
+            "disclaimer": "Advisory only \u2014 not a safety determination.",
+            "p_bloom_cited": 0.6992,
+            "ci_lo_cited": 0.3992,
+            "ci_hi_cited": 0.9992,
+        }
+        base.update(overrides)
+        return json.dumps(base)
+
+    assert R._is_valid_report(draft(), context) is True
+    assert R._is_valid_report("```json\n" + draft() + "\n```", context) is True
+    rendered = R._render_report_text(R._parse_json_report(draft()))
+    for heading in ("What\n", "Why\n", "Cause\u2192effect chain\n",
+                    "What to check next\n", "Disclaimer"):
+        assert heading in rendered
+
+    lying = draft(p_bloom_cited=0.42)
     assert R._is_valid_report(lying, context) is False
-    feedback = R.validation_feedback(lying, context)
-    assert any("0.6992" in problem for problem in feedback)
+    assert any("0.6992" in problem
+               for problem in R.validation_feedback(lying, context))
 
-    assert R.validation_feedback("", context) == ["empty response"]
+    missing = json.loads(draft())
+    del missing["cause_effect"]
+    assert R._is_valid_report(json.dumps(missing), context) is False
+
+    assert R._is_valid_report("Just some prose, no JSON.", context) is False
+    assert R.validation_feedback("", context) == [
+        "respond with a single JSON object containing the keys "
+        + ", ".join(R.REPORT_KEYS)]
 
 
 def test_upstream_throttle_surfaces_as_429(monkeypatch):
