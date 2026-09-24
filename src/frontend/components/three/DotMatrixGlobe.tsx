@@ -105,12 +105,20 @@ export function DotMatrixGlobe({
       };
       const now = performance.now();
       // Starfield outside the disc — seeded once per draw from a fixed
-      // palette so stars never crawl while the globe spins.
+      // palette so stars never crawl while the globe spins. The whole field
+      // drifts almost imperceptibly (one turn per ~4 min).
+      const starAng = now * ((2 * Math.PI) / 240000);
+      const starCos = Math.cos(starAng);
+      const starSin = Math.sin(starAng);
       for (let i = 0; i < 130; i++) {
         const sx = hashPhase(i, 7) / (Math.PI * 2);
         const sy = hashPhase(i, 91) / (Math.PI * 2);
-        const px = sx * width;
-        const py = sy * height;
+        let ox = sx - 0.5;
+        let oy = sy - 0.5;
+        const rx = ox * starCos - oy * starSin;
+        const ry = ox * starSin + oy * starCos;
+        const px = centerX + rx * width;
+        const py = centerY + ry * height;
         const dist = Math.hypot(px - centerX, py - centerY) / radius;
         if (dist < 1.15) continue;
         const tw = 0.25 + 0.35 * (0.5 + 0.5 * Math.sin(now * 0.0009 + hashPhase(i, 13)));
@@ -142,33 +150,48 @@ export function DotMatrixGlobe({
       context.lineWidth = Math.max(1, ratio);
       context.stroke();
       context.restore();
-      for (const [mult, alpha] of [[1.035, 0.22], [1.075, 0.1]] as const) {
+      for (const [mult, base] of [[1.035, 0.22], [1.075, 0.1]] as const) {
+        // The halo breathes with the same slow rhythm as the dots.
+        const breathe = base + 0.05 * Math.sin(now * 0.0006);
         context.beginPath();
         context.arc(centerX, centerY, radius * mult, 0, Math.PI * 2);
-        context.strokeStyle = `rgba(0, 240, 212, ${alpha})`;
+        context.strokeStyle = `rgba(0, 240, 212, ${breathe.toFixed(3)})`;
         context.lineWidth = Math.max(1, ratio * 0.75);
         context.stroke();
       }
       const drawDots = () => {
         // Land dots from real coastline data (warm ivory, DepthGlobe-style);
-        // water stays a clean dark sphere — no ocean-dot texture.
+        // water stays a clean dark sphere — no ocean-dot texture. Brightness
+        // follows the reference shader: slow breath × pow-1.5 limb × soft
+        // two-pass core (bloom feel without postprocessing), with
+        // time-varying warm sparks and perspective dot sizing.
+        const fract = (x: number) => x - Math.floor(x);
         for (const [lat, lon] of LAND_DOTS) {
           const vec = latLonToVec3(lat, lon, 1.004);
           const p = project(vec);
           if (p.z < 0.06) continue;
-          // Limb darkening: dots fade toward the edge — depth cue.
-          const limb = Math.min(1, Math.max(0, (p.z - 0.06) / 0.5));
-          // Bioluminescent shimmer: each dot breathes on its own phase.
-          const tw = 0.72 + 0.28 * Math.sin(now * 0.0012 + hashPhase(lat, lon));
+          const phase = hashPhase(lat, lon);
+          const breath = Math.sin(now * 0.0006 + phase) * 0.5 + 0.5;
+          const brightness = 0.35 + breath * 0.45;
+          const limb = Math.pow(Math.min(1, Math.max(0, (p.z - 0.06) / 0.5)), 1.5);
+          const spark = fract(brightness * 7.3) > 0.93;
           const h = hashPhase(lon, lat);
-          // Rare warm "city-light" sparks among the ivory field.
-          const warm = h % 1 < 0.035;
-          const base = warm ? [255, 205, 140] : [255, 233, 196];
           const shade = 0.82 + 0.18 * (h % 1);
-          const alpha = (0.62 * tw * (0.35 + 0.65 * limb)).toFixed(3);
+          const base = spark ? [255, 205, 140] : [255, 233, 196];
+          const lum = 0.4 + brightness * 0.6;
+          const alpha = (lum * limb * 0.95).toFixed(3);
+          const r = Math.max(1, radius * 0.0095 * (0.6 + 0.65 * p.z) * (0.92 + 0.16 * breath));
+          const cr = Math.round(base[0] * shade * lum);
+          const cg = Math.round(base[1] * shade * lum);
+          const cb = Math.round(base[2] * shade * lum);
+          // Outer glow pass, then bright core — soft falloff, no hard disc.
           context.beginPath();
-          context.arc(p.x, p.y, Math.max(1, radius * 0.0095), 0, Math.PI * 2);
-          context.fillStyle = `rgba(${Math.round(base[0] * shade)}, ${Math.round(base[1] * shade)}, ${Math.round(base[2] * shade)}, ${alpha})`;
+          context.arc(p.x, p.y, r * 2, 0, Math.PI * 2);
+          context.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${(Number(alpha) * 0.22).toFixed(3)})`;
+          context.fill();
+          context.beginPath();
+          context.arc(p.x, p.y, r, 0, Math.PI * 2);
+          context.fillStyle = `rgba(${cr}, ${cg}, ${cb}, ${alpha})`;
           context.fill();
         }
         // Coastline outlines: projected ring segments, front hemisphere only.
@@ -404,7 +427,8 @@ export function DotMatrixGlobe({
           state.velT *= 0.94;
           active = true;
         } else if (spin && performance.now() - state.idleAt > 2500 && !state.hovering) {
-          state.angle += 0.0022;
+          // DepthGlobe-calm drift: 0.04 rad/s instead of the old brisk spin.
+          state.angle += 0.0007;
           active = true;
         } else if (!reduceMotion || performance.now() - state.idleAt <= 2500) {
           // Keep the shimmer alive: twinkle and pulse rings need continuous
