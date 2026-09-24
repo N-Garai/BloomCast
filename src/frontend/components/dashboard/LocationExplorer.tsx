@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { API, readBody } from "@/lib/api";
+import { fetchClientWindows, scoreClientWindows } from "@/lib/openmeteo";
 import { VectorMap } from "@/components/maps/VectorMap";
 import { BloomReport } from "@/components/report/BloomReport";
 import { ErrorState, RiskBadge, RiskTrajectory, friendlyError } from "@/components/dashboard/Resilience";
@@ -11,6 +12,7 @@ interface ExploreResult {
   latitude: number;
   longitude: number;
   provenance: string;
+  weather_source?: string;
   fetched_at: string;
   method: string;
   wash_off: {
@@ -72,7 +74,7 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
   // Rapid map clicks must not pile up in-flight assessments (each costs two
   // upstream calls): the previous request is aborted and the new one waits
   // 600 ms so a drag-click burst becomes a single fetch.
-  const flight = useRef<{ timer?: ReturnType<typeof setTimeout>; ctrl?: AbortController; autoRetried?: boolean; timedOut?: boolean }>({});
+  const flight = useRef<{ timer?: ReturnType<typeof setTimeout>; ctrl?: AbortController; autoRetried?: boolean; timedOut?: boolean; clientFallbackUsed?: boolean }>({});
 
   useEffect(() => {
     if (phase !== "working") return;
@@ -98,6 +100,7 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
     clearTimeout(flight.current.timer);
     flight.current.ctrl?.abort();
     flight.current.autoRetried = false;
+    flight.current.clientFallbackUsed = false;
     flight.current.timer = setTimeout(() => void fetchAssessment(la, lo), 600);
   };
 
@@ -111,9 +114,11 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
       flight.current.timedOut = true;
       ctrl.abort();
     }, 30000);
+    let status = 0;
     try {
       const response = await fetch(`${API}/v1/explore?lat=${la}&lon=${lo}`, { signal: ctrl.signal });
       clearTimeout(timeout);
+      status = response.status;
       if (response.status === 429 && !flight.current.autoRetried) {
         // One automatic retry honoring the server's backoff, then stop —
         // hammering a throttled upstream is what causes these errors.
@@ -136,6 +141,23 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
         setError("The request timed out — the service may be waking from sleep (free tier idles). Try again in a few seconds.");
         setPhase("error");
         return;
+      }
+      // Shared-IP throttle escape hatch: the server answered 429/503, but
+      // the visitor's own IP has a fresh Open-Meteo quota — fetch with it
+      // and have the server score. Same model, same math, zero upstream.
+      if ((status === 429 || status === 503) && !flight.current.clientFallbackUsed) {
+        flight.current.clientFallbackUsed = true;
+        setRetryNote("Server is throttled — fetching weather with your connection instead…");
+        try {
+          const windows = await fetchClientWindows(la, lo, ctrl.signal);
+          const scored = await scoreClientWindows(API, la, lo, windows, ctrl.signal);
+          setResult(scored as ExploreResult);
+          setRetryNote(null);
+          setPhase("done");
+          return;
+        } catch (fallbackErr) {
+          console.error("[explore] client-fetch fallback failed:", fallbackErr);
+        }
       }
       console.error("[explore] live fetch failed:", e);
       setError(friendlyError(e, "weather"));
@@ -255,7 +277,7 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
             {phase === "working" && <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-glow-violet/40 bg-glow-violet/10 px-3 py-1 font-mono text-[10px] uppercase tracking-widest text-glow-violet"><span className="h-1.5 w-1.5 rounded-full bg-glow-violet animate-pulse" /> Updating assessment…</div>}
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div className="text-xs font-mono text-fg-muted">{result.latitude.toFixed(3)}, {result.longitude.toFixed(3)} · fetched {new Date(result.fetched_at).toLocaleTimeString()}</div>
+                <div className="text-xs font-mono text-fg-muted">{result.latitude.toFixed(3)}, {result.longitude.toFixed(3)} · fetched {new Date(result.fetched_at).toLocaleTimeString()}{result.weather_source === "browser" ? " · via your connection" : ""}</div>
                 <div className="mt-1 flex items-baseline gap-2"><span className="font-display text-4xl font-bold tabular text-fg-primary">{Math.round(w.risk_score * 100)}%</span><RiskBadge value={w.risk_score} level={w.risk_level} /></div>
               </div>
               <span className="text-[10px] font-mono px-2 py-1 rounded border border-glow-green/50 text-glow-green uppercase tracking-widest animate-pulse">● realtime</span>

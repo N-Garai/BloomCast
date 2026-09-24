@@ -39,6 +39,12 @@ HEAT_WAVE_C = 28.0
 # Provenance tags — the display contract (v2 M5) keys off these strings.
 PROVENANCE_HEURISTIC = "live-heuristic-nowcast"
 PROVENANCE_MODEL = "weather-only-model"
+# Browser-fetched variants: identical math and model, but the Open-Meteo
+# calls were made by the visitor's browser (each IP gets its own fair-use
+# quota) instead of the server's shared egress IP. The label matters because
+# "live" then means "fresh from your connection", not "fresh from ours".
+PROVENANCE_CLIENT_HEURISTIC = "client-fetched-heuristic"
+PROVENANCE_CLIENT_MODEL = "client-fetched-model"
 
 HEURISTIC_CAVEAT = (
     "Heuristic nowcast from live weather and land-cover assumptions — "
@@ -416,6 +422,48 @@ async def _fetch_windows(lat: float, lon: float) -> dict:
     }
 
 
+def _validate_client_windows(windows: dict) -> dict:
+    """Validate browser-supplied Open-Meteo payloads and split them exactly
+    like the server path. Raises :class:`InvalidLocation` (400) on junk —
+    an empty or absurd payload must never score silent zeros."""
+    from ingestion.openmeteo_client import OpenMeteoClient
+
+    if not isinstance(windows, dict):
+        raise InvalidLocation("Body must include a 'window' object.")
+    window = windows.get("window")
+    archive = windows.get("archive")
+    if not isinstance(window, dict):
+        raise InvalidLocation("Body must include a 'window' object.")
+    hourly = window.get("hourly")
+    if not isinstance(hourly, dict):
+        raise InvalidLocation("window.hourly must be an object.")
+    times = hourly.get("time")
+    temps = hourly.get("temperature_2m")
+    if not isinstance(times, list) or not 1 <= len(times) <= 1500:
+        raise InvalidLocation("window.hourly.time must be a non-empty series.")
+    if not isinstance(temps, list) or not temps:
+        raise InvalidLocation("window.hourly.temperature_2m must be non-empty.")
+    total = sum(len(v) for v in hourly.values() if isinstance(v, list))
+    if total > 100_000:
+        raise InvalidLocation("Weather payload is too large.")
+    past, forecast = OpenMeteoClient.split_window(hourly)
+    past_precip = [v for v in (past.get("precipitation") or []) if v is not None]
+    fc_precip = [v for v in (forecast.get("precipitation") or []) if v is not None]
+    if not past_precip and not fc_precip:
+        raise InvalidLocation("Weather payload has no precipitation series.")
+    if archive is None:
+        return {"past": past, "forecast": forecast, "archive": {},
+                "archive_status": "unavailable"}
+    if not isinstance(archive, dict):
+        raise InvalidLocation("'archive' must be an object or null.")
+    arch_hourly = archive.get("hourly") or {}
+    if not isinstance(arch_hourly, dict):
+        raise InvalidLocation("'archive.hourly' must be an object.")
+    return {"past": past, "forecast": forecast,
+            "archive": archive if isinstance(archive, dict) else {},
+            "archive_status": "ok"}
+
+
 def _cache_block(cached_at: str, age_s: float | None) -> dict:
     """The staleness contract: never a number without its age."""
     return {
@@ -426,14 +474,25 @@ def _cache_block(cached_at: str, age_s: float | None) -> dict:
     }
 
 
-async def assess_location(lat: float, lon: float, *, use_cache: bool = True) -> dict:
+async def assess_location(lat: float, lon: float, *, use_cache: bool = True,
+                          windows: dict | None = None,
+                          weather_source: str = "server") -> dict:
     """Realtime assessment for one location.
 
     Returns the legacy ``/v1/explore`` shape (so existing clients keep working)
     plus the v2 additions: ``provenance``, ``cache``, ``caveats`` and
     ``spectral_prior``. Raises :class:`AssessError` subclasses on failure.
+
+    ``windows`` carries caller-supplied Open-Meteo payloads
+    (``{"window": <forecast-endpoint response>, "archive": <archive response>
+    | None}``) — the ``POST /v1/infer/score`` escape hatch for shared-IP
+    throttling. Scoring is byte-identical to the server-fetched path (same
+    split, same row, same model); only ``provenance``/``weather_source``
+    record the difference. Client payloads are validated before scoring —
+    garbage in is a 400, never a scored zero.
     """
     from ingestion.climatology import prior_for
+    from ingestion.openmeteo_client import OpenMeteoClient
     from ingestion.streamflush import (
         compute_dry_days_antecedent,
         compute_rainfall_48h,
@@ -444,8 +503,16 @@ async def assess_location(lat: float, lon: float, *, use_cache: bool = True) -> 
     lat = float(lat)
     lon = float(lon)
     validate_location(lat, lon)
+    if weather_source not in ("server", "browser"):
+        raise InvalidLocation("weather_source must be 'server' or 'browser'.")
 
     key = coord_key(lat, lon)
+    validated = None
+    if windows is not None:
+        # Client payloads validate BEFORE the cache: a malformed body is a
+        # 400 even when a cached assessment exists — the cache must never
+        # mask a client bug with a stale-looking hit.
+        validated = _validate_client_windows(windows)
     if use_cache:
         hit = _ASSESSMENT_CACHE.get(key)
         if hit is not None:
@@ -455,27 +522,32 @@ async def assess_location(lat: float, lon: float, *, use_cache: bool = True) -> 
             out["stale"] = age > _ASSESSMENT_CACHE.ttl_s / 2
             return out
 
-    try:
-        data = await _fetch_windows(lat, lon)
-    except (UpstreamBusy, UpstreamUnavailable):
-        # Throttled or down: serve a bounded-stale cached assessment,
-        # loudly labelled, instead of failing. Fresh entries were already
-        # returned above; only expired-but-recent ones reach here.
-        if use_cache:
-            stale = _ASSESSMENT_CACHE.get_stale(
-                key, 4 * _ASSESSMENT_CACHE.ttl_s)
-            if stale is not None:
-                value, age = stale
-                out = dict(value)
-                out["cache"] = _cache_block(out["fetched_at"], age)
-                out["stale"] = True
-                out["caveats"] = list(out.get("caveats") or []) + [
-                    "Live weather is throttled right now, so this shows the "
-                    f"last good assessment from {int(age // 60)} min ago "
-                    "instead of failing."
-                ]
-                return out
-        raise
+    if windows is None:
+        try:
+            data = await _fetch_windows(lat, lon)
+        except (UpstreamBusy, UpstreamUnavailable):
+            # Throttled or down: serve a bounded-stale cached assessment,
+            # loudly labelled, instead of failing. Fresh entries were already
+            # returned above; only expired-but-recent ones reach here.
+            if use_cache:
+                stale = _ASSESSMENT_CACHE.get_stale(
+                    key, 4 * _ASSESSMENT_CACHE.ttl_s)
+                if stale is not None:
+                    value, age = stale
+                    out = dict(value)
+                    out["cache"] = _cache_block(out["fetched_at"], age)
+                    out["stale"] = True
+                    out["caveats"] = list(out.get("caveats") or []) + [
+                        "Live weather is throttled right now, so this shows the "
+                        f"last good assessment from {int(age // 60)} min ago "
+                        "instead of failing."
+                    ]
+                    return out
+            raise
+        upstream_calls = 2
+    else:
+        data = validated
+        upstream_calls = 0
     past = data["past"]
     fc_hourly = data["forecast"]
     archive = data["archive"]
@@ -548,10 +620,16 @@ async def assess_location(lat: float, lon: float, *, use_cache: bool = True) -> 
         )
 
     fetched_at = datetime.now(timezone.utc).isoformat()
+    from_browser = weather_source == "browser"
     result = {
         "latitude": lat,
         "longitude": lon,
-        "provenance": PROVENANCE_MODEL if estimate else PROVENANCE_HEURISTIC,
+        "provenance": (
+            (PROVENANCE_CLIENT_MODEL if estimate else PROVENANCE_CLIENT_HEURISTIC)
+            if from_browser
+            else (PROVENANCE_MODEL if estimate else PROVENANCE_HEURISTIC)
+        ),
+        "weather_source": weather_source,
         "is_calibrated": False,
         "fetched_at": fetched_at,
         "method": (
@@ -590,8 +668,12 @@ async def assess_location(lat: float, lon: float, *, use_cache: bool = True) -> 
         "feature_row": feature_row_values,
         "signals": _signals(temp_mean, temp_max, wind_mean, past_temp_mean),
         "nearest_waterbody": nearest,
-        "caveats": caveats,
-        "upstream_calls": 2,
+        "caveats": caveats + ([
+            "Weather for this assessment was fetched by your browser, not "
+            "our server (shared-IP throttling escape hatch) — same model, "
+            "same math."
+        ] if from_browser else []),
+        "upstream_calls": upstream_calls,
     }
 
     _ASSESSMENT_CACHE.set(key, result)

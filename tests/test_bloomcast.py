@@ -1529,5 +1529,74 @@ def test_batch_retries_throttled_location_once(monkeypatch):
     assert len(calls) == 2
 
 
+def test_infer_score_uses_browser_windows_without_upstream(monkeypatch):
+    """Shared-IP throttle escape hatch: the client fetches Open-Meteo with
+    its own IP quota and the server scores with zero upstream calls. Scoring
+    is identical (same split/row/model); provenance records the difference.
+    Scored results populate the shared cache for the next visitor."""
+    import api.infer as infer
+    from fastapi.testclient import TestClient
+    from api.main import app
+
+    hours = [f"2026-09-20T{h:02d}:00" for h in range(72 + 168)]
+    hourly = {
+        "time": hours,
+        "temperature_2m": [22.0] * len(hours),
+        "wind_speed_10m": [2.0] * len(hours),
+        "wind_direction_10m": [90.0] * len(hours),
+        "precipitation": [0.0] * len(hours),
+        "shortwave_radiation": [200.0] * len(hours),
+        "cloud_cover": [10.0] * len(hours),
+        "dewpoint_2m": [12.0] * len(hours),
+        "pressure_msl": [1013.0] * len(hours),
+    }
+
+    async def no_upstream(lat, lon):
+        raise AssertionError("score path must not touch upstream")
+
+    monkeypatch.setattr(infer, "_fetch_windows", no_upstream)
+    monkeypatch.setattr(infer, "_load_serving_artifacts", lambda: None)
+    infer.configure_cache(900)
+    try:
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.post("/v1/infer/score", json={
+            "latitude": 12.0, "longitude": 34.0,
+            "window": {"hourly": hourly},
+            "archive": {"hourly": {"temperature_2m": [18.0] * 720,
+                                   "precipitation": [0.0] * 720}},
+        })
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["provenance"] == "client-fetched-heuristic"
+        assert body["weather_source"] == "browser"
+        assert body["upstream_calls"] == 0
+        assert len(body["daily_outlook"]) == 7
+        # Shared cache: the same coords now hit without any payload.
+        cached = client.get("/v1/infer?lat=12.0&lon=34.0")
+        assert cached.status_code == 200
+        assert cached.json()["cache"]["hit"] is True
+
+        missing = client.post("/v1/infer/score",
+                              json={"latitude": 12.0, "longitude": 34.0})
+        assert missing.status_code == 400
+        empty = client.post("/v1/infer/score", json={
+            "latitude": 12.0, "longitude": 34.0,
+            "window": {"hourly": {"time": [], "temperature_2m": []}}})
+        assert empty.status_code == 400
+        huge = client.post("/v1/infer/score", json={
+            "latitude": 12.0, "longitude": 34.0,
+            "window": {"hourly": {"time": list(range(2000)),
+                                  "temperature_2m": [1.0] * 2000,
+                                  "precipitation": [0.0] * 2000}}})
+        assert huge.status_code == 400
+        no_archive = client.post("/v1/infer/score", json={
+            "latitude": 13.0, "longitude": 35.0,
+            "window": {"hourly": hourly}, "archive": None})
+        assert no_archive.status_code == 200
+        assert no_archive.json()["past_30d"]["status"] == "unavailable"
+    finally:
+        infer.configure_cache(900)
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

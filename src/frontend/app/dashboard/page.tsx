@@ -15,6 +15,7 @@ import { StreamFlushOverlay } from "@/components/streamflush/StreamFlushOverlay"
 import { ScrollReveal } from "@/components/motion/ScrollReveal";
 import { ErrorState, friendlyError } from "@/components/dashboard/Resilience";
 import { API, readBody } from "@/lib/api";
+import { fetchClientWindows, scoreClientWindows } from "@/lib/openmeteo";
 
 interface Waterbody {
   id: string;
@@ -37,6 +38,7 @@ interface ExploreResult {
   wash_off: { risk_score: number; risk_level: string };
   model_estimate?: { p_bloom: number; ci_lo: number; ci_hi: number } | null;
   model_status?: { status?: string; reason?: string } | null;
+  weather_source?: string;
   signals?: string[];
   nearest_waterbody?: { id: string; name: string; distance_km: number } | null;
 }
@@ -68,7 +70,7 @@ export default function DashboardPage() {
   const [dropLoading, setDropLoading] = useState(false);
   const [dropError, setDropError] = useState<string | null>(null);
   const [picked, setPicked] = useState<{ lat: number; lon: number } | null>(null);
-  const exploreFlight = useRef<AbortController | null>(null);
+  const exploreFlight = useRef<{ ctrl?: AbortController; fallbackUsed?: boolean }>({});
 
   const load = useCallback(() => {
     setLoading(true);
@@ -219,16 +221,35 @@ export default function DashboardPage() {
     setDropError(null);
     // A new pick cancels the previous in-flight assessment — rapid clicks
     // become one fetch, not a burst of upstream calls.
-    exploreFlight.current?.abort();
+    exploreFlight.current.ctrl?.abort();
+    exploreFlight.current.fallbackUsed = false;
     const ctrl = new AbortController();
-    exploreFlight.current = ctrl;
+    exploreFlight.current.ctrl = ctrl;
+    let status = 0;
     try {
       const response = await fetch(`${API}/v1/explore?lat=${latitude}&lon=${longitude}`, { signal: ctrl.signal });
+      status = response.status;
       const { data } = await readBody(response);
       if (!response.ok) throw new Error(data?.detail ? `${data.detail} [HTTP ${response.status}]` : `HTTP ${response.status} (no error body)`);
       setDropResult(data as ExploreResult);
     } catch (e) {
       if (e instanceof DOMException && (e as DOMException).name === "AbortError") return;
+      // Shared-IP throttle escape hatch (same as LocationExplorer): the
+      // visitor's IP has a fresh Open-Meteo quota — fetch with it, score
+      // server-side with zero upstream calls.
+      if ((status === 429 || status === 503) && !exploreFlight.current.fallbackUsed) {
+        exploreFlight.current.fallbackUsed = true;
+        try {
+          const windows = await fetchClientWindows(latitude, longitude, ctrl.signal);
+          const scored = await scoreClientWindows(API, latitude, longitude, windows, ctrl.signal);
+          setDropResult(scored as ExploreResult);
+          return;
+        } catch (fallbackErr) {
+          console.error("[dashboard] client-fetch fallback failed:", fallbackErr);
+        } finally {
+          setDropLoading(false);
+        }
+      }
       console.error("[dashboard] live fetch failed:", e);
       setDropError(friendlyError(e, "weather"));
     } finally {
@@ -276,7 +297,7 @@ export default function DashboardPage() {
           <div className="absolute right-4 top-4 bottom-4 z-10 w-[330px] max-w-[calc(100%-2rem)] flex flex-col gap-3 overflow-y-auto pr-1">
             {selectedWb && <div className="shrink-0"><ForecastPipeline key={selectedWb.id} waterbodyId={selectedWb.id} waterbodyName={selectedWb.name} onDone={handleForecastDone} /><div className="mt-3 rounded-xl border border-border-subtle bg-bg-deep/80 p-4 backdrop-blur-xl"><div className="flex items-start justify-between gap-3"><div><div className="text-xs font-mono text-fg-muted">{selectedWb.name}</div><div className="mt-1 font-display text-xl font-semibold text-fg-primary">{selectedForecast ? `${Math.round((selectedForecast.horizons?.["5d"]?.p_bloom ?? selectedForecast.p_bloom ?? 0) * 100)}%` : "Loading outlook"}</div></div>{selectedForecast && <span className={`text-xs font-mono px-2 py-1 rounded-full border border-current ${riskColor(riskOf(selectedForecast.horizons?.["5d"]?.p_bloom ?? selectedForecast.p_bloom ?? 0))}`}>{riskOf(selectedForecast.horizons?.["5d"]?.p_bloom ?? selectedForecast.p_bloom ?? 0).toUpperCase()}</span>}</div><p className="mt-2 text-xs text-fg-muted">Model-backed pilot forecast · confidence interval and drivers are available in the sidebar card.</p><a href="/report" className="mt-3 inline-flex items-center gap-2 text-xs text-glow-cyan">Open full report →</a></div></div>}
             {dropLoading && !dropResult && <div className="shrink-0 rounded-xl border border-border-subtle bg-bg-deep/90 p-4 text-xs text-fg-secondary">Fetching live assessment…</div>}
-            {dropResult && <div className="shrink-0 rounded-xl border border-glow-cyan/30 bg-bg-deep/90 p-4 backdrop-blur-xl"><div className="flex items-start justify-between gap-3"><div><div className="font-mono text-[10px] uppercase tracking-widest text-glow-cyan">Open-water assessment</div><div className="mt-0.5 font-mono text-[11px] text-fg-muted">{dropResult.latitude.toFixed(2)}°, {dropResult.longitude.toFixed(2)}°{dropLoading ? ' · updating…' : ''}</div><div className="mt-1 font-display text-xl font-semibold text-fg-primary">{Math.round(dropResult.wash_off.risk_score * 100)}% wash-off risk</div></div><span className={`text-xs font-mono px-2 py-1 rounded-full border border-current ${riskColor(dropResult.wash_off.risk_level)}`}>{dropResult.wash_off.risk_level.toUpperCase()}</span></div><div className="mt-3 text-xs text-fg-secondary">{dropResult.signals?.slice(0, 3).map((signal) => `${signal} · `).join("") || "Live weather and wash-off signals loaded."}</div>{dropResult.model_estimate && <div className="mt-3 rounded-lg border border-glow-violet/30 bg-glow-violet/5 p-3 text-xs text-fg-secondary">Model estimate: <span className="font-mono text-glow-violet">{Math.round(dropResult.model_estimate.p_bloom * 100)}%</span> · CI {Math.round(dropResult.model_estimate.ci_lo * 100)}–{Math.round(dropResult.model_estimate.ci_hi * 100)}%</div>}{!dropResult.model_estimate && <div className="mt-3 text-[11px] text-fg-faint">Model estimate unavailable{dropResult.model_status?.reason ? ` — ${dropResult.model_status.reason}` : ""}.</div>}</div>}
+            {dropResult && <div className="shrink-0 rounded-xl border border-glow-cyan/30 bg-bg-deep/90 p-4 backdrop-blur-xl"><div className="flex items-start justify-between gap-3"><div><div className="font-mono text-[10px] uppercase tracking-widest text-glow-cyan">Open-water assessment</div><div className="mt-0.5 font-mono text-[11px] text-fg-muted">{dropResult.latitude.toFixed(2)}°, {dropResult.longitude.toFixed(2)}°{dropResult.weather_source === "browser" ? " · via your connection" : ""}{dropLoading ? ' · updating…' : ''}</div><div className="mt-1 font-display text-xl font-semibold text-fg-primary">{Math.round(dropResult.wash_off.risk_score * 100)}% wash-off risk</div></div><span className={`text-xs font-mono px-2 py-1 rounded-full border border-current ${riskColor(dropResult.wash_off.risk_level)}`}>{dropResult.wash_off.risk_level.toUpperCase()}</span></div><div className="mt-3 text-xs text-fg-secondary">{dropResult.signals?.slice(0, 3).map((signal) => `${signal} · `).join("") || "Live weather and wash-off signals loaded."}</div>{dropResult.model_estimate && <div className="mt-3 rounded-lg border border-glow-violet/30 bg-glow-violet/5 p-3 text-xs text-fg-secondary">Model estimate: <span className="font-mono text-glow-violet">{Math.round(dropResult.model_estimate.p_bloom * 100)}%</span> · CI {Math.round(dropResult.model_estimate.ci_lo * 100)}–{Math.round(dropResult.model_estimate.ci_hi * 100)}%</div>}{!dropResult.model_estimate && <div className="mt-3 text-[11px] text-fg-faint">Model estimate unavailable{dropResult.model_status?.reason ? ` — ${dropResult.model_status.reason}` : ""}.</div>}</div>}
             {dropError && <div className="shrink-0 rounded-xl border border-glow-red/30 bg-glow-red/5 p-4 text-xs text-glow-red">{dropError}</div>}
             <div className="shrink-0"><StreamFlushOverlay /></div>
           </div>

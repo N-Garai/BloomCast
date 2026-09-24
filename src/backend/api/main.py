@@ -407,6 +407,41 @@ async def infer_batch(request: Request):
         return _assess_error_response(exc)
 
 
+@app.post("/v1/infer/score")
+async def infer_score(request: Request):
+    """Score browser-fetched Open-Meteo payloads with zero upstream calls.
+
+    The shared-IP throttle escape hatch: when ``GET /v1/infer`` answers 429,
+    the visitor's browser fetches the same two Open-Meteo payloads with its
+    own IP quota and posts them here for identical scoring (same split, same
+    row, same model — ``provenance`` records the difference). Client payloads
+    are validated before scoring; junk is a 400, never silent zeros. Scored
+    results populate the shared cache, so the next visitor gets a server hit.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "Body must be a JSON object"}, status_code=400)
+    try:
+        latitude = float(body.get("latitude", body.get("lat")))
+        longitude = float(body.get("longitude", body.get("lon")))
+    except (TypeError, ValueError):
+        return JSONResponse({"error": "latitude and longitude are required"}, status_code=400)
+    windows = {"window": body.get("window"), "archive": body.get("archive")}
+    # A score request with nothing to score is a client bug — 400 here,
+    # before the shared cache can mask it with a stale-looking hit.
+    if not isinstance(windows["window"], dict):
+        return JSONResponse({"error": "Body must include a 'window' object "
+                                      "with hourly series."}, status_code=400)
+    try:
+        return await assess_location(latitude, longitude, windows=windows,
+                                     weather_source="browser")
+    except AssessError as exc:
+        return _assess_error_response(exc)
+
+
 @app.get("/v1/fhir/Communication/{alert_id}")
 async def fhir_bundle(alert_id: str):
     # "sample" returns the committed example bundle; any other id resolves to
