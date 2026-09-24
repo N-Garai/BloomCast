@@ -83,6 +83,11 @@ def main() -> int:
         feature_names=FEATURE_NAMES,
         meta=meta,
         quantiles=quantiles,
+        weather_only={
+            "booster": bundle["weather_only"]["lgbm"],
+            "calibrator": bundle["weather_only"]["calibrator"],
+            "meta": bundle["weather_only"]["meta"],
+        },
     )
     print(f"artifacts exported to {args.out} (source={source})")
     return 0

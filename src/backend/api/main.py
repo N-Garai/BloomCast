@@ -1,14 +1,22 @@
 """BloomCast FastAPI application — deployed on Render free tier."""
+import inspect
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, Response, FileResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse, Response, FileResponse, StreamingResponse
 import mimetypes
 
 __version__ = "2.0.0"
-from shared.config import ALLOWED_ORIGIN
+from shared.config import (
+    ALLOWED_ORIGIN,
+    BATCH_MAX_LOCATIONS,
+    BATCH_THROTTLE_PER_10MIN,
+    INFER_CACHE_TTL_S,
+    SEED_DIR,
+    UPSTREAM_TIMEOUT_S,
+)
 from api import seed
 from api.db import (
     insert_observation,
@@ -22,8 +30,15 @@ from api.db import (
     validate_observation,
 )
 from api.explore import explore_location
+from api.infer import (
+    AssessError,
+    assess_batch,
+    assess_location,
+    batch_throttle,
+)
 from api.fhir import build_alert_bundle
-from api.rationale import NoKeyError, generate_rationale
+from api.report import NoKeyError as ReportNoKeyError, providers_configured
+import api.report as report_api
 
 # Next.js static export. Resolved by walking up from this file until a
 # `frontend/out` directory is found, so it works regardless of how deeply the
@@ -133,12 +148,34 @@ async def serve_favicon():
 
 @app.get("/v1/health")
 async def health():
+    """Liveness + honest model status (v2 M-K1).
+
+    ``model.status`` is ``loaded`` only when the exported artifacts passed the
+    feature-compatibility check; otherwise ``fallback`` with the reason. A
+    green health check that hides a missing model is worse than a red one.
+    """
+    from ml.training.artifacts import serving_model_status
+
+    model_status = serving_model_status()
+    pipeline_run = None
+    try:
+        pipeline_run = json.loads((SEED_DIR / "pipeline_run.json").read_text(encoding="utf-8")).get("run_at")
+    except (OSError, ValueError, AttributeError):
+        pass
+
     return {
         "status": "ok",
         "version": __version__,
-        "model_sha": "v2.0.0-placeholder",
-        "last_pipeline_run": "2026-09-18T02:00:00Z",
+        "model_sha": model_status.get("model_sha"),
+        "last_pipeline_run": pipeline_run,
         "services": {"seed": "ok", "db": "ok"},
+        "model": model_status,
+        "realtime": {
+            "infer": "live",
+            "cache_ttl_s": INFER_CACHE_TTL_S,
+            "upstream_timeout_s": UPSTREAM_TIMEOUT_S,
+            "upstream_calls_per_location": 2,
+        },
     }
 
 
@@ -273,6 +310,101 @@ async def explore(lat: float, lon: float):
     (see nearest_waterbody) carry the full 3–7 day model outlook.
     """
     return await explore_location(lat, lon)
+
+
+def _assess_error_response(exc: AssessError) -> JSONResponse:
+    """Structured, human-readable error; never a raw upstream URL."""
+    headers = {}
+    if exc.retry_after_s:
+        headers["Retry-After"] = str(int(exc.retry_after_s))
+    return JSONResponse(exc.to_body(), status_code=exc.status_code, headers=headers)
+
+
+@app.get("/v1/infer")
+async def infer(lat: float, lon: float):
+    """Realtime assessment for any point on Earth (v2 M1).
+
+    Live weather in 2–4 s, scored on the spot and cached for 15 minutes per
+    ~110 m cell. Carries ``provenance``, ``cache`` and ``caveats`` so no number
+    can be read without its origin and its staleness.
+    """
+    try:
+        return await assess_location(lat, lon)
+    except AssessError as exc:
+        return _assess_error_response(exc)
+
+
+@app.get("/v1/infer/stream")
+async def infer_stream(lat: float, lon: float):
+    """Server-sent progressive assessment: cached hit → immediate, else staged.
+
+    First frame ("status") is written before any upstream call, so the UI can
+    paint inside the 300 ms budget instead of waiting on the weather window.
+    """
+    import asyncio as _asyncio
+    import json as _json
+
+    async def _events():
+        yield f"event: status\ndata: {_json.dumps({'stage': 'accepted', 'lat': lat, 'lon': lon})}\n\n"
+        task = _asyncio.create_task(assess_location(lat, lon))
+        while not task.done():
+            await _asyncio.sleep(0.25)
+            if task.done():
+                break
+            yield ": keep-alive\n\n"
+        try:
+            payload = task.result()
+            yield f"event: assessment\ndata: {_json.dumps(payload)}\n\n"
+        except AssessError as exc:
+            yield f"event: error\ndata: {_json.dumps(exc.to_body())}\n\n"
+        except Exception:  # noqa: BLE001 - never leak a stack trace to a browser
+            yield ("event: error\ndata: "
+                   f"{_json.dumps({'error': 'Assessment failed', 'kind': 'infer-error'})}\n\n")
+
+    return StreamingResponse(_events(), media_type="text/event-stream")
+
+
+@app.post("/v1/infer/batch")
+async def infer_batch(request: Request):
+    """Assess up to 50 points in one request (v2 M4).
+
+    Per-IP budget keeps one client from spending the shared upstream quota;
+    per-location failures come back in ``errors`` instead of failing the batch.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+
+    locations = body.get("locations") if isinstance(body, dict) else None
+    if not isinstance(locations, list) or not locations:
+        return JSONResponse(
+            {"error": "Body must be {\"locations\": [{\"lat\": .., \"lon\": ..}, ...]}",
+             "kind": "invalid-request"},
+            status_code=400,
+        )
+    if len(locations) > BATCH_MAX_LOCATIONS:
+        return JSONResponse(
+            {"error": f"At most {BATCH_MAX_LOCATIONS} locations per request.",
+             "kind": "invalid-request"},
+            status_code=400,
+        )
+
+    identity = request.client.host if request.client else "unknown"
+    allowed, retry_after = batch_throttle(BATCH_THROTTLE_PER_10MIN).check(identity)
+    if not allowed:
+        return JSONResponse(
+            {"error": "Too many batch requests from this client. "
+                      f"Please wait {int(retry_after)}s and try again.",
+             "kind": "throttled", "retry_after_s": retry_after},
+            status_code=429,
+            headers={"Retry-After": str(int(retry_after))},
+        )
+
+    try:
+        return await assess_batch(locations)
+    except AssessError as exc:
+        return _assess_error_response(exc)
 
 
 @app.get("/v1/fhir/Communication/{alert_id}")
@@ -474,26 +606,49 @@ async def create_fhir_bundle(request: Request):
     return bundle
 
 
-@app.post("/v1/rationale")
-async def rationale(request: Request):
-    """Optional plain-language narrative over an assessment (Gemini/Groq).
-
-    The LLM explains numbers the system already computed — it never scores.
-    No provider key configured means HTTP 501, never a silent failure.
-    """
+@app.post("/v1/report")
+async def report(request: Request):
+    """Generate a grounded report from a server-side assessment."""
     try:
         body = await request.json()
     except Exception:
         return JSONResponse({"error": "Invalid JSON"}, status_code=400)
+    if not isinstance(body, dict):
+        return JSONResponse({"error": "Body must be a JSON object"}, status_code=400)
+    latitude = body.get("latitude", body.get("lat"))
+    longitude = body.get("longitude", body.get("lon"))
     try:
-        text, provider = await generate_rationale(
-            body.get("provider", "auto"), body.get("context", {})
+        latitude = float(latitude)
+        longitude = float(longitude)
+    except (TypeError, ValueError):
+        return JSONResponse({"error": "latitude and longitude are required"}, status_code=400)
+    if not providers_configured():
+        return JSONResponse(
+            {"status": "unavailable", "message": "AI reports unavailable",
+             "reason": "Set GEMINI_API_KEY or GROQ_API_KEY"},
+            status_code=503,
         )
-    except NoKeyError as exc:
-        return JSONResponse({"error": str(exc)}, status_code=501)
-    except Exception as exc:  # noqa: BLE001 - upstream outage becomes a 502
-        return JSONResponse({"error": f"rationale provider failed: {exc}"}, status_code=502)
-    return {"rationale": text, "provider": provider}
+    try:
+        assessment = report_api.assess_location(latitude, longitude)
+        if inspect.isawaitable(assessment):
+            assessment = await assessment
+        text, provider, context, area_validation, degradation = await report_api.generate_report(body, assessment)
+    except AssessError as exc:
+        return _assess_error_response(exc)
+    except ReportNoKeyError as exc:
+        return JSONResponse({"status": "unavailable", "message": "AI reports unavailable",
+                             "reason": str(exc)}, status_code=503)
+    except Exception as exc:  # noqa: BLE001 - provider failure becomes a clear degraded response
+        return JSONResponse({"status": "unavailable", "message": "AI reports unavailable",
+                             "reason": f"report provider failed: {exc}"}, status_code=502)
+    return {
+        "status": "ok",
+        "report": text,
+        "provider": provider,
+        "context": context,
+        "area_validation": area_validation,
+        "degraded": degradation,
+    }
 
 
 # NOTE: no @app.get("/") route here. The StaticFiles mount at the bottom of

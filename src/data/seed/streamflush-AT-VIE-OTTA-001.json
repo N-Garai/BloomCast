@@ -3,10 +3,10 @@
   "name": "Ottakringer Bach",
   "city": "Vienna",
   "country": "AT",
-  "risk_score": 0.4,
-  "risk_level": "moderate",
-  "rainfall_48h_mm": 17.0,
-  "dry_days_antecedent": 7.0,
+  "risk_score": 0.74,
+  "risk_level": "critical",
+  "rainfall_48h_mm": 51.0,
+  "dry_days_antecedent": 11.0,
   "impervious_proxy": 0.62,
-  "updated_at": "2026-09-18T02:00:00Z"
+  "updated_at": "2026-09-24T04:11:06+00:00"
 }

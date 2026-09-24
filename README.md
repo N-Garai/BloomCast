@@ -1,41 +1,44 @@
 # BloomCast
 
-**Algal bloom (cyanobacteria) early warning.** Probabilistic 3–7 day bloom-risk
-forecasts, counterfactual intervention planning, and FHIR R4 alert bundles for
-water utilities and public-health offices. Built to run entirely on free tiers
-— **no credit card required anywhere**.
+**Algal bloom (cyanobacteria) early warning.** Advisory bloom-risk assessment,
+3–7 day pilot forecasts, counterfactual intervention planning, and FHIR R4 alert
+bundles for water utilities and public-health offices. The demo runs on free
+tiers — **no credit card required anywhere**.
 
-> Predict once, serve static. Inference runs on a schedule; the request path
-> never touches a model.
+> Hybrid serving: request-time Open-Meteo weather powers a transparent
+> StreamFlush heuristic for any coordinate. An exported model estimate is added
+> only when compatible real-label artifacts are present. Satellite spectral data
+> is ingested on a schedule; request-time spectral input is a labelled
+> climatology prior, not a live satellite reading.
 
 ---
 
 ## Repository layout
 
-```
+```text
 bloomcast/                        <- git root
-├── .github/workflows/            <- nightly pipeline (free Actions cron)
-├── docs/                         <- architecture, model card, API spec
-├── fhir/                         <- StructureDefinition + example bundle
-├── roadmap/                      <- original PRDs and hosting spec
-├── scripts/                      <- seed generator, free-tier auditor
-├── tests/                        <- import + data-integrity suite
+├── .github/workflows/            nightly ingestion and seed refresh
+├── docs/                         architecture, model card, API spec
+├── fhir/                         FHIR R4 profile + example bundle
+├── roadmap/                      PRDs and hosting specification
+├── scripts/                      seed/climatology generators and audits
+├── tests/                        import and data-integrity suite
 ├── src/
-│   ├── backend/                  <- FastAPI app + ML pipeline
-│   │   ├── api/                  <- the API (uvicorn target)
-│   │   ├── ml/{training,inference} <- model + nightly precompute
-│   │   └── {shared, ingestion, features}
-│   ├── frontend/                 <- Next.js static export
-│   └── data/                     <- waterbodies, stream segments, seeds
-├── package.json                  <- npm workspace root
-├── pyproject.toml                <- uv workspace root
-├── turbo.json                    <- pipeline tasks
-├── render.yaml                   <- both free Render services
-└── .env.example                  <- all optional, no card needed
+│   ├── backend/                  FastAPI app and ML pipeline
+│   │   ├── api/                  API routes, inference, database, FHIR
+│   │   ├── ml/{training,inference}
+│   │   └── {shared,ingestion,features}
+│   ├── frontend/                 Next.js static export
+│   └── data/                     curated data, seed, and spectral priors
+├── package.json                  npm workspace root
+├── pyproject.toml                uv workspace root
+├── turbo.json                    pipeline tasks
+├── render.yaml                   single Docker deployment blueprint
+└── .env.example                  optional environment variables
 ```
 
-Render's web service looks for `src/` at the repo root, so the runtime code
-lives there while tooling, docs, and specs sit at the top level.
+Render uses one Docker service: it builds the Next.js static export and runs
+FastAPI in the same container. The backend serves the built frontend at runtime.
 
 ## Quick start (local, no services)
 
@@ -43,7 +46,7 @@ lives there while tooling, docs, and specs sit at the top level.
 # backend ------------------------------------------------------------------
 cd src/backend
 uv venv .venv --python 3.11
-uv pip install ./.venv/Scripts/python.exe -r requirements.txt
+uv pip install -r requirements.txt
 ./.venv/Scripts/python.exe -m uvicorn api.main:app --port 8000
 
 # frontend -----------------------------------------------------------------
@@ -53,51 +56,97 @@ npm run build        # static export -> src/frontend/out
 npm run dev          # or serve the static out/ directory
 
 # verify nothing needs a credit card --------------------------------------
+cd ../../..
 bash scripts/verify-no-card.sh
 
 # test suite ---------------------------------------------------------------
-python -m pytest tests -q      # run from src/backend with its venv
+python -m pytest tests -q      # run from the repository root
 ```
+
+The backend requires the frontend build to start because it serves the static
+export. The committed data files keep the API usable without satellite
+credentials; live weather calls are made only when an inference endpoint is
+used.
 
 ## What's here
 
-| Capability | Where | Status |
+| Capability | Where | Current status |
 |---|---|---|
-| Probabilistic 3–7 day bloom risk per waterbody | `src/backend/bloomcast/training/` | implemented, trained on deterministic seed |
-| Hybrid model — LightGBM + 1D-CNN + isotonic calibration | `src/backend/bloomcast/training/` | implemented |
-| SHAP-style feature evidence attached to every forecast | `src/backend/bloomcast/training/` | implemented |
-| Counterfactual intervention planning (nutrient/flow/temp) | `src/backend/bloomcast/training/counterfactual.py` | implemented |
-| Replay Theatre — historical events re-forecast day by day | `src/frontend/app/replay/` | implemented |
-| Resilience Sandbox — what-if scenario grid | `src/frontend/app/sandbox/` | implemented |
-| Model scorecard with baselines | `src/frontend/app/scorecard/` | implemented |
-| StreamFlush — urban stream nowcast (5 segments) | `src/frontend/app/streamflush/` | implemented |
-| FHIR R4 alert bundles + `bloomcast-alert` profile | `fhir/`, `src/backend/bloomcast/api/fhir.py` | implemented |
-| Citizen ground-truth reporting loop | `src/frontend/app/report/` | implemented |
-| Alert subscriptions with unsubscribe tokens | `src/backend/bloomcast/api/main.py` | implemented |
-| Nightly refresh on GitHub Actions | `.github/workflows/pipeline.yml` | implemented |
+| Realtime assessment for any coordinate | `src/backend/api/infer.py` | implemented; live weather + StreamFlush heuristic |
+| Compatible `GET /v1/explore` | `src/backend/api/explore.py` | compatibility layer over realtime inference |
+| Optional exported model estimate | `src/backend/ml/inference/predict.py` | artifact-gated; heuristic fallback when absent |
+| Spectral climatology prior | `src/backend/ingestion/climatology.py`, `src/data/climatology.json` | committed modelled fallback; measured records can replace it |
+| Nightly ingestion and seed refresh | `.github/workflows/pipeline.yml` | scheduled at 02:00 UTC; fail-safe |
+| Probabilistic 3–7 day pilot forecast | `src/data/seed/forecast-*.json` | shipped synthetic seed until real-label artifacts are committed |
+| Counterfactual intervention planning | `src/backend/ml/training/counterfactual.py` | planning scenarios, not predictions |
+| Replay Theatre | `src/frontend/app/replay/` | static replay data and UI |
+| Resilience Sandbox | `src/frontend/app/sandbox/` | scenario grid, not a forecast |
+| Model scorecard with baselines | `src/data/seed/scorecard.json` | synthetic-data metrics unless real artifacts are used |
+| StreamFlush urban-stream nowcast | `src/backend/ingestion/streamflush.py` | heuristic risk score, not a calibrated probability |
+| FHIR R4 alert bundles | `fhir/`, `src/backend/api/fhir.py` | implemented |
+| Citizen ground-truth reporting | `src/backend/api/report.py` | implemented with provider fallback |
+| Alert subscriptions | `src/backend/api/main.py` | implemented; no email/push dispatch |
 
 ## Free-tier guarantee
 
-Every external service used has a free tier and none requires a payment card:
+Every external service used by the shipped workflow has a free tier and none
+requires a payment card:
 
 | Service | Purpose | Plan |
 |---|---|---|
-| Render | FastAPI web service | free (spins down when idle) |
-| Render | static site for `src/frontend/out` | free |
-| GitHub Actions | nightly ML pipeline | free for public repos |
-| Copernicus Sentinel-2 / Open-Meteo / open datasets | ingestion | free |
+| Render | FastAPI and static frontend in one Docker service | free |
+| GitHub Actions | nightly ML/ingestion pipeline | free for public repositories |
+| Open-Meteo | keyless weather forecast and archive | free; CC-BY 4.0 |
+| Planetary Computer / Sentinel-2 | optional scheduled spectral ingestion | anonymous STAC and range reads; attribution required |
+| Copernicus Data Space | optional authenticated spectral workflow | free registration; no card |
 
-`bash scripts/verify-no-card.sh` enforces this in CI.
+`bash scripts/verify-no-card.sh` enforces this invariant in CI. Open-Meteo is
+used by the request path for live weather and by scheduled ingestion. Planetary
+Computer is scheduled only; BloomCast never performs a per-request satellite
+read.
 
-## Notes on data
+## Data and honesty boundaries
 
-The committed `src/data/seed/*.json` is a **deterministic synthetic dataset**
-so the demo works without satellite credentials. The real ingestion clients
-(Copernicus, Open-Meteo, NDCI) are wired and used by
-`src/backend/ml/inference/pipeline_nightly.py`, but the shipped seed was generated by
-`scripts/generate_seed.py`. Model metrics quoted in the UI (Brier 0.085,
-AUC 0.989) are measured on this synthetic data and are not evidence of skill
-on real observations.
+The committed `src/data/seed/*.json` files are deterministic synthetic data so
+the demo works without satellite credentials. The current
+`src/data/spectral_history.json` has no measured records, so
+`src/data/climatology.json` contains a **modelled latitude × month fallback**,
+not satellite measurements. `scripts/generate_climatology.py` builds the prior
+table from `spectral_history.json` and `ingested-features.json`; once three or
+more waterbodies have real spectral records, measured seasonal means can be
+used.
+
+The realtime response always includes:
+
+- `provenance`: `live-heuristic-nowcast` or `weather-only-model`;
+- `cache`: fetch time, age, and TTL;
+- `caveats`: including the distinction between heuristic and model output; and
+- `spectral_prior`: measured, modelled, or unavailable.
+
+The top-level `is_calibrated` field remains `false` for arbitrary-coordinate
+assessments. A `model_estimate` is an experimental weather-only probability
+using a climatology prior; it is not a calibrated forecast for an arbitrary
+point. Pilot forecast metrics in the shipped seed are synthetic and are not
+evidence of real-lake skill.
+
+## Deployment checklist
+
+For a Render deployment:
+
+1. Build the frontend with `npm run build` in `src/frontend`.
+2. Keep `src/data/waterbodies.geojson`, `stream_segments.geojson`,
+   `replay_events.json`, `seed/`, `climatology.json`, and
+   `spectral_history.json` in the image.
+3. Optionally place real-label model artifacts in
+   `src/backend/ml/artifacts/`. `/v1/health` must report `loaded` and an
+   inference request must return `model_estimate`; otherwise the documented
+   heuristic fallback is expected.
+4. Confirm `/v1/health` is green and `/v1/infer?lat=...&lon=...` returns a
+   labelled response. Do not treat a missing model as a deployment failure:
+   the health response must explain the fallback.
+5. Run the nightly workflow only when scheduled data refreshes are desired. It
+   ingests weather and optional spectral data, regenerates seed artifacts, and
+   rebuilds the spectral climatology prior.
 
 ## License
 

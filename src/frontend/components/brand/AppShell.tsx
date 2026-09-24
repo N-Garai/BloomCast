@@ -6,6 +6,7 @@ import { BioLuminescentBackdrop } from "@/components/brand/BioLuminescentBackdro
 import { StarfieldBackground } from "@/components/three/StarfieldBackground";
 import { ScrollProgress } from "@/components/brand/ScrollProgress";
 import { MagneticCursor } from "@/components/brand/MagneticCursor";
+import { OfflineBanner } from "@/components/dashboard/Resilience";
 import { useKeepAlive } from "@/hooks/useKeepAlive";
 import { useLenis } from "@/lib/useLenis";
 
@@ -39,6 +40,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </a>
       {booting && <Loader onDone={finish} />}
       <ScrollProgress />
+      <OfflineBanner />
       <MagneticCursor />
       <StarfieldBackground />
       <BioLuminescentBackdrop />

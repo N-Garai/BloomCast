@@ -1,0 +1,49 @@
+{
+  "variant": "weather-only",
+  "training_source": "synthetic-seed",
+  "features_used": [
+    "temp_mean_3d",
+    "temp_mean_7d",
+    "temp_anomaly_7d",
+    "wind_speed_mean_3d",
+    "wind_speed_max_3d",
+    "wind_dir_variance_3d",
+    "precip_sum_7d",
+    "precip_sum_3d",
+    "dry_days_7d",
+    "solar_mean_3d",
+    "cloud_cover_mean_3d",
+    "dewpoint_mean_3d",
+    "pressure_trend_3d",
+    "growing_degree_days",
+    "heat_wave_flag",
+    "area_km2",
+    "latitude",
+    "longitude",
+    "impervious_proxy"
+  ],
+  "features_zeroed": [
+    "ndci_mean",
+    "ndci_trend_5d",
+    "ndci_max",
+    "chlorophyll_a_mean",
+    "chlorophyll_a_trend_5d",
+    "ndvi_mean",
+    "fai_mean",
+    "ndci_std_7d",
+    "citizen_reports_7d",
+    "citizen_color_green_ratio",
+    "citizen_scum_reports_7d",
+    "citizen_consensus_severity",
+    "citizen_report_density"
+  ],
+  "metrics": {
+    "auc": 0.6109,
+    "brier": 0.2505,
+    "n": 4000
+  },
+  "note": "Weather + static features only; spectral and citizen blocks are zeroed. Usable where no satellite pixels exist \u2014 a real number, and a modest one.",
+  "training_note": "Synthetic stand-in: labels from a physically-motivated rule (warm + calm + rising chlorophyll), not real bloom observations. Add train_labels.csv + metadata.csv (docs/training-data.md) to train on real labels.",
+  "ci_half": 0.3,
+  "model_version": "v2.1.0-synthetic-seed+weather-only"
+}

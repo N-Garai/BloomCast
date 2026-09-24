@@ -1,135 +1,135 @@
 {
-  "generated_at": "2026-09-23T06:54:45.208848+00:00",
-  "model_version": "v2.1.0-synthetic-seed",
-  "training_source": "synthetic-seed",
-  "training_note": "Synthetic stand-in: labels from a physically-motivated rule (warm + calm + rising chlorophyll), not real bloom observations. Add train_labels.csv + metadata.csv (docs/training-data.md) to train on real labels.",
-  "p_bloom": 0.4291,
-  "ci_lo": 0.1291,
-  "ci_hi": 0.7291,
-  "baseline_climatology": 1.0,
+  "generated_at": "2026-09-24T04:11:05.932150+00:00",
+  "model_version": "v2.2.0-kaggle-labels",
+  "training_source": "tick-tick-bloom",
+  "training_note": "Colab-trained on 23570 Tick Tick Bloom samples; Optuna-tuned LightGBM + GPU CNN + quantiles.",
+  "p_bloom": 0.2049,
+  "ci_lo": 0.0082,
+  "ci_hi": 1.0,
+  "baseline_climatology": 0.0,
   "shap_top_features": [
     {
-      "feature": "ndci_trend_5d",
-      "human": "Rising chlorophyll trend",
-      "shap_value": 0.0893,
+      "feature": "longitude",
+      "human": "Longitude",
+      "shap_value": 0.735,
       "method": "gain"
     },
     {
-      "feature": "wind_speed_mean_3d",
-      "human": "Calm winds (low mixing)",
-      "shap_value": 0.0891,
+      "feature": "latitude",
+      "human": "Latitude",
+      "shap_value": 0.1526,
       "method": "gain"
     },
     {
-      "feature": "temp_mean_3d",
-      "human": "Recent warm temperatures",
-      "shap_value": 0.0857,
+      "feature": "temp_mean_7d",
+      "human": "Sustained warm week",
+      "shap_value": 0.0211,
       "method": "gain"
     },
     {
-      "feature": "chlorophyll_a_mean",
-      "human": "Chlorophyll-a concentration",
-      "shap_value": 0.0751,
+      "feature": "temp_anomaly_7d",
+      "human": "Surface temperature anomaly",
+      "shap_value": 0.0174,
       "method": "gain"
     },
     {
-      "feature": "solar_mean_3d",
-      "human": "Solar radiation",
-      "shap_value": 0.0513,
+      "feature": "dewpoint_mean_3d",
+      "human": "High humidity",
+      "shap_value": 0.0158,
       "method": "gain"
     }
   ],
   "horizons": {
     "3d": {
-      "p_bloom": 0.5042,
-      "ci_lo": 0.2042,
-      "ci_hi": 0.9042,
+      "p_bloom": 0.1677,
+      "ci_lo": 0.1677,
+      "ci_hi": 1.0,
       "shap_top_features": [
         {
-          "feature": "ndci_trend_5d",
-          "human": "Rising chlorophyll trend",
-          "shap_value": 0.0893,
-          "method": "gain"
+          "feature": "longitude",
+          "human": "Longitude",
+          "shap_value": -1.0668,
+          "method": "shap"
         },
         {
-          "feature": "wind_speed_mean_3d",
-          "human": "Calm winds (low mixing)",
-          "shap_value": 0.0891,
-          "method": "gain"
+          "feature": "temp_mean_7d",
+          "human": "Sustained warm week",
+          "shap_value": -0.3331,
+          "method": "shap"
         },
         {
           "feature": "temp_mean_3d",
           "human": "Recent warm temperatures",
-          "shap_value": 0.0857,
-          "method": "gain"
+          "shap_value": -0.2168,
+          "method": "shap"
         }
       ]
     },
     "5d": {
-      "p_bloom": 0.5542,
-      "ci_lo": 0.2542,
-      "ci_hi": 0.8542,
+      "p_bloom": 0.2177,
+      "ci_lo": 0.2177,
+      "ci_hi": 1.0,
       "shap_top_features": [
         {
-          "feature": "ndci_trend_5d",
-          "human": "Rising chlorophyll trend",
-          "shap_value": 0.0893,
-          "method": "gain"
+          "feature": "longitude",
+          "human": "Longitude",
+          "shap_value": -1.0668,
+          "method": "shap"
         },
         {
-          "feature": "wind_speed_mean_3d",
-          "human": "Calm winds (low mixing)",
-          "shap_value": 0.0891,
-          "method": "gain"
+          "feature": "temp_mean_7d",
+          "human": "Sustained warm week",
+          "shap_value": -0.3331,
+          "method": "shap"
         },
         {
           "feature": "temp_mean_3d",
           "human": "Recent warm temperatures",
-          "shap_value": 0.0857,
-          "method": "gain"
+          "shap_value": -0.2168,
+          "method": "shap"
         },
         {
-          "feature": "chlorophyll_a_mean",
-          "human": "Chlorophyll-a concentration",
-          "shap_value": 0.0751,
-          "method": "gain"
+          "feature": "latitude",
+          "human": "Latitude",
+          "shap_value": 0.1392,
+          "method": "shap"
         },
         {
           "feature": "solar_mean_3d",
           "human": "Solar radiation",
-          "shap_value": 0.0513,
-          "method": "gain"
+          "shap_value": 0.0797,
+          "method": "shap"
         }
       ]
     },
     "7d": {
-      "p_bloom": 0.6342,
-      "ci_lo": 0.2242,
-      "ci_hi": 0.9542,
+      "p_bloom": 0.2977,
+      "ci_lo": 0.1877,
+      "ci_hi": 1.0,
       "shap_top_features": [
         {
-          "feature": "ndci_trend_5d",
-          "human": "Rising chlorophyll trend",
-          "shap_value": 0.0893,
-          "method": "gain"
+          "feature": "longitude",
+          "human": "Longitude",
+          "shap_value": -1.0668,
+          "method": "shap"
         },
         {
-          "feature": "wind_speed_mean_3d",
-          "human": "Calm winds (low mixing)",
-          "shap_value": 0.0891,
-          "method": "gain"
+          "feature": "temp_mean_7d",
+          "human": "Sustained warm week",
+          "shap_value": -0.3331,
+          "method": "shap"
         },
         {
           "feature": "temp_mean_3d",
           "human": "Recent warm temperatures",
-          "shap_value": 0.0857,
-          "method": "gain"
+          "shap_value": -0.2168,
+          "method": "shap"
         },
         {
-          "feature": "chlorophyll_a_mean",
-          "human": "Chlorophyll-a concentration",
-          "shap_value": 0.0751,
-          "method": "gain"
+          "feature": "latitude",
+          "human": "Latitude",
+          "shap_value": 0.1392,
+          "method": "shap"
         }
       ]
     }

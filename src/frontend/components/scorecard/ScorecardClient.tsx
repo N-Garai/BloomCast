@@ -21,6 +21,9 @@ interface Scorecard {
   calibration_method: string;
   limitations: string;
   per_region?: Record<string, { auc: number | null; brier: number; n: number; positive_rate: number }>;
+  holdout_region?: { status: string; protocol?: string; mean_auc?: number | null; worst_region?: { name: string; auc: number | null; n: number } | null; regions?: Record<string, { auc: number | null; brier: number | null; n: number; note?: string }> ; reason?: string };
+  eu_holdout?: { status: string; reason: string };
+  variants?: Record<string, { auc: number; brier: number; n: number; features?: number; provenance: string; note?: string }>;
 }
 
 function Metric({ label, value, hint, delay = 0 }: { label: string; value: string; hint?: string; delay?: number }) {
@@ -204,10 +207,89 @@ export function ScorecardClient() {
       <div className="glass rounded-2xl p-8 border border-glow-yellow/30">
         <h3 className="font-display text-lg font-semibold mb-3 text-glow-yellow">Honest limitations</h3>
         <p className="text-sm text-fg-secondary leading-relaxed">{sc.limitations}</p>
+        {sc.eu_holdout && (
+          <p className="mt-3 text-xs text-fg-muted leading-relaxed">
+            <span className="font-mono uppercase tracking-widest text-glow-yellow">EU hold-out: {sc.eu_holdout.status}</span>
+            {" — "}{sc.eu_holdout.reason}
+          </p>
+        )}
         <div className="mt-6 text-xs text-fg-muted">
           Calibration: {sc.calibration_method} · n={sc.sample_size}
         </div>
       </div>
+
+      {sc.holdout_region && sc.holdout_region.status === "ok" && (
+        <div className="glass rounded-2xl p-8 border border-border-subtle">
+          <h3 className="font-display text-lg font-semibold mb-2 tracking-wide">Region hold-out rotation</h3>
+          <p className="text-xs text-fg-muted mb-4">
+            {sc.holdout_region.protocol} Mean AUC {sc.holdout_region.mean_auc?.toFixed(3) ?? "—"} ·
+            worst region {sc.holdout_region.worst_region?.name ?? "—"} ({sc.holdout_region.worst_region?.auc?.toFixed(3) ?? "—"}).
+            The worst region is the number a new deployment actually experiences.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-fg-muted text-xs uppercase tracking-wider">
+                  <th className="text-left pb-3">Held-out region</th>
+                  <th className="text-right pb-3">Samples</th>
+                  <th className="text-right pb-3">AUC</th>
+                  <th className="text-right pb-3">Brier</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(sc.holdout_region.regions ?? {}).map(([name, m]) => (
+                  <tr key={name} className="border-t border-border-faint text-fg-secondary">
+                    <td className="py-3 capitalize">{name}</td>
+                    <td className="text-right font-mono">{m.n}</td>
+                    <td className="text-right font-mono">{m.auc == null ? "—" : m.auc.toFixed(3)}</td>
+                    <td className="text-right font-mono">{m.brier == null ? "—" : m.brier.toFixed(3)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {Object.values(sc.holdout_region.regions ?? {}).some((m: any) => m.note) && (
+            <p className="mt-3 text-xs text-fg-faint">Single-class hold-outs report no AUC — there is nothing to discriminate.</p>
+          )}
+        </div>
+      )}
+
+      {sc.variants && Object.keys(sc.variants).length > 0 && (
+        <div className="glass rounded-2xl p-8 border border-glow-violet/30">
+          <h3 className="font-display text-lg font-semibold mb-2 tracking-wide">Model variants</h3>
+          <p className="text-xs text-fg-muted mb-4">
+            The weather-only variant answers arbitrary coordinates where no satellite pixels exist.
+            Lower skill is expected and published — not hidden.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-fg-muted text-xs uppercase tracking-wider">
+                  <th className="text-left pb-3">Variant</th>
+                  <th className="text-right pb-3">Samples</th>
+                  <th className="text-right pb-3">AUC</th>
+                  <th className="text-right pb-3">Brier</th>
+                  <th className="text-right pb-3">Trained on</th>
+                </tr>
+              </thead>
+              <tbody>
+                {Object.entries(sc.variants).map(([name, m]) => (
+                  <tr key={name} className="border-t border-border-faint text-fg-secondary">
+                    <td className="py-3 capitalize">{name.replace(/_/g, " ")}</td>
+                    <td className="text-right font-mono">{m.n}</td>
+                    <td className="text-right font-mono">{m.auc.toFixed(3)}</td>
+                    <td className="text-right font-mono">{m.brier.toFixed(3)}</td>
+                    <td className="text-right font-mono text-xs">{m.provenance}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          {Object.values(sc.variants).map((m) => m.note).filter(Boolean)[0] && (
+            <p className="mt-3 text-xs text-fg-faint">{Object.values(sc.variants).map((m) => m.note).filter(Boolean)[0]}</p>
+          )}
+        </div>
+      )}
     </div>
   );
 }

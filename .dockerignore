@@ -1,0 +1,19 @@
+# Keep the Docker build context small and hermetic — the Dockerfile
+# reinstalls deps and rebuilds the frontend inside the image.
+node_modules
+.next
+out
+.git
+.agent
+.kilo
+__pycache__
+*.pyc
+.venv
+venv
+.env
+.env.local
+*.db
+*.db-journal
+weather_cache.csv
+coverage
+.turbo

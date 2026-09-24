@@ -7,7 +7,7 @@ is present and well-formed. They need no network and no model artifacts.
 """
 
 import json
-import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -110,13 +110,15 @@ def test_no_orphan_packages_dir():
 
 
 def test_render_yaml_targets_new_layout():
+    """Single Docker container on the free tier — no build.chdir layout."""
     ry = (ROOT / "render.yaml").read_text()
-    assert "cd src/backend" in ry
-    assert "cd src/frontend" in ry
-    assert "staticPublishPath: src/frontend/out" in ry
+    assert "runtime: docker" in ry
+    assert "plan: free" in ry
+    assert "healthCheckPath: /v1/health" in ry
     assert "packages/" not in ry
 
 
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash unavailable on this host")
 def test_no_card_required_anywhere():
     """Every referenced service must stay on a free tier."""
     import subprocess
@@ -320,6 +322,7 @@ def test_alert_routes_reject_bad_input():
 def test_artifact_roundtrip_matches(tmp_path):
     import numpy as np
     from features.feature_store import FEATURE_NAMES
+    from api.infer import _model_estimate
     from ml.inference.predict import _fit_all
     from ml.training import artifacts as A
 
@@ -348,9 +351,16 @@ def test_artifact_roundtrip_matches(tmp_path):
                 "baseline_climatology": 0.3,
             },
         },
+        weather_only={
+            "booster": bundle["weather_only"]["lgbm"],
+            "calibrator": bundle["weather_only"]["calibrator"],
+            "meta": bundle["weather_only"]["meta"],
+        },
     )
     loaded = A.load_artifacts(out, FEATURE_NAMES)
     assert loaded is not None
+    loaded_weather = A.load_weather_only(out, FEATURE_NAMES)
+    assert loaded_weather is not None
     rng = np.random.default_rng(3)
     Xt = rng.normal(0, 1, (20, 32)).astype(np.float32)
     assert np.allclose(
@@ -363,6 +373,22 @@ def test_artifact_roundtrip_matches(tmp_path):
         loaded["calibrator"].transform([0.2, 0.5, 0.8]),
         atol=1e-12,
     )
+    assert np.allclose(
+        bundle["weather_only"]["lgbm"].model.predict_proba(Xt)[:, 1],
+        loaded_weather["lgbm"].predict_proba(Xt)[:, 1],
+        atol=1e-9,
+    )
+    assert np.allclose(
+        bundle["weather_only"]["calibrator"].transform([0.2, 0.5, 0.8]),
+        loaded_weather["calibrator"].transform([0.2, 0.5, 0.8]),
+        atol=1e-12,
+    )
+    estimate = _model_estimate(
+        np.zeros((1, 32), dtype=np.float32), {"weather_only": loaded_weather}
+    )
+    assert estimate is not None
+    assert estimate["provenance"] == "weather-only-model"
+    assert 0 <= estimate["ci_lo"] <= estimate["p_bloom"] <= estimate["ci_hi"] <= 1
     e1 = bundle["cnn"].predict_embedding(np.zeros((2, 30, 6), dtype=np.float32))
     e2 = loaded["cnn"].predict_embedding(np.zeros((2, 30, 6), dtype=np.float32))
     assert np.allclose(e1, e2, atol=1e-6)
@@ -381,24 +407,124 @@ def test_committed_artifacts_are_real():
     )
 
 
-# --- rationale (no keys configured → honest 501) ----------------------------
+# --- report endpoint (no keys configured → honest unavailable) -------------
 
-def test_rationale_needs_keys(monkeypatch):
-    import api.rationale as R
+def test_report_needs_keys(monkeypatch):
+    import api.report as R
     from fastapi.testclient import TestClient
     from api.main import app
 
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
-    prompt = R.build_prompt({"latitude": 1.0, "wash_off": {"risk_score": 0.7}})
-    assert "0.7" in prompt and "1.0" in prompt
+    monkeypatch.setattr(R, "assess_location", lambda *args, **kwargs: pytest.fail("assessment should not run"))
     client = TestClient(app, raise_server_exceptions=False)
-    r = client.post("/v1/rationale", json={"context": {"latitude": 1.0}})
-    assert r.status_code == 501
+    response = client.post("/v1/report", json={"lat": 1.0, "lon": 2.0})
+    assert response.status_code == 503
+    assert response.json()["message"] == "AI reports unavailable"
+
+
+def test_report_uses_server_assessment_and_verified_provider(monkeypatch):
+    import api.report as R
+    from fastapi.testclient import TestClient
+    from api.main import app
+
+    assessment = {
+        "latitude": 47.3,
+        "longitude": 8.5,
+        "provenance": "weather-only-model",
+        "fetched_at": "2026-09-23T15:00:00+00:00",
+        "feature_names": [f"feature_{i}" for i in range(32)],
+        "feature_row": [float(i) for i in range(32)],
+        "model_estimate": {
+            "p_bloom": 0.42,
+            "ci_lo": 0.25,
+            "ci_hi": 0.6,
+            "drivers": [{"feature": "feature_0", "shap_value": 0.1}],
+        },
+        "wash_off": {"risk_score": 0.4},
+        "signals": ["warm week"],
+        "nearest_waterbody": None,
+    }
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    async def fake_assess(*args, **kwargs):
+        return assessment
+
+    monkeypatch.setattr(R, "assess_location", fake_assess)
+    async def fake_validate_area(*args, **kwargs):
+        return {
+            "status": "validated", "name": "Test Lake", "matched_name": "Test Lake",
+            "description": "verified background", "latitude": 47.3, "longitude": 8.5,
+        }
+
+    monkeypatch.setattr(R, "_validate_area", fake_validate_area)
+
+    async def fake_generate(prompt):
+        assert "MEASURED_AND_COMPUTED" in prompt
+        assert "GENERAL_BACKGROUND" in prompt
+        assert "0.42" in prompt and "0.25" in prompt and "0.6" in prompt
+        assert "feature_0" in prompt
+        return (
+            "What\nThe model estimate is 0.42 with interval 0.25 to 0.6.\n\n"
+            "Why\nThe supplied features explain the result.\n\n"
+            "Cause→effect chain\nFeature 0 changed.\n\n"
+            "What to check next\nCheck the next weather window.\n\n"
+            "Disclaimer\nAdvisory only — not a safety determination."
+        ), "gemini"
+
+    monkeypatch.setattr(R, "_generate_with_fallback", fake_generate)
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.post("/v1/report", json={
+        "latitude": 47.3, "longitude": 8.5, "name": "Test Lake",
+    })
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["provider"] == "gemini"
+    assert payload["context"]["feature_row"] == assessment["feature_row"]
+    assert "0.42" in payload["report"] and "0.25" in payload["report"] and "0.6" in payload["report"]
+    assert payload["degraded"]["degraded"] is False
+
+
+def test_report_retries_once_then_uses_template(monkeypatch):
+    import api.report as R
+    from fastapi.testclient import TestClient
+    from api.main import app
+
+    assessment = {
+        "latitude": 1.0, "longitude": 2.0, "provenance": "live-heuristic-nowcast",
+        "fetched_at": "2026-09-23T15:00:00+00:00", "feature_names": [f"f{i}" for i in range(32)],
+        "feature_row": list(range(32)), "model_estimate": None,
+        "wash_off": {"risk_score": 0.4}, "signals": [], "nearest_waterbody": None,
+    }
+    calls = 0
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    async def fake_assess(*args, **kwargs):
+        return assessment
+
+    monkeypatch.setattr(R, "assess_location", fake_assess)
+    async def fake_validate_area(*args, **kwargs):
+        return {"status": "not_requested"}
+
+    monkeypatch.setattr(R, "_validate_area", fake_validate_area)
+
+    async def fake_generate(prompt):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            return "What\n0.42\nDisclaimer\nAdvisory only — not a safety determination.", "gemini"
+        return "What\n0.4\nDisclaimer\nAdvisory only — not a safety determination.", "gemini"
+
+    monkeypatch.setattr(R, "_generate_with_fallback", fake_generate)
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.post("/v1/report", json={"lat": 1.0, "lon": 2.0})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["provider"] == "template"
+    assert payload["degraded"]["degraded"] is True
+    assert "0.4" in payload["report"]
+    assert calls == 2
 
 
 def test_explore_live_row_and_estimate():
-    import numpy as np
     from api.explore import _live_feature_row, _model_estimate
 
     fc = {"hourly": {
@@ -800,6 +926,331 @@ def test_quantile_models_differ_and_order(tmp_path):
     assert loaded is not None and loaded["meta"]["has_quantiles"] is True
     r05 = np.asarray(loaded["quantiles"]["q05"].predict(X[:20])).ravel()
     assert np.allclose(p05, r05, atol=1e-9)
+
+
+    loaded = load_artifacts(out, FEATURE_NAMES)
+    assert loaded is not None and loaded["meta"]["has_quantiles"] is True
+    r05 = np.asarray(loaded["quantiles"]["q05"].predict(X[:20])).ravel()
+    assert np.allclose(p05, r05, atol=1e-9)
+
+
+# --- realtime serving core: cache, throttle, climatology, spectral --------
+
+def test_ttl_cache_expiry_and_eviction():
+    from shared.cache import TTLCache, coord_key
+
+    now = [1000.0]
+    cache = TTLCache(ttl_s=60, max_entries=2, clock=lambda: now[0])
+    assert cache.get("a") is None
+    cache.set("a", 1)
+    assert cache.get("a") == (1, 0.0)
+    now[0] += 30
+    assert cache.get("a") == (1, 30.0)
+    now[0] += 31
+    assert cache.get("a") is None  # expired, not served stale
+    cache.set("a", 1)
+    cache.set("b", 2)
+    cache.set("c", 3)
+    assert cache.get("a") is None  # oldest evicted at capacity
+    assert cache.get("c") == (3, 0.0)
+    assert coord_key(47.3771, 8.5411) == coord_key(47.3774, 8.5414)
+
+
+def test_throttle_blocks_then_recovers():
+    from shared.cache import SlidingWindowThrottle
+
+    now = [0.0]
+    throttle = SlidingWindowThrottle(limit=2, window_s=60.0, clock=lambda: now[0])
+    assert throttle.check("ip")[0] is True
+    assert throttle.check("ip")[0] is True
+    allowed, wait = throttle.check("ip")
+    assert allowed is False and wait > 0
+    assert throttle.check("other")[0] is True  # per-identity budget
+    now[0] += 61
+    assert throttle.check("ip")[0] is True
+    throttle.reset("ip")
+
+
+def test_climatology_fallback_rule():
+    from ingestion.climatology import fallback_rule_value, prior_for
+
+    july = fallback_rule_value({}, 47.0, 7)
+    january = fallback_rule_value({}, 47.0, 1)
+    assert july["ndci_mean"] > january["ndci_mean"]  # northern summer peak
+    south = fallback_rule_value({}, -33.0, 1)
+    assert south["ndci_mean"] > fallback_rule_value({}, -33.0, 7)["ndci_mean"]
+    for key in ("ndci_mean", "ndci_trend_5d", "ndci_max", "chlorophyll_a_mean",
+                "chlorophyll_a_trend_5d", "ndvi_mean", "fai_mean", "ndci_std_7d"):
+        assert key in july
+
+    missing = prior_for(47.0, 8.0, month=7)
+    assert missing["source"] in ("unavailable", "grid-climatology")
+
+
+def test_climatology_waterbody_path(tmp_path):
+    import json
+    from ingestion import climatology as clim
+
+    table = {
+        "generated_at": "2026-01-01T00:00:00Z",
+        "method": "test",
+        "method_note": "test note",
+        "waterbodies": {
+            "CH-ZUR-01": {
+                "name": "Lake Zurich",
+                "monthly": {"7": {k: 0.1 for k in clim.SPECTRAL_KEYS}},
+                "annual": {k: 0.05 for k in clim.SPECTRAL_KEYS},
+            }
+        },
+    }
+    path = tmp_path / "clim.json"
+    path.write_text(json.dumps(table))
+    out = clim.prior_for(47.0, 8.0, month=7, waterbody_id="CH-ZUR-01")
+    # default global table has no waterbodies; explicit path does
+    direct = clim.load_priors(path)
+    assert direct["waterbodies"]["CH-ZUR-01"]["monthly"]["7"]["ndci_mean"] == 0.1
+    assert out["source"] in ("waterbody-climatology", "grid-climatology", "unavailable")
+
+
+def test_spectral_pure_functions():
+    import numpy as np
+    from ingestion.streamflush import compute_streamflush_risk  # noqa: F401 (import surface)
+    from ingestion.spectral_pc import select_scene, ndci_from_arrays, forward_fill
+
+    class Item:
+        def __init__(self, cloud, bands):
+            self.properties = {"eo:cloud_cover": cloud}
+            self.assets = {b: True for b in bands}
+            self.id = f"scene-{cloud}"
+
+    best = select_scene([Item(50, ["B04", "B05"]), Item(10, ["B04", "B05"]),
+                         Item(5, ["B04"])])
+    assert best.id == "scene-10"
+    assert select_scene([Item(90, ["B04", "B05"])]) is None
+    assert select_scene([]) is None
+
+    mean, frac = ndci_from_arrays(
+        np.array([[100.0, 120.0]]), np.array([[150.0, 180.0]]))
+    assert mean == pytest.approx((50 / 250 + 60 / 300) / 2)
+    assert frac == 1.0
+    assert ndci_from_arrays(np.zeros((2, 2)), np.zeros((2, 2))) == (None, 0.0)
+
+    filled = forward_fill({"ndci_mean": 0.2, "scene_id": "s1"}, "cloudy")
+    assert filled["forward_filled"] is True and filled["ndci_mean"] == 0.2
+    empty = forward_fill(None, "no scene")
+    assert empty["ndci_mean"] is None and empty["forward_filled"] is False
+
+
+def test_assess_location_mocked(monkeypatch):
+    import asyncio
+    import api.infer as infer
+
+    async def fake_windows(lat, lon):
+        hours = [f"2026-09-20T{h:02d}:00" for h in range(72 + 168)]
+        return {
+            "past": {"precipitation": [0.0] * 72},
+            "forecast": {
+                "time": hours,
+                "temperature_2m": [22.0] * len(hours),
+                "wind_speed_10m": [2.0] * len(hours),
+                "wind_direction_10m": [90.0] * len(hours),
+                "precipitation": [0.0] * len(hours),
+                "shortwave_radiation": [200.0] * len(hours),
+                "cloud_cover": [10.0] * len(hours),
+                "dewpoint_2m": [12.0] * len(hours),
+                "pressure_msl": [1013.0] * len(hours),
+            },
+            "archive": {"hourly": {"temperature_2m": [18.0] * 720,
+                                   "precipitation": [0.0] * 720}},
+            "archive_status": "ok",
+        }
+
+    monkeypatch.setattr(infer, "_fetch_windows", fake_windows)
+    monkeypatch.setattr(infer, "_load_serving_artifacts", lambda: None)
+    infer.configure_cache(60)
+    try:
+        first = asyncio.run(infer.assess_location(47.38, 8.54))
+        assert first["provenance"] == "live-heuristic-nowcast"
+        assert first["cache"]["hit"] is False
+        assert first["wash_off"]["risk_score"] >= 0
+        assert len(first["daily_outlook"]) == 7
+        second = asyncio.run(infer.assess_location(47.38, 8.54))
+        assert second["cache"]["hit"] is True  # TTL served, upstream untouched
+    finally:
+        infer.configure_cache(900)
+
+
+def test_assess_batch_limits_and_errors(monkeypatch):
+    import asyncio
+    import api.infer as infer
+
+    async def fake_assess(lat, lon):
+        if lat == 91.0:
+            raise infer.InvalidLocation("bad")
+        return {"latitude": lat, "provenance": "x"}
+
+    monkeypatch.setattr(infer, "assess_location", fake_assess)
+    out = asyncio.run(infer.assess_batch(
+        [{"lat": 47.0, "lon": 8.0}, {"lat": 91.0, "lon": 0.0}],
+        max_locations=50, concurrency=2))
+    assert out["count"] == 1 and len(out["errors"]) == 1
+    assert out["errors"][0]["index"] == 1
+    try:
+        asyncio.run(infer.assess_batch([{"lat": 0.0, "lon": 0.0}] * 3,
+                                        max_locations=2))
+        raise AssertionError("should have raised")
+    except infer.AssessError as e:
+        assert "Too many locations" in str(e)
+    try:
+        infer.validate_location(999, 0.0)
+        raise AssertionError("should have raised")
+    except infer.InvalidLocation:
+        pass
+    infer.validate_location(47.0, 8.0)
+
+
+def test_singleton_loads_once_and_reports():
+    from ml.training import artifacts as A
+    from features.feature_store import FEATURE_NAMES
+
+    A.reset_serving_cache()
+    first = A.get_serving_artifacts(FEATURE_NAMES)
+    assert first is not None
+    assert A._SERVING["loads"] == 1
+    second = A.get_serving_artifacts(FEATURE_NAMES)
+    assert second is first
+    assert A._SERVING["loads"] == 1  # no per-request reload
+    status = A.serving_model_status(FEATURE_NAMES)
+    assert status["status"] == "loaded"
+    assert status["training_source"] == "tick-tick-bloom"
+    A.reset_serving_cache()
+
+
+def test_region_holdout_rotation_reports():
+    import numpy as np
+    from ml.inference.predict import region_holdout_metrics
+
+    rng = np.random.default_rng(0)
+    X = rng.normal(0, 1, (120, 32))
+    y = (rng.random(120) > 0.5).astype(int)
+    regions = ["west", "midwest", "south", "northeast"]
+    out = region_holdout_metrics(X, y, np.array([i % 4 for i in range(120)]), regions)
+    assert out["status"] == "ok"
+    assert set(out["regions"]) == set(regions)
+    assert out["worst_region"]["name"] in regions
+    single = region_holdout_metrics(X, y, np.zeros(120, dtype=int), ["only"])
+    assert single["status"] == "unavailable"
+
+
+def test_sanitize_backfills_provenance():
+    from ml.training.scorecard import sanitize_loaded_scorecard
+
+    sc = sanitize_loaded_scorecard({"brier": 0.2, "auc": 0.7}, "tick-tick-bloom")
+    assert sc["training_source"] == "tick-tick-bloom"
+    assert "EU" not in sc["limitations"] or "No EU validation exists" in sc["limitations"]
+    assert sc["eu_holdout"]["status"] == "data-blocked"
+    assert sc["holdout_region"]["status"] == "not-recorded"
+
+
+def test_infer_routes_reject_and_shape(monkeypatch):
+    import api.infer as infer
+    from fastapi.testclient import TestClient
+    from api.main import app
+
+    async def boom(lat, lon):
+        raise infer.UpstreamUnavailable("down")
+
+    monkeypatch.setattr(infer, "_fetch_windows", boom)
+    monkeypatch.setattr(infer, "_load_serving_artifacts", lambda: None)
+    client = TestClient(app, raise_server_exceptions=False)
+    assert client.get("/v1/infer?lat=999&lon=0").status_code == 400
+    response = client.get("/v1/infer?lat=47.0&lon=8.0")
+    assert response.status_code == 503
+    assert "error" in response.json() and "kind" in response.json()
+    bad = client.post("/v1/infer/batch", json={})
+    assert bad.status_code == 400
+    many = client.post("/v1/infer/batch",
+                       json={"locations": [{"lat": 0.0, "lon": 0.0}] * 51})
+    assert many.status_code == 400
+
+
+def test_health_reports_model_status():
+    from fastapi.testclient import TestClient
+    from api.main import app
+
+    client = TestClient(app, raise_server_exceptions=False)
+    data = client.get("/v1/health").json()
+    assert data["status"] == "ok"
+    assert data["model"]["status"] in ("loaded", "fallback")
+    assert data["realtime"]["upstream_calls_per_location"] == 2
+
+
+def test_report_unavailable_without_provider_keys(monkeypatch):
+    from fastapi.testclient import TestClient
+    import api.main as main
+
+    monkeypatch.setattr(main, "providers_configured", lambda: False)
+    client = TestClient(main.app)
+    response = client.post("/v1/report", json={"lat": 47.0, "lon": 8.0})
+    assert response.status_code == 503
+    assert response.json()["status"] == "unavailable"
+
+
+def test_singleton_loader_threadsafe():
+    import threading
+    from features.feature_store import FEATURE_NAMES
+    from ml.training import artifacts as A
+
+    A.reset_serving_cache()
+    try:
+        results = []
+
+        def load():
+            results.append(A.get_serving_artifacts(FEATURE_NAMES))
+
+        threads = [threading.Thread(target=load) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert len(results) == 8
+        assert all(r is results[0] for r in results)
+    finally:
+        A.reset_serving_cache()
+
+
+def test_climatology_prior_for_contract():
+    from ingestion.climatology import SPECTRAL_KEYS, prior_for
+
+    for lat, lon in ((47.0, 8.0), (0.0, -150.0), (-33.0, 151.0)):
+        prior = prior_for(lat, lon, month=7)
+        assert prior["source"] in (
+            "unavailable", "grid-climatology", "waterbody-climatology")
+        assert prior["month"] == 7
+        for key in SPECTRAL_KEYS:
+            assert key in prior["values"]
+
+
+def test_serving_load_path_has_no_torch():
+    """M-K1: the serving chain must never pull in torch.
+
+    torch (~500MB+) would blow the free-tier RAM budget and cold start; the
+    CNN ships as numpy weights by design. pandas arrives transitively via
+    sklearn/lightgbm and is tolerated (tens of MB, needed by their compat
+    layers) — the test asserts the true invariant, not a wish.
+    Run in a subprocess so the audit sees exactly what serving pulls in,
+    unaffected by whatever the test session already imported.
+    """
+    import subprocess
+    code = (
+        "import sys; "
+        "sys.path.insert(0, 'src/backend'); "
+        "import ml.inference.predict, ml.training.artifacts; "
+        "assert 'torch' not in sys.modules, 'torch in serving path'"
+    )
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True,
+                       text=True, cwd=ROOT)
+    assert r.returncode == 0, r.stderr
 
 
 if __name__ == "__main__":

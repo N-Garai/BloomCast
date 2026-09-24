@@ -21,7 +21,7 @@ export default function AlertsPage() {
             <p className="mt-4 text-fg-secondary">
               Subscribe to a waterbody and threshold — no email needed, it stays on
               this device. Check anytime to see crossed thresholds with the SHAP
-              rationale and an optional FHIR R4 bundle export.
+              explanation and an optional FHIR R4 bundle export.
             </p>
           </div>
         </ScrollReveal>

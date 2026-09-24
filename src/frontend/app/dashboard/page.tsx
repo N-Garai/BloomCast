@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, Suspense, lazy } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/brand/Navbar";
 import { Footer } from "@/components/brand/Footer";
@@ -9,13 +9,12 @@ import { ForecastPipeline } from "@/components/dashboard/ForecastPipeline";
 import { LocationExplorer } from "@/components/dashboard/LocationExplorer";
 import { NdciExplainer } from "@/components/dashboard/NdciExplainer";
 import { RiskLegend } from "@/components/dashboard/RiskLegend";
+import { DotMatrixGlobe } from "@/components/three/DotMatrixGlobe";
+import { VectorMap } from "@/components/maps/VectorMap";
 import { StreamFlushOverlay } from "@/components/streamflush/StreamFlushOverlay";
 import { ScrollReveal } from "@/components/motion/ScrollReveal";
-import { Spinner } from "@/components/ui/Spinner";
-import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { ErrorState, friendlyError } from "@/components/dashboard/Resilience";
 import { API } from "@/lib/api";
-
-const Globe = lazy(() => import("@/components/three/Globe").then(m => ({ default: m.Globe })));
 
 interface Waterbody {
   id: string;
@@ -27,12 +26,34 @@ interface Waterbody {
   _risk?: string;
 }
 
-function riskOf(p: number): string {
-  if (p < 0.3) return "low";
-  if (p < 0.5) return "moderate";
-  if (p < 0.7) return "elevated";
-  if (p < 0.85) return "high";
+interface Forecast {
+  horizons?: Record<string, { p_bloom: number; ci_lo: number; ci_hi: number }>;
+  p_bloom?: number;
+}
+
+interface ExploreResult {
+  latitude: number;
+  longitude: number;
+  wash_off: { risk_score: number; risk_level: string };
+  model_estimate?: { p_bloom: number; ci_lo: number; ci_hi: number } | null;
+  signals?: string[];
+  nearest_waterbody?: { id: string; name: string; distance_km: number } | null;
+}
+
+function riskOf(value: number) {
+  if (value < 0.3) return "low";
+  if (value < 0.5) return "moderate";
+  if (value < 0.7) return "elevated";
+  if (value < 0.85) return "high";
   return "critical";
+}
+
+function riskColor(level: string) {
+  return { low: "text-glow-green", moderate: "text-glow-yellow", elevated: "text-glow-orange", high: "text-glow-red", critical: "text-glow-magenta" }[level] ?? "text-fg-muted";
+}
+
+function riskBackground(level: string) {
+  return { low: "bg-glow-green/10 border-glow-green/30", moderate: "bg-glow-yellow/10 border-glow-yellow/30", elevated: "bg-glow-orange/10 border-glow-orange/30", high: "bg-glow-red/10 border-glow-red/30", critical: "bg-glow-magenta/10 border-glow-magenta/30" }[level] ?? "bg-bg-surface border-border-subtle";
 }
 
 export default function DashboardPage() {
@@ -41,155 +62,194 @@ export default function DashboardPage() {
   const [showGlobe, setShowGlobe] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedForecast, setSelectedForecast] = useState<Forecast | null>(null);
+  const [dropResult, setDropResult] = useState<ExploreResult | null>(null);
+  const [dropLoading, setDropLoading] = useState(false);
+  const [dropError, setDropError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
     fetch(`${API}/v1/waterbodies?limit=25`)
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status} on /v1/waterbodies`);
-        return r.json();
+      .then((response) => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
       })
-      .then(d => {
-        const features = (d.data ?? d.features ?? []).filter((f: any) => f?.type === "Feature");
-        const mapped: Waterbody[] = features.map((f: any) => {
-          const p = f.properties ?? {};
-          const g = f.geometry ?? {};
-          return {
-            id: p.id,
-            name: p.name,
-            region: p.region,
-            country: p.country,
-            centroid: g.coordinates ?? p.centroid ?? [0, 0],
-            type: p.type,
-          };
+      .then((data) => {
+        const features = (data.data ?? data.features ?? []).filter((feature: any) => feature?.type === "Feature");
+        const mapped = features.map((feature: any) => {
+          const properties = feature.properties ?? {};
+          const geometry = feature.geometry ?? {};
+          return { id: properties.id, name: properties.name, region: properties.region, country: properties.country, centroid: geometry.coordinates ?? properties.centroid ?? [0, 0], type: properties.type };
         });
         setWaterbodies(mapped);
         setLoading(false);
         if (!mapped.length) setError("The service returned no waterbodies.");
-        else setSelected((s) => s ?? mapped[0].id);
+        else setSelected((current) => current ?? mapped[0].id);
       })
-      .catch((e) => {
-        setLoading(false);
-        setError(String(e?.message ?? e));
-      });
+      .catch((e) => { setLoading(false); setError(friendlyError(e)); });
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
+  useEffect(() => { load(); }, [load]);
 
-  // Enrich globe points with live risk (best-effort, never blocks the list).
   useEffect(() => {
     if (!waterbodies.length) return;
     let cancelled = false;
-    const enrich = async () => {
+    const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+    const keyOf = (lat: number, lon: number) => `${lat.toFixed(4)},${lon.toFixed(4)}`;
+    const coordsOf = (waterbody: Waterbody) => ({ lat: waterbody.centroid[1], lon: waterbody.centroid[0] });
+
+    const applyBatchResults = (results: any[]) => {
       const updates: Record<string, string> = {};
-      await Promise.all(
-        waterbodies.slice(0, 25).map(async (wb) => {
-          try {
-            const r = await fetch(`${API}/v1/forecast/${wb.id}`);
-            if (!r.ok) return;
-            const d = await r.json();
-            const p = d?.horizons?.["5d"]?.p_bloom ?? d?.p_bloom;
-            if (typeof p === "number") updates[wb.id] = riskOf(p);
-          } catch {
-            /* keep default */
-          }
-        })
-      );
-      if (!cancelled && Object.keys(updates).length) {
-        setWaterbodies((wbs) => wbs.map((w) => (updates[w.id] ? { ...w, _risk: updates[w.id] } : w)));
+      for (const result of results) {
+        // Match by rounded coordinates, not by position: the batch response
+        // omits failed locations, so indices shift. model_estimate carries
+        // the live bloom probability; wash_off is a different scale and is
+        // never substituted for it.
+        const key = keyOf(Number(result?.latitude), Number(result?.longitude));
+        const match = waterbodies.find((waterbody) => {
+          const coords = coordsOf(waterbody);
+          return keyOf(coords.lat, coords.lon) === key;
+        });
+        const pBloom = result?.model_estimate?.p_bloom;
+        if (match && typeof pBloom === "number") updates[match.id] = riskOf(pBloom);
+      }
+      if (!cancelled && Object.keys(updates).length) setWaterbodies((current) => current.map((waterbody) => updates[waterbody.id] ? { ...waterbody, _risk: updates[waterbody.id] } : waterbody));
+      return updates;
+    };
+
+    // Legacy per-item path: only a fallback when the batch endpoint itself
+    // is unreachable — never a retry amplifier (one batch 429 must not
+    // become 25 individual requests).
+    const legacyEnrich = async (list: Waterbody[]) => {
+      const updates: Record<string, string> = {};
+      await Promise.all(list.map(async (waterbody) => {
+        try {
+          const response = await fetch(`${API}/v1/forecast/${waterbody.id}`);
+          if (!response.ok) return;
+          const data = await response.json();
+          const value = data?.horizons?.["5d"]?.p_bloom ?? data?.p_bloom;
+          if (typeof value === "number") updates[waterbody.id] = riskOf(value);
+        } catch {
+          // Keep the default risk marker when enrichment fails.
+        }
+      }));
+      if (!cancelled && Object.keys(updates).length) setWaterbodies((current) => current.map((waterbody) => updates[waterbody.id] ? { ...waterbody, _risk: updates[waterbody.id] } : waterbody));
+    };
+
+    const runBatch = async (list: Waterbody[]): Promise<boolean> => {
+      const response = await fetch(`${API}/v1/infer/batch`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ locations: list.map(coordsOf) }),
+      });
+      if (response.status === 429) {
+        // One delayed retry, then stop: hammering a throttled upstream is
+        // what got the deployment throttled in the first place.
+        const retryAfter = Number(response.headers.get("Retry-After")) || 5;
+        await sleep(Math.min(Math.max(retryAfter, 1), 30) * 1000);
+        if (cancelled) return true;
+        const retry = await fetch(`${API}/v1/infer/batch`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ locations: list.map(coordsOf) }),
+        });
+        if (!retry.ok) return false;
+        const data = await retry.json();
+        applyBatchResults(data?.results ?? []);
+        return true;
+      }
+      if (!response.ok) return false;
+      const data = await response.json();
+      const applied = applyBatchResults(data?.results ?? []);
+      // Per-item fallback only for the locations the batch itself failed.
+      const failed = new Set((data?.errors ?? []).map((entry: any) => Number(entry?.index)));
+      const missing = list.filter((waterbody, index) => failed.has(index) && !applied[waterbody.id]);
+      if (missing.length) await legacyEnrich(missing);
+      return true;
+    };
+
+    const enrich = async () => {
+      // M4: the whole pilot list resolves in ONE round trip. The server
+      // fans out behind a 4-wide semaphore, so upstream never sees a burst.
+      const list = waterbodies.slice(0, 25);
+      try {
+        const ok = await runBatch(list);
+        if (!ok && !cancelled) await legacyEnrich(list);
+      } catch {
+        if (!cancelled) await legacyEnrich(list);
       }
     };
     enrich();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [waterbodies.length]);
 
-  const selectedWb = waterbodies.find((w) => w.id === selected) ?? null;
+  const selectedWb = waterbodies.find((waterbody) => waterbody.id === selected) ?? null;
+
+  const loadSelectedForecast = useCallback(async (id: string) => {
+    setSelectedForecast(null);
+    try {
+      const response = await fetch(`${API}/v1/forecast/${id}`);
+      if (!response.ok) return;
+      setSelectedForecast(await response.json() as Forecast);
+    } catch {
+      setSelectedForecast(null);
+    }
+  }, []);
+
+  useEffect(() => { if (selectedWb) loadSelectedForecast(selectedWb.id); }, [selectedWb, loadSelectedForecast]);
+
+  const runExplore = async (latitude: number, longitude: number) => {
+    setDropLoading(true);
+    setDropError(null);
+    setDropResult(null);
+    try {
+      const response = await fetch(`${API}/v1/explore?lat=${latitude}&lon=${longitude}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data?.detail ?? `HTTP ${response.status}`);
+      setDropResult(data as ExploreResult);
+    } catch (e) {
+      setDropError(friendlyError(e, "weather"));
+    } finally {
+      setDropLoading(false);
+    }
+  };
+
+  const mapPoints = useMemo(() => waterbodies.map((waterbody) => ({ id: waterbody.id, name: waterbody.name, lat: waterbody.centroid[1], lon: waterbody.centroid[0], risk: waterbody._risk === "low" ? 0.1 : waterbody._risk === "moderate" ? 0.4 : waterbody._risk === "elevated" ? 0.6 : waterbody._risk === "high" ? 0.8 : 0.95, selected: selected === waterbody.id })), [waterbodies, selected]);
 
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
       <div className="flex-1 flex flex-col lg:flex-row pt-16">
-        <aside className="lg:w-[380px] w-full border-b lg:border-b-0 lg:border-r border-border-subtle bg-bg-deep/60 backdrop-blur-xl flex flex-col lg:max-h-[calc(100vh-4rem)] lg:sticky lg:top-16">
-          <div className="p-4 border-b border-border-subtle">
-            <ScrollReveal>
-              <p className="font-mono text-[11px] uppercase tracking-[0.3em] text-glow-cyan">Live outlook</p>
-              <h2 className="font-display text-2xl font-semibold mt-1">Forecast Map</h2>
-              <p className="text-xs text-fg-muted mt-1">Pilot waterbodies · refreshed nightly</p>
-            </ScrollReveal>
+        <aside className="w-full border-b border-border-subtle bg-bg-deep/60 backdrop-blur-xl lg:w-[380px] lg:flex-1 lg:max-h-[calc(100vh-4rem)] lg:sticky lg:top-16 lg:border-b-0 lg:border-r lg:flex lg:flex-col">
+          <div className="shrink-0 border-b border-border-subtle p-4">
+            <ScrollReveal><p className="font-mono text-[11px] uppercase tracking-[0.3em] text-glow-cyan">Live outlook</p><h2 className="font-display text-2xl font-semibold mt-1">Forecast Map</h2><p className="text-xs text-fg-muted mt-1">Pilot waterbodies · markers live, outlook nightly</p></ScrollReveal>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-3 lg:max-h-none max-h-[60vh]">
-            {loading && <Spinner label="Loading waterbodies" />}
-            {error && !loading && <ErrorBanner message={error} onRetry={load} />}
-            {!loading && !error && waterbodies.map((wb, i) => (
-              <ScrollReveal key={wb.id} delay={Math.min(i * 0.03, 0.3)}>
-                <motion.div
-                  initial={{ opacity: 0, x: -16 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: Math.min(i * 0.03, 0.3) }}
-                >
-                  <ForecastCard
-                    waterbody={wb}
-                    selected={selected === wb.id}
-                    onClick={() => setSelected(wb.id)}
-                  />
-                </motion.div>
-              </ScrollReveal>
-            ))}
+          <div className="min-h-0 flex-1 overflow-y-auto p-4 space-y-3 lg:max-h-none" aria-live="polite">
+            {loading && <div className="space-y-3">{[0, 1, 2, 3].map((item) => <div key={item} className="rounded-xl border border-border-subtle bg-bg-deep/40 p-4"><div className="h-3 w-24 rounded bg-bg-elevated mb-3" /><div className="h-8 w-20 rounded bg-bg-elevated" /><div className="mt-3 h-2 w-full rounded bg-bg-elevated/70" /><div className="mt-2 h-2 w-2/3 rounded bg-bg-elevated/70" /></div>)}</div>}
+            {error && !loading && <ErrorState title="Forecast map unavailable" message={error} onRetry={load} />}
+            {!loading && !error && waterbodies.length === 0 && <ErrorState title="No waterbodies here yet" message="The service has no pilot sites for this deployment. Try again after the next refresh." onRetry={load} />}
+            {!loading && !error && waterbodies.map((waterbody, index) => <motion.div key={waterbody.id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(index * 0.03, 0.3) }}><ForecastCard waterbody={waterbody} selected={selected === waterbody.id} onClick={() => setSelected(waterbody.id)} /></motion.div>)}
           </div>
-          <div className="p-4 border-t border-border-subtle space-y-4">
+          <div className="shrink-0 border-t border-border-subtle p-4 space-y-4">
             <RiskLegend />
             <NdciExplainer waterbodyId={selected} waterbodyName={selectedWb?.name} />
           </div>
         </aside>
 
-        <main className="flex-1 relative min-h-[80vh]">
+        <main className="relative min-h-[70vh] flex-1 overflow-hidden">
           <div className="absolute inset-0">
-            {showGlobe ? (
-              <Suspense fallback={<div className="w-full h-full bg-bg-abyss" />}>
-                <Globe
-                  waterbodies={waterbodies}
-                  selected={selected}
-                  onSelect={setSelected}
-                />
-              </Suspense>
-            ) : (
-              <div className="w-full h-full bg-bg-abyss flex items-center justify-center text-fg-muted">
-                Map view (reduced motion fallback)
-              </div>
-            )}
+            {showGlobe ? <DotMatrixGlobe waterbodies={waterbodies} selected={selected ?? undefined} onSelect={setSelected} onPick={runExplore} /> : <div className="h-full w-full bg-bg-abyss"><VectorMap points={mapPoints} selectedId={selected ?? undefined} onPick={(latitude, longitude) => runExplore(latitude, longitude)} /></div>}
           </div>
-          <div className="absolute top-4 right-4 z-10 flex gap-2">
-            <button
-              onClick={() => setShowGlobe(!showGlobe)}
-              className="px-3 py-2 rounded-lg glass border border-border-subtle text-xs text-fg-secondary hover:text-fg-primary"
-            >
-              {showGlobe ? "Flat Map" : "3D Globe"}
-            </button>
-          </div>
-          {selectedWb && (
-            <div className="absolute top-4 left-4 z-10 w-[320px] max-w-[calc(100%-2rem)] hidden md:block">
-              <ForecastPipeline
-                key={selectedWb.id}
-                waterbodyId={selectedWb.id}
-                waterbodyName={selectedWb.name}
-              />
-            </div>
-          )}
+          <div className="absolute top-4 right-4 z-10 flex gap-2"><button onClick={() => setShowGlobe((current) => !current)} className="px-3 py-2 rounded-lg glass border border-border-subtle text-xs text-fg-secondary hover:text-fg-primary">{' '}{showGlobe ? "Flat Map" : "3D Globe"}</button></div>
+          {selectedWb && <div className="absolute top-4 left-4 z-10 w-[330px] max-w-[calc(100%-2rem)]"><ForecastPipeline key={selectedWb.id} waterbodyId={selectedWb.id} waterbodyName={selectedWb.name} onDone={(forecast) => setSelectedForecast(forecast as Forecast)} /><div className="mt-3 rounded-xl border border-border-subtle bg-bg-deep/80 p-4 backdrop-blur-xl"><div className="flex items-start justify-between gap-3"><div><div className="text-xs font-mono text-fg-muted">{selectedWb.name}</div><div className="mt-1 font-display text-xl font-semibold text-fg-primary">{selectedForecast ? `${Math.round((selectedForecast.horizons?.["5d"]?.p_bloom ?? selectedForecast.p_bloom ?? 0) * 100)}%` : "Loading outlook"}</div></div>{selectedForecast && <span className={`text-xs font-mono px-2 py-1 rounded-full border border-current ${riskColor(riskOf(selectedForecast.horizons?.["5d"]?.p_bloom ?? selectedForecast.p_bloom ?? 0))}`}>{riskOf(selectedForecast.horizons?.["5d"]?.p_bloom ?? selectedForecast.p_bloom ?? 0).toUpperCase()}</span>}</div><p className="mt-2 text-xs text-fg-muted">Model-backed pilot forecast · confidence interval and drivers are available in the sidebar card.</p><a href="/report" className="mt-3 inline-flex items-center gap-2 text-xs text-glow-cyan">Open full report →</a></div></div>}
+          {dropResult && !dropLoading && <div className="absolute bottom-4 left-4 z-10 w-[360px] max-w-[calc(100%-2rem)] rounded-xl border border-glow-cyan/30 bg-bg-deep/90 p-4 backdrop-blur-xl"><div className="flex items-start justify-between gap-3"><div><div className="font-mono text-[10px] uppercase tracking-widest text-glow-cyan">Open-water assessment</div><div className="mt-1 font-display text-xl font-semibold text-fg-primary">{Math.round(dropResult.wash_off.risk_score * 100)}% wash-off risk</div></div><span className={`text-xs font-mono px-2 py-1 rounded-full border border-current ${riskColor(dropResult.wash_off.risk_level)}`}>{dropResult.wash_off.risk_level.toUpperCase()}</span></div><div className="mt-3 text-xs text-fg-secondary">{dropResult.signals?.slice(0, 3).map((signal) => `${signal} · `).join("") || "Live weather and wash-off signals loaded."}</div>{dropResult.model_estimate && <div className="mt-3 rounded-lg border border-glow-violet/30 bg-glow-violet/5 p-3 text-xs text-fg-secondary">Model estimate: <span className="font-mono text-glow-violet">{Math.round(dropResult.model_estimate.p_bloom * 100)}%</span> · CI {Math.round(dropResult.model_estimate.ci_lo * 100)}–{Math.round(dropResult.model_estimate.ci_hi * 100)}%</div>}</div>}
+          {dropLoading && <div className="absolute bottom-4 left-4 z-10 w-[360px] max-w-[calc(100%-2rem)] rounded-xl border border-border-subtle bg-bg-deep/90 p-4 text-xs text-fg-secondary">Fetching live assessment…</div>}
+          {dropError && <div className="absolute bottom-4 left-4 z-10 w-[360px] max-w-[calc(100%-2rem)] rounded-xl border border-glow-red/30 bg-glow-red/5 p-4 text-xs text-glow-red">{dropError}</div>}
           <StreamFlushOverlay />
         </main>
       </div>
-      <div className="border-t border-border-subtle bg-bg-abyss">
-        <div className="max-w-6xl mx-auto w-full px-4 md:px-6 py-8">
-          <ScrollReveal>
-            <LocationExplorer onSelectWaterbody={setSelected} />
-          </ScrollReveal>
-        </div>
-      </div>
+      <div className="border-t border-border-subtle bg-bg-abyss"><div className="max-w-6xl mx-auto w-full px-4 md:px-6 py-8"><ScrollReveal><LocationExplorer onSelectWaterbody={setSelected} /></ScrollReveal></div></div>
       <Footer />
     </div>
   );

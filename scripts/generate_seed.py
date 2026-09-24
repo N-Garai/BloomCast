@@ -1,5 +1,10 @@
-"""Generate deterministic seed data for the demo dataset."""
-import sys, os, json, datetime as dt
+"""Generate deterministic seed data for the demo dataset.
+
+Determinism contract: the nightly job sets PYTHONHASHSEED=0 and this script
+uses only seeded RNGs and content hashes, so identical inputs always produce
+identical files — quiet nights commit nothing.
+"""
+import sys, os, json, hashlib, datetime as dt
 
 # scripts/generate_seed.py -> scripts/ -> <repo root>
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -92,10 +97,15 @@ with open(os.path.join(out_dir, "scorecard.json"), "w") as f:
 for wb in wbs:
     fid = wb["properties"]["id"]
     with open(os.path.join(out_dir, f"sandbox-{fid}.json"), "w") as f:
+        # Baseline high-risk days come from the neutral scenario of the same
+        # sweep (temp+0 / nut-0), not a hardcoded constant, so the baseline
+        # moves with the model instead of disagreeing with it.
+        base_days = sandbox.get("temp+0_nut-0", {}).get(
+            "projected_annual_high_risk_days", 18)
         json.dump({
             "waterbody_id": fid,
             "name": wb["properties"]["name"],
-            "baseline_annual_high_risk_days": 18,
+            "baseline_annual_high_risk_days": base_days,
             "scenarios": sandbox,
         }, f, indent=2, default=str)
 
@@ -104,28 +114,37 @@ with open(os.path.join(_SRC, "data", "stream_segments.geojson")) as f:
 
 for seg in segs:
     sid = seg["properties"]["id"]
+    # Stable content hash (NOT hash(): PYTHONHASHSEED randomizes it per
+    # process, which would rewrite every file on every run). These seed
+    # placeholders are replaced by nightly ingestion where available.
+    digest = int(hashlib.sha256(sid.encode("utf-8")).hexdigest(), 16)
+    stamp = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
     with open(os.path.join(out_dir, f"streamflush-{sid}.json"), "w") as f:
         json.dump({
             "segment_id": sid,
             "name": seg["properties"]["name"],
             "city": seg["properties"]["city"],
             "country": seg["properties"]["country"],
-            "risk_score": round(0.35 + (hash(sid) % 60) / 100, 3),
-            "risk_level": ["low", "moderate", "high", "critical"][hash(sid) % 4],
-            "rainfall_48h_mm": round(12.0 + (hash(sid) % 40), 1),
-            "dry_days_antecedent": round(2.0 + (hash(sid) % 10), 1),
+            "risk_score": round(0.35 + (digest % 60) / 100, 3),
+            "risk_level": ["low", "moderate", "high", "critical"][digest % 4],
+            "rainfall_48h_mm": round(12.0 + (digest % 40), 1),
+            "dry_days_antecedent": round(2.0 + (digest % 10), 1),
             "impervious_proxy": seg["properties"]["impervious_proxy"],
-            "updated_at": "2026-09-18T02:00:00Z",
+            "updated_at": stamp,
         }, f, indent=2)
 
-# FHIR sample bundle
+# FHIR sample bundle. Uses the live headline forecast so the example never
+# disagrees with the served numbers; still clearly marked as a sample.
 from ml.training.fhir_bundle import build_alert_bundle
+_h = forecast["horizons"]["5d"]
 with open(os.path.join(out_dir, "fhir-alert-sample.json"), "w") as f:
     json.dump(build_alert_bundle(
         alert_id="sample", waterbody_id="CH-ZUR-01", waterbody_name="Lake Zurich",
         city="Zurich", country="CH", longitude=8.541, latitude=47.327, altitude=406,
-        horizon_days=5, p_bloom=0.64, ci_lo=0.52, ci_hi=0.76, threshold=0.6,
-        model_version="sha-sample", sent_at="2026-09-18T02:30:00Z",
+        horizon_days=5, p_bloom=_h["p_bloom"], ci_lo=_h["ci_lo"], ci_hi=_h["ci_hi"],
+        threshold=0.6,
+        model_version=forecast.get("model_version", "unknown"),
+        sent_at=dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
         recipient="elena.vasquez@lisboa.pt",
         shap_top_features=forecast["shap_top_features"],
     ), f, indent=2, default=str)

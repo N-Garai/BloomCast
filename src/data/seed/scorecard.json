@@ -1,70 +1,110 @@
 {
-  "model_version": "v2.1.0-synthetic-seed",
+  "model_version": "v2.2.0-kaggle-labels",
   "horizon_days": 5,
-  "sample_size": 4000,
-  "brier": 0.23348018517382854,
-  "auc": 0.669265210482049,
-  "hit_rate": 0.7145688800792864,
-  "false_alarm_rate": 0.48385469223007066,
+  "sample_size": 23570,
+  "brier": 0.1735247681642598,
+  "auc": 0.7590639102271942,
+  "hit_rate": 0.5932551922681473,
+  "false_alarm_rate": 0.07013868824039295,
   "reliability_diagram": {
     "prob_true": [
-      0.1717171717171717,
-      0.3238341968911917,
-      0.35546875,
-      0.4671968190854871,
-      0.5204778156996587,
-      0.5976095617529881,
-      0.7040816326530612,
-      0.7890295358649789
+      0.2803831855876466,
+      0.14242424242424243,
+      0.24330042313117067,
+      0.3642908567314615,
+      0.5503533568904594,
+      0.6510638297872341,
+      0.7021276595744681,
+      0.9855660802886784
     ],
     "prob_pred": [
-      0.08102079010259132,
-      0.19001957093663077,
-      0.3129728710812626,
-      0.4377083161322979,
-      0.5353356454465812,
-      0.6886936889612529,
-      0.8083641126157253,
-      0.9170784533120017
+      0.035899284294430824,
+      0.18383905874333947,
+      0.3041388067635989,
+      0.42924808256856645,
+      0.5617490960306031,
+      0.6795169179564344,
+      0.7777800421610531,
+      0.9781396182736662
     ]
   },
   "baselines": {
     "climatology": {
-      "auc": 0.9826494696070383,
-      "brier": 0.04980416666666667,
-      "hit_rate": 0.981169474727453,
-      "false_alarm_rate": 0.16599394550958627
+      "auc": 0.8989735540875761,
+      "brier": 0.11614685403633382,
+      "hit_rate": 0.6994653506066214,
+      "false_alarm_rate": 0.06212077434267553
     },
     "persistence": {
-      "auc": 0.6133794337341325,
-      "brier": 0.2880551517009735,
-      "hit_rate": 0.5758176412289395,
-      "false_alarm_rate": 0.42330978809283554
+      "auc": 0.5,
+      "brier": 0.25,
+      "hit_rate": 1.0,
+      "false_alarm_rate": 1.0
     },
     "weather_only": {
-      "auc": 0.6764886705823172,
-      "brier": 0.2262105643749237,
-      "hit_rate": 0.6352824578790882,
-      "false_alarm_rate": 0.37235116044399597
+      "auc": 0.7368742500004308,
+      "brier": 0.19905971692326638,
+      "hit_rate": 0.51326341764343,
+      "false_alarm_rate": 0.15226813059809305
     }
   },
   "delta_vs_climatology": {
-    "brier": 0.18367601850716186,
-    "auc": -0.31338425912498924
+    "brier": 0.05737791412792598,
+    "auc": -0.13990964386038185
   },
   "delta_vs_persistence": {
-    "brier": -0.05457496652714497,
-    "auc": 0.055885776747916505
+    "brier": -0.0764752318357402,
+    "auc": 0.2590639102271942
   },
   "delta_vs_weather_only": {
-    "brier": 0.007269620798904836,
-    "auc": -0.0072234601002681975
+    "brier": -0.02553494875900658,
+    "auc": 0.022189660226763386
   },
   "calibration_method": "Isotonic regression on out-of-fold predictions, refit on full data",
-  "limitations": "Trained and evaluated on SYNTHETIC labels (physically-motivated rule + noise, n=4000) \u2014 these metrics describe the generator, not real-lake skill. Add Tick Tick Bloom labels (docs/training-data.md) to train on real in-situ observations.",
-  "training_source": "synthetic-seed",
-  "training_note": "Synthetic stand-in: labels from a physically-motivated rule (warm + calm + rising chlorophyll), not real bloom observations. Add train_labels.csv + metadata.csv (docs/training-data.md) to train on real labels.",
-  "cv_folds": 5,
-  "oof_auc": 0.669265210482049,
-  "oof_brier": 0.23348018517382854
+  "limitations": "Metrics are out-of-fold on the training distribution described by training_source \u2014 they are not an independent hold-out. Region skill is published two ways: per-region (per_region) and by rotating region hold-out (holdout_region), which trains on three regions and evaluates the fourth. No EU validation exists; see eu_holdout for why, and do not quote these numbers as European skill. The scorecard refreshes with every nightly seed run.",
+  "per_region": {
+    "midwest": {
+      "auc": 0.7742902868943137,
+      "brier": 0.18555684588687296,
+      "n": 3765,
+      "positive_rate": 0.3958
+    },
+    "northeast": {
+      "auc": 0.7040237145590066,
+      "brier": 0.16881031562222507,
+      "n": 2190,
+      "positive_rate": 0.2447
+    },
+    "south": {
+      "auc": 0.6328396571265535,
+      "brier": 0.13973446096722747,
+      "n": 11459,
+      "positive_rate": 0.1678
+    },
+    "west": {
+      "auc": 0.7541049645053194,
+      "brier": 0.23074163116169497,
+      "n": 6156,
+      "positive_rate": 0.9384
+    }
+  },
+  "training_source": "tick-tick-bloom",
+  "eu_holdout": {
+    "status": "data-blocked",
+    "reason": "Tick Tick Bloom labels cover four U.S. regions only, so no EU-lake hold-out can be computed. Unlocked by citizen Ground Truth Loop labels in the identical row format \u2014 region IDs already flow end-to-end, so no code change is needed, only data."
+  },
+  "holdout_region": {
+    "status": "not-recorded",
+    "reason": "The committed artifacts predate region hold-out rotation; re-export from the training notebook to publish it."
+  },
+  "variants": {
+    "weather_only": {
+      "auc": 0.6109,
+      "brier": 0.2505,
+      "n": 4000,
+      "provenance": "synthetic-seed",
+      "note": "Weather + static features only; spectral and citizen blocks are zeroed. Usable where no satellite pixels exist \u2014 a real number, and a modest one.",
+      "source": "committed-artifact"
+    }
+  }
 }

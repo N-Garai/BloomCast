@@ -31,6 +31,17 @@ PORT = int(os.environ.get("PORT", "8000"))
 COPERNICUS_TOKEN = os.environ.get("COPERNICUS_TOKEN", "")
 OPEN_METEO_BASE = os.environ.get("OPEN_METEO_BASE", "https://api.open-meteo.com")
 
+# --- realtime serving knobs (v2 §2.3/§2.4) ---------------------------------
+# Every score that is served from memory is stamped with its age, so the
+# staleness of a "realtime" number is never hidden from the user.
+INFER_CACHE_TTL_S = int(os.environ.get("INFER_CACHE_TTL_S", "900"))       # 15 min
+UPSTREAM_TIMEOUT_S = float(os.environ.get("UPSTREAM_TIMEOUT_S", "10"))    # per upstream call
+UPSTREAM_RETRIES = int(os.environ.get("UPSTREAM_RETRIES", "2"))
+BATCH_MAX_LOCATIONS = int(os.environ.get("BATCH_MAX_LOCATIONS", "50"))
+BATCH_CONCURRENCY = int(os.environ.get("BATCH_CONCURRENCY", "4"))
+BATCH_THROTTLE_PER_10MIN = int(os.environ.get("BATCH_THROTTLE_PER_10MIN", "30"))
+SPECTRAL_INGEST = os.environ.get("BLOOMCAST_SPECTRAL", "auto")            # auto|on|off
+
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
 
 

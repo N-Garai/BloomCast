@@ -39,21 +39,31 @@ export function ReportForm() {
   }
 
   function setLocation() {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      setError("Geolocation is unavailable — enter coordinates manually.");
+      return;
+    }
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setForm((f) => ({ ...f, latitude: String(pos.coords.latitude), longitude: String(pos.coords.longitude) }));
+        setForm((current) => ({ ...current, latitude: String(pos.coords.latitude), longitude: String(pos.coords.longitude) }));
+        setError("");
       },
-      () => setError("Geolocation unavailable — enter coordinates manually"),
+      () => setError("Geolocation unavailable — enter coordinates manually."),
     );
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setStatus("submitting");
+    setError("");
     const observation_id = `obs-${Date.now()}`;
-    const lat = parseFloat(form.latitude) || 0;
-    const lon = parseFloat(form.longitude) || 0;
+    const lat = Number(form.latitude);
+    const lon = Number(form.longitude);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+      setStatus("idle");
+      setError("Enter valid latitude and longitude coordinates.");
+      return;
+    }
     try {
       const res = await fetch(`${API}/v1/citizen/report`, {
         method: "POST",
@@ -73,11 +83,14 @@ export function ReportForm() {
           source: "bloomcast-form",
         }),
       });
-      if (!res.ok) throw new Error("submit failed");
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(`Report service returned HTTP ${res.status}.`);
+      }
       setStatus("ok");
     } catch (err: any) {
-      setStatus("error");
-      setError(err.message);
+      setStatus("idle");
+      setError(err?.message ?? "The report could not be submitted.");
     }
   }
 

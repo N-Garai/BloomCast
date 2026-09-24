@@ -3,7 +3,9 @@
 Runs in CI (GitHub Actions) only — never on the server. Writes the forecast
 JSON artifacts that the API then serves statically.
 """
-import sys, os, json
+import sys
+import os
+import json
 from pathlib import Path
 
 import numpy as np
@@ -15,15 +17,15 @@ _BACKEND_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 if _BACKEND_DIR not in sys.path:
     sys.path.insert(0, _BACKEND_DIR)
 
-from features.feature_store import FEATURE_NAMES, humanize_feature
-from ml.training.lightgbm_branch import (
+from features.feature_store import FEATURE_NAMES, humanize_feature  # noqa: E402
+from ml.training.lightgbm_branch import (  # noqa: E402
     LightGBMBranch, calibrate, ClimatologyBaseline, PersistenceBaseline, WeatherOnlyBaseline,
-)
-from ml.training.cnn_branch import BloomCNN
-from ml.training.ensemble import Ensemble
-from ml.training.counterfactual import precompute_sandbox_sweeps
-from ml.training.scorecard import generate_scorecard
-from ml.training.fhir_bundle import build_alert_bundle
+)  # noqa: E402
+from ml.training.cnn_branch import BloomCNN  # noqa: E402
+from ml.training.ensemble import Ensemble  # noqa: E402
+from ml.training.counterfactual import precompute_sandbox_sweeps  # noqa: E402
+from ml.training.scorecard import generate_scorecard, sanitize_loaded_scorecard  # noqa: E402
+from ml.training.artifacts import WEATHER_ONLY_FEATURE_NAMES  # noqa: E402
 
 # Semantic feature indices — must stay in sync with features/feature_store.py
 I_TEMP_3D = FEATURE_NAMES.index("temp_mean_3d")
@@ -232,6 +234,127 @@ def per_region_metrics(y: np.ndarray, oof: np.ndarray,
     return out
 
 
+def region_holdout_metrics(X: np.ndarray, y: np.ndarray, region_ids: np.ndarray,
+                           region_names: list, fit_fn=None, n_splits: int = 5) -> dict:
+    """Rotating region hold-out — train on 3 regions, evaluate the 4th (v2 M-V1).
+
+    Region IDs never enter a fitted model, so this is a *reporting* construct:
+    it answers "does the model transfer to a region it has never seen?", which
+    a random or time-based split cannot. AUC is reported per held-out region
+    plus the mean and the worst case; the worst region is the number that
+    matters, because it is the one a new deployment will actually experience.
+
+    Returns a ``status``-tagged dict when the frame has no region labels, so
+    the scorecard can say "data-blocked" instead of printing nothing.
+    """
+    from sklearn.metrics import roc_auc_score, brier_score_loss
+
+    region_ids = np.asarray(region_ids)
+    y = np.asarray(y)
+    present = sorted({int(r) for r in region_ids.tolist()})
+    name_of = {i: (region_names[i] if i < len(region_names) else f"region-{i}")
+               for i in present}
+    if len(present) < 2:
+        return {
+            "status": "unavailable",
+            "reason": "fewer than two regions present in the training frame",
+            "regions": [name_of[i] for i in present],
+        }
+
+    if fit_fn is None:
+        def fit_fn(Xtr, ytr):  # default: the same LightGBM branch used elsewhere
+            return LightGBMBranch().fit(Xtr, ytr)
+
+    per_region: dict = {}
+    aucs: list[float] = []
+    for rid in present:
+        test = region_ids == rid
+        train = ~test
+        if not test.any() or len(np.unique(y[test])) < 2:
+            per_region[name_of[rid]] = {
+                "n": int(test.sum()), "auc": None, "brier": None,
+                "note": "single-class hold-out — AUC undefined",
+            }
+            continue
+        if len(np.unique(y[train])) < 2 or train.sum() < 10:
+            per_region[name_of[rid]] = {
+                "n": int(test.sum()), "auc": None, "brier": None,
+                "note": "training folds do not contain both classes",
+            }
+            continue
+        model = fit_fn(X[train], y[train])
+        p = _proba(model.model if hasattr(model, "model") else model, X[test])
+        auc = float(roc_auc_score(y[test], p))
+        aucs.append(auc)
+        per_region[name_of[rid]] = {
+            "n": int(test.sum()),
+            "auc": round(auc, 4),
+            "brier": round(float(brier_score_loss(y[test], p)), 4),
+            "positive_rate": round(float(y[test].mean()), 4),
+        }
+
+    if not aucs:
+        return {
+            "status": "unavailable",
+            "reason": "no hold-out region had both classes",
+            "regions": per_region,
+        }
+    worst = min(per_region.items(), key=lambda kv: kv[1]["auc"] if kv[1]["auc"] is not None else 1.0)
+    return {
+        "status": "ok",
+        "protocol": f"rotating region hold-out over {len(present)} regions (train {len(present)-1}, test 1)",
+        "method": "LightGBM tabular branch, no region feature",
+        "mean_auc": round(float(sum(aucs) / len(aucs)), 4),
+        "worst_region": {"name": worst[0], **worst[1]},
+        "scorecard_status": "US-only labels — not an EU validation (see eu_holdout)",
+        "regions": per_region,
+    }
+
+
+def weather_only_variant(X: np.ndarray, y: np.ndarray, feature_names: list,
+                         sample_weight=None, calibrator=None) -> dict:
+    """Train + score the weather-only variant on a masked copy of the frame.
+
+    This is what makes an arbitrary coordinate answerable by a *model* instead
+    of only by the heuristic: the variant never sees spectral or citizen
+    columns, so it is defined exactly where those inputs are missing. Its
+    metrics are published next to the full model's, never instead of them —
+    expect a lower AUC and say so (v2 §7.1).
+    """
+    from ml.training.artifacts import apply_weather_only_mask
+
+    Xw = apply_weather_only_mask(X, feature_names)
+    model, oof = _fit_with_oof(Xw, y, sample_weight=sample_weight)
+    cal = calibrate(oof, y)
+    from sklearn.metrics import roc_auc_score, brier_score_loss
+
+    metrics = {
+        "auc": round(float(roc_auc_score(y, oof)), 4),
+        "brier": round(float(brier_score_loss(y, oof)), 4),
+        "n": int(len(y)),
+    }
+    return {
+        "lgbm": model,
+        "calibrator": cal,
+        "oof": oof,
+        "metrics": metrics,
+        "meta": {
+            "variant": "weather-only",
+            "training_source": None,  # filled by the caller
+            "features_used": [f for f in feature_names
+                              if f in set(WEATHER_ONLY_FEATURE_NAMES)],
+            "features_zeroed": [f for f in feature_names
+                                if f not in set(WEATHER_ONLY_FEATURE_NAMES)],
+            "metrics": metrics,
+            "note": (
+                "Weather + static features only; spectral and citizen blocks are "
+                "zeroed. Usable where no satellite pixels exist — a real number, "
+                "and a modest one."
+            ),
+        },
+    }
+
+
 def empirical_ci_half(y: np.ndarray, oof: np.ndarray) -> float:
     """80% interval half-width from out-of-fold residuals (was fixed ±0.12)."""
     resid_std = float(np.std(np.asarray(y, dtype=float) - np.asarray(oof, dtype=float)))
@@ -339,6 +462,9 @@ def _fit_all():
     oof_brier = float(brier_score_loss(y, oof))
     regions = frame.get("regions")
     per_region = per_region_metrics(y, oof, wb_ids, regions) if regions else {}
+    holdout_region = (
+        region_holdout_metrics(X, y, wb_ids, regions) if regions else None
+    )
 
     clim = ClimatologyBaseline().fit(X, y, doy, wb_ids)
     persist = PersistenceBaseline().fit(X, y)
@@ -346,6 +472,30 @@ def _fit_all():
     cnn = BloomCNN().fit(frame["S"], y, sample_weight=weights)
     emb_train = cnn.predict_embedding(frame["S"])
     ens = Ensemble().fit(oof, emb_train, X, y, sample_weight=weights)
+
+    # Weather-only variant (v2 M3): a second, honest probability for locations
+    # where the spectral block does not exist. Trained on a masked copy, so it
+    # cannot leak spectral or citizen information it will not have at serving.
+    variant = weather_only_variant(X, y, FEATURE_NAMES, sample_weight=weights)
+    variant["meta"]["training_source"] = source
+    variant["meta"]["training_note"] = frame["note"]
+    variant["meta"]["ci_half"] = empirical_ci_half(variant["oof"], y)
+    variants = {
+        "full": {
+            "auc": round(oof_auc, 4),
+            "brier": round(oof_brier, 4),
+            "n": int(len(y)),
+            "features": len(FEATURE_NAMES),
+            "provenance": source,
+        },
+        "weather_only": {
+            **variant["metrics"],
+            "features": len(WEATHER_ONLY_FEATURE_NAMES),
+            "features_zeroed": len(FEATURE_NAMES) - len(WEATHER_ONLY_FEATURE_NAMES),
+            "provenance": source,
+            "note": variant["meta"]["note"],
+        },
+    }
 
     # Representative feature vector: a low-moderate risk profile, so the
     # headline forecast and its counterfactuals spread across the risk scale.
@@ -362,6 +512,8 @@ def _fit_all():
         y, oof, clim.predict(X, doy, wb_ids), persist.predict(X), weather.predict(X),
         model_version=version, sample_size=int(len(y)), horizon_days=5,
         per_region=per_region or None,
+        holdout_region=holdout_region,
+        variants=variants,
     )
     scorecard["training_source"] = source
     scorecard["training_note"] = frame["note"]
@@ -393,6 +545,7 @@ def _fit_all():
         "scorecard": scorecard, "sandbox": sandbox, "base": base, "clim": clim,
         "p_bloom": p_bloom, "ci_lo": ci_lo, "ci_hi": ci_hi,
         "top_features": top_features,
+        "weather_only": variant,
     }
 
 
@@ -400,11 +553,13 @@ def _load_bundle():
     """Artifact-first bundle: Kaggle-exported model when valid, else None.
 
     The nightly/CI job then becomes pure inference — no training, no labels,
-    no weather join. Falls back to _fit_all() on any problem.
+    no weather join. Falls back to _fit_all() on any problem. The artifacts are
+    loaded through the process-wide mtime-checked singleton, so a nightly run
+    and a serving process each pay for exactly one load.
     """
-    from ml.training.artifacts import default_dir, load_artifacts
+    from ml.training.artifacts import default_dir, get_serving_artifacts
 
-    art = load_artifacts(default_dir(), FEATURE_NAMES)
+    art = get_serving_artifacts(FEATURE_NAMES, default_dir())
     if art is None:
         return None
     meta = art["meta"]
@@ -421,7 +576,18 @@ def _load_bundle():
         return np.array(out)
 
     sandbox = precompute_sandbox_sweeps(predict_fn, base.reshape(1, -1), "placeholder")
-    sc = dict(meta["scorecard"])
+    # Never re-serve a stale *claim* baked into an old artifact (v2 §3): the
+    # numbers are the training run's, the narration is re-derived.
+    sc = sanitize_loaded_scorecard(dict(meta["scorecard"]), meta.get("training_source"))
+    variant = art.get("weather_only")
+    if variant:
+        vmeta = variant.get("meta", {})
+        sc.setdefault("variants", {})["weather_only"] = {
+            **(vmeta.get("metrics") or {}),
+            "provenance": vmeta.get("training_source") or meta.get("training_source"),
+            "note": vmeta.get("note", ""),
+            "source": "committed-artifact",
+        }
     return {
         "lgbm": art["lgbm"], "calibrator": art["calibrator"], "cnn": art["cnn"],
         "ens": ens,
@@ -435,20 +601,22 @@ def _load_bundle():
         "ci_hi": float(meta["headline"]["ci_hi"]),
         "top_features": [dict(f) for f in meta["headline"]["shap_top_features"]],
         "baseline_climatology": float(meta["headline"]["baseline_climatology"]),
+        "quantiles": art.get("quantiles"),
+        "weather_only": variant,
     }
+
 
 
 def train_and_predict():
     bundle = _load_bundle()
     if bundle is None:
         bundle = _fit_all()
-    lgbm = bundle["lgbm"]
     p_bloom, ci_lo, ci_hi = bundle["p_bloom"], bundle["ci_lo"], bundle["ci_hi"]
     top_features = bundle["top_features"]
     scorecard, sandbox = bundle["scorecard"], bundle["sandbox"]
     version, source = bundle["version"], bundle["frame"]["source"]
     if bundle["clim"] is not None:
-        X, doy, wb_ids = bundle["frame"]["X"], bundle["frame"]["doy"], bundle["frame"]["wb_ids"]
+        doy, wb_ids = bundle["frame"]["doy"], bundle["frame"]["wb_ids"]
         base_clim = round(float(bundle["clim"].predict(
             bundle["base"].reshape(1, -1), doy[:1], wb_ids[:1])[0]), 4)
     else:

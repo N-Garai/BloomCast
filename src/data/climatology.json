@@ -1,0 +1,24 @@
+{
+  "generated_at": "2026-09-23T14:45:52+00:00",
+  "method": "latitude-season-fallback",
+  "method_note": "Modelled seasonal prior (mid-latitude summer maximum \u00d7 coarse latitude belt) \u2014 not a satellite measurement. It is replaced automatically once three or more waterbodies have real spectral records in src/data/spectral_history.json.",
+  "measured_waterbodies": [],
+  "history_records": 0,
+  "waterbodies": {},
+  "fallback_rule": {
+    "method": "latitude-season-fallback",
+    "ndci_base": 0.02,
+    "ndci_amplitude": 0.1,
+    "belt_centroid_deg": 45.0,
+    "belt_width_deg": 25.0,
+    "north_peak_month": 8,
+    "south_peak_month": 2,
+    "chlorophyll_at_ndci": 10.0,
+    "trend_fraction": 0.25,
+    "max_offset": 0.04,
+    "chl_trend_fraction": 0.12,
+    "ndvi_base": 0.08,
+    "fai_base": 0.01,
+    "std_base": 0.012
+  }
+}

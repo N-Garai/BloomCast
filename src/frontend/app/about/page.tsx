@@ -4,6 +4,7 @@ import { Footer } from "@/components/brand/Footer";
 import { ScrollReveal, StaggerContainer, StaggerItem } from "@/components/motion/ScrollReveal";
 import { SplitHeadline } from "@/components/brand/SplitHeadline";
 import { SectionFilm } from "@/components/brand/SectionFilm";
+import { OneHealthSummary } from "@/components/onehealth/OneHealthSummary";
 
 export const metadata: Metadata = { title: "BloomCast — About & Architecture" };
 
@@ -157,6 +158,12 @@ export default function AboutPage() {
                 </div>
               ))}
             </div>
+          </section>
+
+          <section className="mb-16">
+            <ScrollReveal>
+              <OneHealthSummary />
+            </ScrollReveal>
           </section>
 
           <section className="mb-16">
