@@ -330,13 +330,22 @@ def load_weather_only(path: str | Path, expected_features: list) -> dict | None:
 
 
 def serving_model_status(expected_features: list | None = None) -> dict:
-    """Model status for ``/v1/health`` — loaded / fallback, never a guess."""
-    if expected_features is None:
-        try:
-            from features.feature_store import FEATURE_NAMES as expected_features  # noqa: N813
-        except Exception:  # noqa: BLE001
-            return {"status": "unknown", "reason": "feature names unavailable"}
-    art = get_serving_artifacts(expected_features)
+    """Model status for ``/v1/health`` — loaded / fallback, never a guess.
+
+    Never raises: a broken ML dependency (missing system lib, unreadable
+    files, version skew) must degrade serving to the honest heuristic, not
+    500 the endpoint that asked. The reason is surfaced so the UI can print
+    the backend's own diagnosis instead of guessing.
+    """
+    try:
+        if expected_features is None:
+            try:
+                from features.feature_store import FEATURE_NAMES as expected_features  # noqa: N813
+            except Exception:  # noqa: BLE001
+                return {"status": "unknown", "reason": "feature names unavailable"}
+        art = get_serving_artifacts(expected_features)
+    except Exception as exc:  # noqa: BLE001 - any load failure is a fallback
+        return {"status": "fallback", "reason": f"artifact load failed: {exc}"}
     if art is None:
         return {
             "status": "fallback",

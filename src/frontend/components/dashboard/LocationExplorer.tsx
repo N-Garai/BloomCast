@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { API } from "@/lib/api";
+import { API, readBody } from "@/lib/api";
 import { VectorMap } from "@/components/maps/VectorMap";
 import { BloomReport } from "@/components/report/BloomReport";
 import { Advisory, ErrorState, RiskBadge, RiskTrajectory, friendlyError } from "@/components/dashboard/Resilience";
@@ -72,7 +72,7 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
   // Rapid map clicks must not pile up in-flight assessments (each costs two
   // upstream calls): the previous request is aborted and the new one waits
   // 600 ms so a drag-click burst becomes a single fetch.
-  const flight = useRef<{ timer?: ReturnType<typeof setTimeout>; ctrl?: AbortController; autoRetried?: boolean }>({});
+  const flight = useRef<{ timer?: ReturnType<typeof setTimeout>; ctrl?: AbortController; autoRetried?: boolean; timedOut?: boolean }>({});
 
   useEffect(() => {
     if (phase !== "working") return;
@@ -104,8 +104,16 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
   const fetchAssessment = async (la: number, lo: number) => {
     const ctrl = new AbortController();
     flight.current.ctrl = ctrl;
+    flight.current.timedOut = false;
+    // Free-tier containers sleep after idle: a hanging request is usually a
+    // cold start, not a dead service — time out loudly instead of spinning.
+    const timeout = setTimeout(() => {
+      flight.current.timedOut = true;
+      ctrl.abort();
+    }, 30000);
     try {
       const response = await fetch(`${API}/v1/explore?lat=${la}&lon=${lo}`, { signal: ctrl.signal });
+      clearTimeout(timeout);
       if (response.status === 429 && !flight.current.autoRetried) {
         // One automatic retry honoring the server's backoff, then stop —
         // hammering a throttled upstream is what causes these errors.
@@ -115,12 +123,20 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
         flight.current.timer = setTimeout(() => void fetchAssessment(la, lo), waitS * 1000);
         return;
       }
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.detail ? `${data.detail} [HTTP ${response.status}]` : `HTTP ${response.status}`);
+      // Gateway/proxy failures come back as empty bodies or HTML — parse
+      // defensively so a missing body can never mask the HTTP status.
+      const { data } = await readBody(response);
+      if (!response.ok) throw new Error(data?.detail ? `${data.detail} [HTTP ${response.status}]` : `HTTP ${response.status} (no error body)`);
       setResult(data as ExploreResult);
       setPhase("done");
     } catch (e) {
-      if (e instanceof DOMException && e.name === "AbortError") return;
+      clearTimeout(timeout);
+      if (e instanceof DOMException && e.name === "AbortError") {
+        if (!flight.current.timedOut) return;
+        setError("The request timed out — the service may be waking from sleep (free tier idles). Try again in a few seconds.");
+        setPhase("error");
+        return;
+      }
       console.error("[explore] live fetch failed:", e);
       setError(friendlyError(e, "weather"));
       setPhase("error");
@@ -221,15 +237,18 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
         <p className="mt-1.5 text-[11px] font-mono text-fg-faint">Offline vector map · click anywhere to run the same live assessment</p>
       </div>
 
+      {/* Working trace: mounted from the first run on and never removed —
+          working steps progress, done checks everything, error freezes at
+          the failed step in red. The trace outlives every request. */}
+      {phase !== "idle" && (
+        <div className="mt-5 space-y-2" aria-live="polite">
+          {STEPS.map((label, index) => {
+            const state = phase === "done" || index < step ? "done" : phase === "error" ? (index === step ? "failed" : "waiting") : index === step ? "active" : "waiting";
+            return <div key={label} className="flex items-center gap-3 text-sm"><span className={`flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-mono ${state === "done" ? "border-glow-green/60 bg-glow-green/15 text-glow-green" : state === "active" ? "border-glow-violet/60 bg-glow-violet/15 text-glow-violet" : state === "failed" ? "border-glow-red/60 bg-glow-red/15 text-glow-red" : "border-border-subtle text-fg-faint"}`}>{state === "done" ? "✓" : state === "failed" ? "✕" : `0${index + 1}`}</span><span className={state === "waiting" ? "text-fg-faint" : "text-fg-primary"}>{label}{state === "active" ? "…" : ""}{state === "failed" ? " — failed here" : ""}</span></div>;
+          })}
+        </div>
+      )}
       <AnimatePresence mode="wait">
-        {phase === "working" && (
-          <motion.div key="working" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-5 space-y-2">
-            {STEPS.map((label, index) => {
-              const state = index < step ? "done" : index === step ? "active" : "waiting";
-              return <div key={label} className="flex items-center gap-3 text-sm"><span className={`flex h-5 w-5 items-center justify-center rounded-full border text-[10px] font-mono ${state === "done" ? "border-glow-green/60 bg-glow-green/15 text-glow-green" : state === "active" ? "border-glow-violet/60 bg-glow-violet/15 text-glow-violet" : "border-border-subtle text-fg-faint"}`}>{state === "done" ? "✓" : `0${index + 1}`}</span><span className={state === "waiting" ? "text-fg-faint" : "text-fg-primary"}>{label}{state === "active" ? "…" : ""}</span></div>;
-            })}
-          </motion.div>
-        )}
         {phase === "error" && error && <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-5"><ErrorState title="Live fetch failed" message={error} onRetry={() => run(lat, lon)} />{retryNote && <p className="mt-2 text-[11px] font-mono text-fg-muted">{retryNote}</p>}</motion.div>}
         {(phase === "done" || (phase === "working" && result)) && result && w && (
           <motion.div key="done" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-5 rounded-xl border border-border-subtle bg-bg-deep/50 p-5">

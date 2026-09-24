@@ -11,6 +11,7 @@ RUN apt-get update \
        curl \
        ca-certificates \
        gnupg \
+       libgomp1 \
     && curl -fsSL https://deb.nodesource.com/setup_${NODE_VERSION}.x | bash - \
     && apt-get install -y --no-install-recommends nodejs \
     && rm -rf /var/lib/apt/lists/*

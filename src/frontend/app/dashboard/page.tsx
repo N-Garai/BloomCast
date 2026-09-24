@@ -14,7 +14,7 @@ import { VectorMap } from "@/components/maps/VectorMap";
 import { StreamFlushOverlay } from "@/components/streamflush/StreamFlushOverlay";
 import { ScrollReveal } from "@/components/motion/ScrollReveal";
 import { ErrorState, friendlyError } from "@/components/dashboard/Resilience";
-import { API } from "@/lib/api";
+import { API, readBody } from "@/lib/api";
 
 interface Waterbody {
   id: string;
@@ -224,8 +224,8 @@ export default function DashboardPage() {
     exploreFlight.current = ctrl;
     try {
       const response = await fetch(`${API}/v1/explore?lat=${latitude}&lon=${longitude}`, { signal: ctrl.signal });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data?.detail ? `${data.detail} [HTTP ${response.status}]` : `HTTP ${response.status}`);
+      const { data } = await readBody(response);
+      if (!response.ok) throw new Error(data?.detail ? `${data.detail} [HTTP ${response.status}]` : `HTTP ${response.status} (no error body)`);
       setDropResult(data as ExploreResult);
     } catch (e) {
       if (e instanceof DOMException && (e as DOMException).name === "AbortError") return;

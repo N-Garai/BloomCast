@@ -1255,5 +1255,53 @@ def test_serving_load_path_has_no_torch():
     assert r.returncode == 0, r.stderr
 
 
+def test_broken_artifacts_degrade_to_heuristic_not_500(monkeypatch):
+    """Regression: libgomp-style loader explosions must never 500 explore.
+
+    On the Render image LightGBM's native lib failed to import (missing
+    system libgomp), and the unguarded status call turned every assessment
+    into an HTTP 500. The loader may raise; serving must answer heuristic.
+    """
+    import asyncio
+    import api.infer as infer
+    from ml.training import artifacts as A
+
+    async def fake_windows(lat, lon):
+        hours = [f"2026-09-20T{h:02d}:00" for h in range(72 + 168)]
+        return {
+            "past": {"precipitation": [0.0] * 72},
+            "forecast": {
+                "time": hours,
+                "temperature_2m": [22.0] * len(hours),
+                "wind_speed_10m": [2.0] * len(hours),
+                "wind_direction_10m": [90.0] * len(hours),
+                "precipitation": [0.0] * len(hours),
+                "shortwave_radiation": [200.0] * len(hours),
+                "cloud_cover": [10.0] * len(hours),
+                "dewpoint_2m": [12.0] * len(hours),
+                "pressure_msl": [1013.0] * len(hours),
+            },
+            "archive": {"hourly": {"temperature_2m": [18.0] * 720,
+                                   "precipitation": [0.0] * 720}},
+            "archive_status": "ok",
+        }
+
+    def boom(expected, path=None, force=False):
+        raise OSError("libgomp.so.1: cannot open shared object file")
+
+    monkeypatch.setattr(infer, "_fetch_windows", fake_windows)
+    monkeypatch.setattr(A, "get_serving_artifacts", boom)
+    infer.configure_cache(0)
+    try:
+        out = asyncio.run(infer.assess_location(47.38, 8.54, use_cache=False))
+        assert out["provenance"] == "live-heuristic-nowcast"
+        assert out["model_estimate"] is None
+        assert out["model_status"]["status"] == "fallback"
+        assert "libgomp" in out["model_status"]["reason"]
+    finally:
+        infer.configure_cache(900)
+        A.reset_serving_cache()
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

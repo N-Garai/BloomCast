@@ -16,3 +16,18 @@ export async function apiGet<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) throw new Error(`HTTP ${res.status} on ${path}`);
   return res.json() as Promise<T>;
 }
+
+/**
+ * Read a response body that may not be JSON (gateway timeouts and proxy
+ * error pages come back as empty bodies or HTML). Never throws on parse —
+ * callers decide what a missing body means.
+ */
+export async function readBody(response: Response): Promise<{ data: any; text: string }> {
+  const text = await response.text();
+  if (!text) return { data: {}, text: "" };
+  try {
+    return { data: JSON.parse(text), text };
+  } catch {
+    return { data: {}, text };
+  }
+}
