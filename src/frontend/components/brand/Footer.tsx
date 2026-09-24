@@ -36,7 +36,7 @@ export function Footer() {
           <div>
             <h4 className="text-sm font-semibold text-fg-primary mb-3">Legal</h4>
             <ul className="space-y-2 text-sm text-fg-secondary">
-              <li>MIT License (code)</li>
+              <li>Apache 2.0 (code)</li>
               <li>CC-BY 4.0 (documentation)</li>
               <li className="text-fg-muted text-xs pt-2">
                 &ldquo;BloomCast outputs are advisory support for environmental

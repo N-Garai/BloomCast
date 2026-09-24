@@ -1447,5 +1447,87 @@ def test_upstream_throttle_surfaces_as_429(monkeypatch):
         infer.configure_cache(900)
 
 
+def test_stale_cache_served_on_throttle(monkeypatch):
+    """Under upstream throttling, a recent-but-expired assessment is served
+    loudly labelled stale instead of failing. Beyond the stale window the
+    throttle error still surfaces."""
+    import asyncio
+    import time
+    import api.infer as infer
+    from shared.cache import TTLCache
+
+    now = [1000.0]
+    cache = TTLCache(ttl_s=60, max_entries=8, clock=lambda: now[0])
+    cache.set("k", {"v": 1})
+    assert cache.get_stale("k", 240) == ({"v": 1}, 0.0)
+    now[0] += 90
+    # Note: get() evicts expired entries, so get_stale is checked first —
+    # production reads fresh first for the same reason.
+    value, age = cache.get_stale("k", 240)
+    assert value == {"v": 1} and age == 90.0
+    assert cache.get("k") is None
+    now[0] += 200
+    assert cache.get_stale("k", 240) is None
+
+    async def fake_windows(lat, lon):
+        hours = [f"2026-09-20T{h:02d}:00" for h in range(72 + 168)]
+        return {
+            "past": {"precipitation": [0.0] * 72},
+            "forecast": {
+                "time": hours,
+                "temperature_2m": [22.0] * len(hours),
+                "wind_speed_10m": [2.0] * len(hours),
+                "wind_direction_10m": [90.0] * len(hours),
+                "precipitation": [0.0] * len(hours),
+                "shortwave_radiation": [200.0] * len(hours),
+                "cloud_cover": [10.0] * len(hours),
+                "dewpoint_2m": [12.0] * len(hours),
+                "pressure_msl": [1013.0] * len(hours),
+            },
+            "archive": {"hourly": {"temperature_2m": [18.0] * 720,
+                                   "precipitation": [0.0] * 720}},
+            "archive_status": "ok",
+        }
+
+    monkeypatch.setattr(infer, "_fetch_windows", fake_windows)
+    monkeypatch.setattr(infer, "_load_serving_artifacts", lambda: None)
+    infer.configure_cache(0.05)
+    try:
+        fresh = asyncio.run(infer.assess_location(11.0, 22.0))
+        assert fresh["stale"] is False
+
+        async def throttled(lat, lon):
+            raise infer.UpstreamBusy("busy", 1)
+
+        monkeypatch.setattr(infer, "_fetch_windows", throttled)
+        time.sleep(0.1)
+        stale = asyncio.run(infer.assess_location(11.0, 22.0))
+        assert stale["stale"] is True
+        assert stale["cache"]["hit"] is True
+        assert any("throttl" in caveat for caveat in stale["caveats"])
+        assert stale["wash_off"] == fresh["wash_off"]
+    finally:
+        infer.configure_cache(900)
+
+
+def test_batch_retries_throttled_location_once(monkeypatch):
+    import asyncio
+    import api.infer as infer
+
+    calls = []
+
+    async def flaky(lat, lon):
+        calls.append((lat, lon))
+        if len(calls) == 1:
+            raise infer.UpstreamBusy("busy", 0.01)
+        return {"latitude": lat, "provenance": "x"}
+
+    monkeypatch.setattr(infer, "assess_location", flaky)
+    out = asyncio.run(infer.assess_batch([{"lat": 47.0, "lon": 8.0}],
+                                         max_locations=50, concurrency=2))
+    assert out["count"] == 1 and out["errors"] == []
+    assert len(calls) == 2
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

@@ -455,7 +455,27 @@ async def assess_location(lat: float, lon: float, *, use_cache: bool = True) -> 
             out["stale"] = age > _ASSESSMENT_CACHE.ttl_s / 2
             return out
 
-    data = await _fetch_windows(lat, lon)
+    try:
+        data = await _fetch_windows(lat, lon)
+    except (UpstreamBusy, UpstreamUnavailable):
+        # Throttled or down: serve a bounded-stale cached assessment,
+        # loudly labelled, instead of failing. Fresh entries were already
+        # returned above; only expired-but-recent ones reach here.
+        if use_cache:
+            stale = _ASSESSMENT_CACHE.get_stale(
+                key, 4 * _ASSESSMENT_CACHE.ttl_s)
+            if stale is not None:
+                value, age = stale
+                out = dict(value)
+                out["cache"] = _cache_block(out["fetched_at"], age)
+                out["stale"] = True
+                out["caveats"] = list(out.get("caveats") or []) + [
+                    "Live weather is throttled right now, so this shows the "
+                    f"last good assessment from {int(age // 60)} min ago "
+                    "instead of failing."
+                ]
+                return out
+        raise
     past = data["past"]
     fc_hourly = data["forecast"]
     archive = data["archive"]
@@ -610,13 +630,30 @@ async def assess_batch(locations: list[dict], *, max_locations: int | None = Non
 
     async def _one(i: int, item: dict) -> None:
         async with sem:
+            # NOTE: `except X as name` deletes `name` when the block exits,
+            # so failures are copied to `err` first — reading `exc` below
+            # the handlers would raise UnboundLocalError.
             try:
                 results[i] = await assess_location(float(item["lat"]), float(item["lon"]))
-            except (AssessError, KeyError, TypeError, ValueError) as exc:
-                body = exc.to_body() if isinstance(exc, AssessError) else {
-                    "error": "invalid location entry", "kind": "invalid-location",
-                }
-                errors.append({**body, "index": i})
+                return
+            except UpstreamBusy as busy_exc:
+                # One delayed retry honoring the server's backoff: under a
+                # shared-IP throttle the first attempt often loses a race
+                # that the second wins. Capped so a hard throttle still
+                # degrades fast instead of stalling the batch.
+                wait = min(max(float(busy_exc.retry_after_s or 5), 1.0), 15.0)
+                await _asyncio.sleep(wait)
+                try:
+                    results[i] = await assess_location(float(item["lat"]), float(item["lon"]))
+                    return
+                except (AssessError, KeyError, TypeError, ValueError) as retry_exc:
+                    err = retry_exc
+            except (AssessError, KeyError, TypeError, ValueError) as other_exc:
+                err = other_exc
+            body = err.to_body() if isinstance(err, AssessError) else {
+                "error": "invalid location entry", "kind": "invalid-location",
+            }
+            errors.append({**body, "index": i})
 
     await _asyncio.gather(*(_one(i, item) for i, item in enumerate(locations)))
     return {

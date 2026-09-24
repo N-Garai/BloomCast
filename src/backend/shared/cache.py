@@ -9,8 +9,10 @@ Two rules this module exists to enforce:
 
 1. Every cache read exposes *how old* the value is (``age_s`` / ``cached_at``),
    so a "realtime" score can always be labelled with its staleness.
-2. Expired entries are recomputed, not served. The cache is a rate-limit shield
-   for the upstream weather API, never a source of stale authority.
+2. Expired entries are recomputed, not served — except under upstream
+   throttling/outage, where a bounded-stale entry (see ``get_stale``) is
+   served explicitly labelled ``stale`` with its age, instead of failing.
+   A minutes-old real number beats no number during a throttle window.
 """
 
 from __future__ import annotations
@@ -32,7 +34,13 @@ class TTLCache:
         self._store: dict[str, tuple[float, Any]] = {}
 
     def get(self, key: str) -> tuple[Any, float] | None:
-        """Return ``(value, age_seconds)`` when fresh, else ``None``."""
+        """Return ``(value, age_seconds)`` when fresh, else ``None``.
+
+        Expired entries are deliberately NOT evicted here: the throttle
+        fallback in ``assess_location`` may still serve them as labelled
+        stale via :meth:`get_stale`. Eviction happens by insertion order in
+        :meth:`set` (bounded memory) and by max age in :meth:`get_stale`.
+        """
         with self._lock:
             entry = self._store.get(key)
             if entry is None:
@@ -40,6 +48,21 @@ class TTLCache:
             stored_at, value = entry
             age = self._clock() - stored_at
             if age > self.ttl_s:
+                return None
+            return value, age
+
+    def get_stale(self, key: str, max_age_s: float) -> tuple[Any, float] | None:
+        """Return ``(value, age_seconds)`` when present and younger than
+        ``max_age_s``, even past TTL. Entries older than that are dropped.
+        Used only when the upstream is throttled or down — callers must label
+        the result ``stale`` with its age."""
+        with self._lock:
+            entry = self._store.get(key)
+            if entry is None:
+                return None
+            stored_at, value = entry
+            age = self._clock() - stored_at
+            if age > max_age_s:
                 self._store.pop(key, None)
                 return None
             return value, age
