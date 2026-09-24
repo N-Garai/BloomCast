@@ -1390,5 +1390,33 @@ def test_report_tries_gemini_first_then_groq(monkeypatch):
         assert "gemini failed" in message and "groq failed" in message
 
 
+def test_report_validation_accepts_honest_paraphrase(monkeypatch):
+    """The validator must accept any honest citation (percentages, spaced
+    headers, human driver names) and reject invented numbers — with feedback
+    naming the failure so the retry prompt can demand it."""
+    import api.report as R
+
+    context = {"model_estimate": {"p_bloom": 0.6992, "ci_lo": 0.3992,
+                                  "ci_hi": 0.9992},
+               "drivers": [{"feature": "temp_mean_7d",
+                            "human": "Recent warm temperatures"}]}
+    honest = (
+        "What\nAssessment of 21.63, -13.38.\n\n"
+        "Why\nWarm weather.\n\n"
+        "Cause - effect chain\nRecent warm temperatures (69.92%) drove risk; "
+        "interval 39.92% to 99.92%.\n\n"
+        "What to check next\nRecheck later.\n\n"
+        "Disclaimer\nAdvisory only — not a safety determination."
+    )
+    assert R._is_valid_report(honest, context) is True
+
+    lying = honest.replace("69.92%", "42%").replace("0.6992", "0.42")
+    assert R._is_valid_report(lying, context) is False
+    feedback = R.validation_feedback(lying, context)
+    assert any("0.6992" in problem for problem in feedback)
+
+    assert R.validation_feedback("", context) == ["empty response"]
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

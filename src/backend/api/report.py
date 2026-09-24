@@ -303,37 +303,108 @@ async def _validate_area(name, latitude, longitude):
     }
 
 
+def _normalize_section_text(text):
+    """Canonicalize text for validation: lowercase, unify arrows/dashes and
+    whitespace so "Cause → effect chain" and "Cause-effect chain" count as
+    the specified "Cause→effect chain" section. Matching stays strict on
+    numbers (handled separately) — only headings get flexibility."""
+    out = text.lower()
+    for char in ("→", "—", "–", "-", ":", ">"):
+        out = out.replace(char, " ")
+    return re.sub(r"\s+", " ", out).strip()
+
+
+def _mentions_number(text, value):
+    """True when the text cites a number equal to value — either as the exact
+    decimal ("0.6992") or as its percentage ("69.92%"). Both are verifiable
+    citations of the same number; what is forbidden is a *different* number.
+    Tolerance is half a percentage point to absorb 0.699→69.9% rounding."""
+    try:
+        target = float(value)
+    except (TypeError, ValueError):
+        return False
+    for match in re.finditer(r"(\d+(?:\.\d+)?)\s*(%)?", text):
+        mentioned = float(match.group(1))
+        if match.group(2):
+            mentioned /= 100.0
+        if abs(mentioned - target) <= 0.005:
+            return True
+    return False
+
+
+def _mentions_driver(cause, feature, human):
+    """Driver cited when its key or human name appears modulo case and
+    punctuation ("heat_wave_flag" matches "heat wave flag")."""
+    norm = re.sub(r"[^a-z0-9]+", "", cause.lower())
+    for alias in {str(feature), str(human)}:
+        if re.sub(r"[^a-z0-9]+", "", alias.lower()) in norm:
+            return True
+    return False
+
+
 def _is_valid_report(text, context):
     if not text or not text.strip():
         return False
     if not text.strip().endswith(DISCLAIMER):
         return False
+    norm = _normalize_section_text(text)
     required_sections = (
-        "What\n",
-        "Why\n",
-        "Cause→effect chain\n",
-        "What to check next\n",
-        "Disclaimer",
+        "what",
+        "why",
+        "cause effect chain",
+        "what to check next",
+        "disclaimer",
     )
-    if not all(section in text for section in required_sections):
+    if not all(section in norm for section in required_sections):
         return False
     model = context.get("model_estimate") or {}
-    values = [model.get("p_bloom"), model.get("ci_lo"), model.get("ci_hi")]
-    if not all(_number_token(value) in text for value in values if value is not None):
-        return False
-    cause_start = text.find("Cause→effect chain\n")
-    cause_end = text.find("What to check next\n", cause_start)
+    for key in ("p_bloom", "ci_lo", "ci_hi"):
+        value = model.get(key)
+        if value is not None and not _mentions_number(text, value):
+            return False
+    cause_start = norm.find("cause effect chain")
+    cause_end = norm.find("what to check next", cause_start)
     if cause_start < 0 or cause_end < 0:
         return False
-    cause = text[cause_start + len("Cause→effect chain\n"):cause_end]
+    cause = norm[cause_start:cause_end]
     for driver in context.get("drivers") or []:
-        feature = driver.get("feature") if isinstance(driver, dict) else None
+        if not isinstance(driver, dict):
+            continue
+        feature = driver.get("feature")
         if not feature:
             continue
-        aliases = {str(feature), humanize_feature(str(feature))}
-        if not any(alias in cause for alias in aliases):
+        if not _mentions_driver(cause, feature, driver.get("human", "")):
             return False
     return True
+
+
+def validation_feedback(text, context):
+    """Name exactly which checks failed so the retry prompt can demand them."""
+    problems = []
+    if not text or not text.strip():
+        return ["empty response"]
+    if not text.strip().endswith(DISCLAIMER):
+        problems.append("must end with the exact disclaimer line")
+    norm = _normalize_section_text(text)
+    for section in ("what", "why", "cause effect chain",
+                    "what to check next", "disclaimer"):
+        if section not in norm:
+            problems.append(f"missing section: {section}")
+    model = context.get("model_estimate") or {}
+    for key in ("p_bloom", "ci_lo", "ci_hi"):
+        value = model.get(key)
+        if value is not None and not _mentions_number(text, value):
+            problems.append(f"must cite the number {value} (decimal or %)")
+    cause_start = norm.find("cause effect chain")
+    cause_end = norm.find("what to check next", cause_start)
+    cause = norm[cause_start:cause_end] if cause_start >= 0 else ""
+    for driver in context.get("drivers") or []:
+        if not isinstance(driver, dict) or not driver.get("feature"):
+            continue
+        if not _mentions_driver(cause, driver["feature"],
+                                driver.get("human", "")):
+            problems.append(f"cause section must name driver: {driver['feature']}")
+    return problems
 
 
 def _template_report(context):
@@ -423,8 +494,17 @@ async def generate_report(body, assessment):
             "reason": f"LLM generation timed out or failed: {sanitize_error(exc)}",
         }
     if not _is_valid_report(text, context):
+        # Retry once with the exact failures spelled out — a second identical
+        # prompt usually fails the identical way; a correction prompt that
+        # names the missing numbers/sections typically passes.
+        correction = (
+            "\n\nSTRICT CORRECTION — your previous draft failed validation "
+            "for these reasons; fix every one, keep everything else:\n- "
+            + "\n- ".join(validation_feedback(text, context))
+        )
         try:
-            text, provider = await asyncio.wait_for(_generate_with_fallback(prompt), timeout=14.0)
+            text, provider = await asyncio.wait_for(
+                _generate_with_fallback(prompt + correction), timeout=14.0)
         except Exception as exc:  # noqa: BLE001 - one retry then template
             return _template_report(context), "template", context, area, {
                 "degraded": True,
