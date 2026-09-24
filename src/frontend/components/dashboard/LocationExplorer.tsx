@@ -84,7 +84,8 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
     setPhase("working");
     setStep(0);
     setError(null);
-    setResult(null);
+    // The previous result stays mounted while the new fetch runs — the
+    // working trace is updated, never blanked.
     try {
       const response = await fetch(`${API}/v1/explore?lat=${la}&lon=${lo}`);
       const data = await response.json();
@@ -124,7 +125,10 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
 
   const w = result?.wash_off;
   const levelStyle = (w && LEVEL_STYLE[w.risk_level]) || LEVEL_STYLE.low;
-  const mapPoints = result?.nearest_waterbody ? [{ id: result.nearest_waterbody.id, name: result.nearest_waterbody.name, lat: 0, lon: 0, selected: true }] : [];
+  // The pin marks the ASSESSED coordinates — never a (0, 0) default. When no
+  // pilot is near, the picked point itself carries the crosshair.
+  const markerId = result ? (result.nearest_waterbody?.id ?? "__picked__") : undefined;
+  const mapPoints = result ? [{ id: markerId as string, name: result.nearest_waterbody?.name ?? "Picked point", lat: result.latitude, lon: result.longitude, selected: true }] : [];
 
   return (
     <div className="glass rounded-2xl border border-border-subtle p-6 md:p-8 relative overflow-hidden">
@@ -141,7 +145,7 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
       <div className="mb-4">
         <VectorMap
           points={mapPoints}
-          selectedId={result?.nearest_waterbody?.id}
+          selectedId={markerId}
           onPick={(nextLat, nextLon) => {
             const nextLatString = String(nextLat);
             const nextLonString = String(nextLon);
@@ -181,8 +185,9 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
           </motion.div>
         )}
         {phase === "error" && error && <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-5"><ErrorState title="Live fetch failed" message={error} onRetry={() => run(lat, lon)} /></motion.div>}
-        {phase === "done" && result && w && (
+        {(phase === "done" || (phase === "working" && result)) && result && w && (
           <motion.div key="done" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-5 rounded-xl border border-border-subtle bg-bg-deep/50 p-5">
+            {phase === "working" && <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-glow-violet/40 bg-glow-violet/10 px-3 py-1 font-mono text-[10px] uppercase tracking-widest text-glow-violet"><span className="h-1.5 w-1.5 rounded-full bg-glow-violet animate-pulse" /> Updating assessment…</div>}
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="text-xs font-mono text-fg-muted">{result.latitude.toFixed(3)}, {result.longitude.toFixed(3)} · fetched {new Date(result.fetched_at).toLocaleTimeString()}</div>

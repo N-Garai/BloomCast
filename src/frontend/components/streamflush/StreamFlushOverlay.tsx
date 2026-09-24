@@ -44,7 +44,7 @@ export function StreamFlushOverlay() {
   useEffect(() => { load(); }, []);
 
   return (
-    <div className="absolute bottom-4 left-4 z-10 w-[340px] max-w-xs rounded-xl border border-border-subtle bg-bg-deep/90 p-4 backdrop-blur-xl">
+    <div className="w-full rounded-xl border border-border-subtle bg-bg-deep/90 p-4 backdrop-blur-xl">
       <div className="flex items-center gap-2 mb-2"><span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-glow-cyan opacity-60" /><span className="relative inline-flex rounded-full h-2 w-2 bg-glow-cyan" /></span><h3 className="text-sm font-semibold text-fg-primary">StreamFlush Nowcast</h3></div>
       <p className="text-xs text-fg-muted mb-3">Urban stream post-storm wash-off risk — covers streams satellites cannot see.</p>
       {loading && <div className="text-xs text-fg-muted">Loading stream signals…</div>}

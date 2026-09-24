@@ -19,7 +19,7 @@ function project(lat: number, lon: number, width: number, height: number) {
   };
 }
 
-export function VectorMap({ points = [], onPick, selectedId }: { points?: VectorMapPoint[]; onPick: (lat: number, lon: number) => void; selectedId?: string }) {
+export function VectorMap({ points = [], onPick, selectedId, fill = false }: { points?: VectorMapPoint[]; onPick: (lat: number, lon: number) => void; selectedId?: string; fill?: boolean }) {
   const ref = useRef<SVGSVGElement>(null);
   const width = 900;
   const height = 450;
@@ -43,11 +43,12 @@ export function VectorMap({ points = [], onPick, selectedId }: { points?: Vector
   };
 
   return (
-    <div className="relative">
+    <div className={`flex flex-col gap-3 sm:flex-row ${fill ? "h-full" : ""}`}>
       <svg
         ref={ref}
         viewBox={`0 0 ${width} ${height}`}
-        className="h-64 w-full rounded-xl border border-border-subtle bg-[#02060f] cursor-crosshair touch-manipulation"
+        preserveAspectRatio={fill ? "xMidYMid slice" : "xMidYMid meet"}
+        className={`${fill ? "h-72 sm:h-full" : "h-72"} w-full rounded-xl border border-border-subtle bg-[#02060f] cursor-crosshair touch-manipulation sm:min-w-0 sm:flex-1`}
         role="application"
         aria-label="World map. Click to pick coordinates."
         onClick={handleClick}
@@ -96,9 +97,19 @@ export function VectorMap({ points = [], onPick, selectedId }: { points?: Vector
           );
         })}
       </svg>
-      <div className="pointer-events-none absolute bottom-2 left-2 rounded-lg border border-border-subtle bg-bg-abyss/85 px-2 py-1 font-mono text-[10px] text-fg-muted">
-        {selected ? `${selected.name} · ${selected.lat.toFixed(2)}, ${selected.lon.toFixed(2)}` : "Click ocean or land to pick coordinates"}
-      </div>
+      <aside className="shrink-0 rounded-xl border border-border-subtle bg-bg-deep/60 p-3 sm:w-44" aria-live="polite">
+        <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-glow-cyan">Coordinates</div>
+        {selected ? (
+          <div className="mt-2">
+            <div className="text-sm font-medium text-fg-primary">{selected.name}</div>
+            <div className="mt-1 font-mono text-lg tabular text-fg-primary">{selected.lat.toFixed(2)}°</div>
+            <div className="font-mono text-lg tabular text-fg-primary">{selected.lon.toFixed(2)}°</div>
+            <div className="mt-2 text-[11px] leading-relaxed text-fg-muted">Crosshair marks this spot. Click elsewhere to move it.</div>
+          </div>
+        ) : (
+          <div className="mt-2 text-[11px] leading-relaxed text-fg-muted">Click ocean or land to drop a pin and run the live assessment.</div>
+        )}
+      </aside>
     </div>
   );
 }

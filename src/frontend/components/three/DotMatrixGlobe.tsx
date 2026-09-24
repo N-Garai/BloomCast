@@ -62,12 +62,14 @@ export function DotMatrixGlobe({
   onSelect,
   onPick,
   autoRotate = true,
+  picked = null,
 }: {
   waterbodies?: any[];
   selected?: string | null;
   onSelect?: (id: string) => void;
   onPick?: (lat: number, lon: number) => void;
   autoRotate?: boolean;
+  picked?: { lat: number; lon: number } | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef({ angle: 0, targetAngle: 0, dragging: false, lastX: 0, moved: 0, downX: 0, downY: 0 });
@@ -105,9 +107,12 @@ export function DotMatrixGlobe({
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
       const project = (vec: [number, number, number]) => {
+        // Spin is a rotation about the Y (polar) axis, so latitude (vec[1])
+        // is fixed and depth is the rotated Z. (An earlier revision used Z
+        // for vertical, which collapsed the sphere into a northern dome.)
         const x = cos * vec[0] + sin * vec[2];
         const z = -sin * vec[0] + cos * vec[2];
-        return { x: centerX + x * radius, y: centerY - z * radius, z };
+        return { x: centerX + x * radius, y: centerY - vec[1] * radius, z };
       };
       const drawDots = () => {
         for (let lat = -80; lat <= 80; lat += 4) {
@@ -164,6 +169,68 @@ export function DotMatrixGlobe({
         context.fill();
         context.shadowBlur = 0;
       });
+      const labelFor = (lat: number, lon: number) => {
+        const target = latLonToVec3(lat, lon, 1);
+        let best: any = null;
+        let bestDot = -2;
+        for (const wb of points) {
+          if (!Array.isArray(wb.centroid)) continue;
+          const vec = latLonToVec3(wb.centroid[1], wb.centroid[0], 1);
+          const dot = target[0] * vec[0] + target[1] * vec[1] + target[2] * vec[2];
+          if (dot > bestDot) {
+            bestDot = dot;
+            best = wb;
+          }
+        }
+        // ~8° hotspot radius: a nearby pilot names the spot, otherwise the
+        // coordinates themselves are the label — never a silent dot.
+        if (best && bestDot > 0.99 && best.name) return best.name;
+        return `Open water · ${lat.toFixed(1)}°, ${lon.toFixed(1)}°`;
+      };
+      const drawLabel = (lat: number, lon: number, color: string) => {
+        const p = project(latLonToVec3(lat, lon, 1.02));
+        if (p.z < 0.08) return;
+        const font = `${Math.max(10, radius * 0.032)}px "JetBrains Mono", monospace`;
+        context.font = font;
+        const text = labelFor(lat, lon);
+        const padding = 6 * ratio;
+        const textWidth = context.measureText(text).width;
+        const boxWidth = textWidth + padding * 2;
+        const boxHeight = Math.max(16, radius * 0.05) + padding;
+        let boxX = Math.min(Math.max(p.x - boxWidth / 2, 4), width - boxWidth - 4);
+        let boxY = p.y - boxHeight - radius * 0.03;
+        if (boxY < 4) boxY = p.y + radius * 0.03;
+        context.beginPath();
+        context.fillStyle = "rgba(2, 6, 15, 0.88)";
+        context.strokeStyle = color;
+        context.lineWidth = Math.max(1, ratio * 0.75);
+        context.rect(boxX, boxY, boxWidth, boxHeight);
+        context.fill();
+        context.stroke();
+        context.beginPath();
+        context.fillStyle = "#e8fbff";
+        context.textBaseline = "middle";
+        context.fillText(text, boxX + padding, boxY + boxHeight / 2 + 1);
+      };
+      const selectedPoint = points.find((wb) => wb.id === selected);
+      if (selectedPoint && Array.isArray(selectedPoint.centroid)) {
+        drawLabel(selectedPoint.centroid[1], selectedPoint.centroid[0], selectedPoint.color);
+      }
+      if (picked && Number.isFinite(picked.lat) && Number.isFinite(picked.lon)) {
+        const marker = project(latLonToVec3(picked.lat, picked.lon, 1.02));
+        if (marker.z >= 0.08) {
+          context.beginPath();
+          context.arc(marker.x, marker.y, radius * 0.03, 0, Math.PI * 2);
+          context.strokeStyle = "#8b5cf6";
+          context.lineWidth = Math.max(1.5, ratio);
+          context.stroke();
+          context.beginPath();
+          context.arc(marker.x, marker.y, radius * 0.014, 0, Math.PI * 2);
+          context.fillStyle = "#8b5cf6";
+          context.fill();
+        }
+        drawLabel(picked.lat, picked.lon, "#8b5cf6");
+      }
       if (onPick && !cancelled) {
         canvas.onmousemove = (event: MouseEvent) => {
           const state = stateRef.current;
@@ -196,20 +263,18 @@ export function DotMatrixGlobe({
           }
           state.moved = 0;
           const bounds = canvas.getBoundingClientRect();
-          // Orthographic inverse in CSS pixels: the globe disc has radius r
-          // around its center; clicks outside the disc are ignored, and the
-          // front-hemisphere root keeps southern clicks southern.
+          // Orthographic inverse in CSS pixels: vertical screen offset maps
+          // back to latitude (vec[1]), horizontal to rotated X; depth comes
+          // from the front-hemisphere root. Clicks outside the disc ignored.
           const r = Math.min(bounds.width, bounds.height) * 0.39;
           const dx = (event.clientX - (bounds.left + bounds.width / 2)) / r;
           const dy = (event.clientY - (bounds.top + bounds.height / 2)) / r;
           if (dx * dx + dy * dy > 1) return;
-          const y0 = Math.sqrt(Math.max(0, 1 - dx * dx - dy * dy));
-          // Undo the draw() rotation (X = c*x0 + s*z0, Z = -s*x0 + c*z0)
-          // and the screen flip (screenY = cy - Z*r).
-          const rx = dx;
-          const rz = -dy;
-          const x0 = Math.cos(state.angle) * rx - Math.sin(state.angle) * rz;
-          const z0 = Math.sin(state.angle) * rx + Math.cos(state.angle) * rz;
+          const y0 = -dy;
+          const zr = Math.sqrt(Math.max(0, 1 - dx * dx - y0 * y0));
+          // Undo the draw() Y-rotation (X = c*x0 + s*z0, Z = -s*x0 + c*z0).
+          const x0 = Math.cos(state.angle) * dx - Math.sin(state.angle) * zr;
+          const z0 = Math.sin(state.angle) * dx + Math.cos(state.angle) * zr;
           const lat = 90 - Math.acos(Math.max(-1, Math.min(1, y0))) * 180 / Math.PI;
           const lon = (Math.atan2(z0, -x0) * 180 / Math.PI - 180 + 180 + 360) % 360 - 180;
           onPick(lat, lon);
@@ -238,7 +303,7 @@ export function DotMatrixGlobe({
       canvas.onmousedown = null;
       canvas.onclick = null;
     };
-  }, [autoRotate, onPick, points, selected]);
+  }, [autoRotate, onPick, points, selected, picked]);
 
   return <canvas ref={canvasRef} className="h-full w-full cursor-grab touch-none select-none" aria-label="Interactive dot-matrix globe" />;
 }

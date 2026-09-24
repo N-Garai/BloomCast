@@ -38,3 +38,5 @@ src/data/ingested/
 roadmap/
 .kilo/
 .agent/
+# local uv lockfile — repo builds via pip + requirements.txt, nothing consumes it
+uv.lock
