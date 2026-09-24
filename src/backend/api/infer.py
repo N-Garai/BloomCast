@@ -499,7 +499,11 @@ async def assess_location(lat: float, lon: float, *, use_cache: bool = True) -> 
     estimate = _model_estimate(feature_row, artifacts,
                                spectral_label=f"{prior.get('source')} ({prior.get('method')})")
     feature_row_values = [float(value) for value in feature_row] if feature_row is not None else []
-
+    # Self-diagnosis for the UI: when estimate is None the client can show
+    # the backend's own reason instead of guessing (missing files, feature
+    # mismatch, failed load — never a silent hole).
+    from ml.training.artifacts import serving_model_status
+    _model_status = serving_model_status(list(FEATURE_NAMES))
     caveats = [HEURISTIC_CAVEAT]
     if estimate:
         caveats.append(MODEL_CAVEAT)
@@ -551,6 +555,11 @@ async def assess_location(lat: float, lon: float, *, use_cache: bool = True) -> 
         },
         "spectral_prior": prior,
         "model_estimate": estimate,
+        "model_status": {
+            "status": _model_status.get("status"),
+            "reason": None if _model_status.get("status") == "loaded"
+            else (_model_status.get("reason") or "unknown"),
+        },
         "feature_names": list(FEATURE_NAMES) if feature_row is not None else [],
         "feature_row": feature_row_values,
         "signals": _signals(temp_mean, temp_max, wind_mean, past_temp_mean),

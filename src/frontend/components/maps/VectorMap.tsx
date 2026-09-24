@@ -19,7 +19,7 @@ function project(lat: number, lon: number, width: number, height: number) {
   };
 }
 
-export function VectorMap({ points = [], onPick, selectedId, fill = false }: { points?: VectorMapPoint[]; onPick: (lat: number, lon: number) => void; selectedId?: string; fill?: boolean }) {
+export function VectorMap({ points = [], onPick, selectedId, fill = false, panel = null }: { points?: VectorMapPoint[]; onPick: (lat: number, lon: number) => void; selectedId?: string; fill?: boolean; panel?: React.ReactNode }) {
   const ref = useRef<SVGSVGElement>(null);
   const width = 900;
   const height = 450;
@@ -34,9 +34,19 @@ export function VectorMap({ points = [], onPick, selectedId, fill = false }: { p
   const selected = useMemo(() => points.find((point) => point.id === selectedId), [points, selectedId]);
 
   const handleClick = (event: React.MouseEvent<SVGSVGElement>) => {
+    // Map the click through the REAL content rect, not the element box: with
+    // meet there are letterbox bars, with slice the edges are cropped — both
+    // offset a naive clientX/width mapping (the old code put pins left of
+    // the click for exactly this reason).
     const rect = event.currentTarget.getBoundingClientRect();
-    const x = ((event.clientX - rect.left) / rect.width) * width;
-    const y = ((event.clientY - rect.top) / rect.height) * height;
+    const scale = fill
+      ? Math.max(rect.width / width, rect.height / height)
+      : Math.min(rect.width / width, rect.height / height);
+    const offX = (rect.width - width * scale) / 2;
+    const offY = (rect.height - height * scale) / 2;
+    const x = (event.clientX - rect.left - offX) / scale;
+    const y = (event.clientY - rect.top - offY) / scale;
+    if (x < 0 || x > width || y < 0 || y > height) return;
     const lon = (x / width) * 360 - 180;
     const lat = 90 - (y / height) * 180;
     if (Number.isFinite(lat) && Number.isFinite(lon)) onPick(lat, lon);
@@ -98,6 +108,7 @@ export function VectorMap({ points = [], onPick, selectedId, fill = false }: { p
         })}
       </svg>
       <aside className="shrink-0 rounded-xl border border-border-subtle bg-bg-deep/60 p-3 sm:w-44" aria-live="polite">
+        {panel ?? (<>
         <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-glow-cyan">Coordinates</div>
         {selected ? (
           <div className="mt-2">
@@ -109,6 +120,7 @@ export function VectorMap({ points = [], onPick, selectedId, fill = false }: { p
         ) : (
           <div className="mt-2 text-[11px] leading-relaxed text-fg-muted">Click ocean or land to drop a pin and run the live assessment.</div>
         )}
+        </>)}
       </aside>
     </div>
   );

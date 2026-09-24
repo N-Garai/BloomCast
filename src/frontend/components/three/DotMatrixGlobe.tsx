@@ -72,7 +72,11 @@ export function DotMatrixGlobe({
   picked?: { lat: number; lon: number } | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const stateRef = useRef({ angle: 0, targetAngle: 0, dragging: false, lastX: 0, moved: 0, downX: 0, downY: 0 });
+  const stateRef = useRef({
+    angle: 0, tilt: 0.3, velA: 0, velT: 0,
+    dragging: false, lastX: 0, lastY: 0, lastT: 0,
+    downX: 0, downY: 0, moved: 0, idleAt: 0,
+  });
   const reduceMotion = useMemo(
     () => typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches,
     []
@@ -91,6 +95,7 @@ export function DotMatrixGlobe({
     let cancelled = false;
 
     const draw = () => {
+      if (cancelled) return;
       const rect = canvas.getBoundingClientRect();
       const ratio = window.devicePixelRatio || 1;
       const width = Math.max(320, Math.round(rect.width * ratio));
@@ -104,25 +109,31 @@ export function DotMatrixGlobe({
       const centerY = height / 2;
       const radius = Math.min(width, height) * 0.39;
       const angle = stateRef.current.angle;
+      const tilt = stateRef.current.tilt;
       const cos = Math.cos(angle);
       const sin = Math.sin(angle);
+      const ct = Math.cos(tilt);
+      const st = Math.sin(tilt);
       const project = (vec: [number, number, number]) => {
-        // Spin is a rotation about the Y (polar) axis, so latitude (vec[1])
-        // is fixed and depth is the rotated Z. (An earlier revision used Z
-        // for vertical, which collapsed the sphere into a northern dome.)
+        // Free rotation: spin about the polar (Y) axis, then tilt about the
+        // X axis. Latitude is fixed by the spin; depth is the twice-rotated
+        // Z. (An earlier revision used depth for vertical, which collapsed
+        // the sphere into a northern dome.)
         const x = cos * vec[0] + sin * vec[2];
         const z = -sin * vec[0] + cos * vec[2];
-        return { x: centerX + x * radius, y: centerY - vec[1] * radius, z };
+        const yp = vec[1] * ct - z * st;
+        const zp = vec[1] * st + z * ct;
+        return { x: centerX + x * radius, y: centerY - yp * radius, z: zp };
       };
       const drawDots = () => {
-        for (let lat = -80; lat <= 80; lat += 4) {
-          for (let lon = -180; lon < 180; lon += 4) {
+        for (let lat = -80; lat <= 80; lat += 3) {
+          for (let lon = -180; lon < 180; lon += 3) {
             const vec = latLonToVec3(lat, lon, 1.004);
             const p = project(vec);
             if (p.z < 0.06) continue;
             context.beginPath();
-            context.arc(p.x, p.y, Math.max(1, radius * 0.008), 0, Math.PI * 2);
-            context.fillStyle = isLand(lat, lon) ? "rgba(0, 240, 212, 0.35)" : "rgba(8, 65, 88, 0.22)";
+            context.arc(p.x, p.y, Math.max(1, radius * 0.009), 0, Math.PI * 2);
+            context.fillStyle = isLand(lat, lon) ? "rgba(45, 255, 225, 0.55)" : "rgba(10, 70, 95, 0.28)";
             context.fill();
           }
         }
@@ -231,63 +242,105 @@ export function DotMatrixGlobe({
         }
         drawLabel(picked.lat, picked.lon, "#8b5cf6");
       }
-      if (onPick && !cancelled) {
-        canvas.onmousemove = (event: MouseEvent) => {
-          const state = stateRef.current;
-          if (state.dragging) {
-            state.angle += (event.clientX - state.lastX) * 0.008;
-            state.lastX = event.clientX;
-            state.moved = Math.max(state.moved, Math.abs(event.clientX - state.downX));
-            draw();
-          }
-        };
-        canvas.onmouseup = () => {
-          stateRef.current.dragging = false;
-        };
-        canvas.onmousedown = (event: MouseEvent) => {
-          stateRef.current.dragging = true;
-          stateRef.current.lastX = event.clientX;
-          stateRef.current.downX = event.clientX;
-          stateRef.current.downY = event.clientY;
-          stateRef.current.moved = 0;
-          const pointerEvent = event as PointerEvent;
-          canvas.setPointerCapture?.(pointerEvent.pointerId);
-        };
-        canvas.onclick = (event: MouseEvent) => {
-          const state = stateRef.current;
-          // A drag that ends over the canvas also fires click — only treat
-          // near-stationary presses as picks.
-          if (state.moved > 6) {
-            state.moved = 0;
-            return;
-          }
-          state.moved = 0;
-          const bounds = canvas.getBoundingClientRect();
-          // Orthographic inverse in CSS pixels: vertical screen offset maps
-          // back to latitude (vec[1]), horizontal to rotated X; depth comes
-          // from the front-hemisphere root. Clicks outside the disc ignored.
-          const r = Math.min(bounds.width, bounds.height) * 0.39;
-          const dx = (event.clientX - (bounds.left + bounds.width / 2)) / r;
-          const dy = (event.clientY - (bounds.top + bounds.height / 2)) / r;
-          if (dx * dx + dy * dy > 1) return;
-          const y0 = -dy;
-          const zr = Math.sqrt(Math.max(0, 1 - dx * dx - y0 * y0));
-          // Undo the draw() Y-rotation (X = c*x0 + s*z0, Z = -s*x0 + c*z0).
-          const x0 = Math.cos(state.angle) * dx - Math.sin(state.angle) * zr;
-          const z0 = Math.sin(state.angle) * dx + Math.cos(state.angle) * zr;
-          const lat = 90 - Math.acos(Math.max(-1, Math.min(1, y0))) * 180 / Math.PI;
-          const lon = (Math.atan2(z0, -x0) * 180 / Math.PI - 180 + 180 + 360) % 360 - 180;
-          onPick(lat, lon);
-        };
-      }
+      // Drag-to-spin works on every globe, with or without a pick handler —
+      // the hero globe has no onPick and was previously undraggable.
+      // Pointer Events (not mouse events) so touch and pen drag too, and
+      // pointercancel ends the gesture so rotation can never stick.
+      const endDrag = () => {
+        const state = stateRef.current;
+        if (!state.dragging) return;
+        state.dragging = false;
+        state.idleAt = performance.now();
+        if (reduceMotion) {
+          state.velA = 0;
+          state.velT = 0;
+        }
+        // Pointer capture releases implicitly on pointerup; pointercancel
+        // and lostpointercapture funnel here so rotation can never stick.
+      };
+      canvas.onpointerdown = (event: PointerEvent) => {
+        const state = stateRef.current;
+        state.dragging = true;
+        state.lastX = event.clientX;
+        state.lastY = event.clientY;
+        state.lastT = performance.now();
+        state.downX = event.clientX;
+        state.downY = event.clientY;
+        state.moved = 0;
+        state.velA = 0;
+        state.velT = 0;
+        canvas.setPointerCapture?.(event.pointerId);
+        draw();
+      };
+      canvas.onpointermove = (event: PointerEvent) => {
+        const state = stateRef.current;
+        if (!state.dragging) return;
+        const now = performance.now();
+        const dt = Math.max(1, now - state.lastT);
+        const dx = event.clientX - state.lastX;
+        const dy = event.clientY - state.lastY;
+        state.angle += dx * 0.008;
+        state.tilt = Math.min(1.0, Math.max(-1.0, state.tilt + dy * 0.005));
+        // Exponentially smoothed pixels/ms — released as inertia.
+        const instantaneousA = (dx * 0.008) / dt;
+        const instantaneousT = (dy * 0.005) / dt;
+        state.velA = state.velA * 0.7 + instantaneousA * 0.3;
+        state.velT = state.velT * 0.7 + instantaneousT * 0.3;
+        state.lastX = event.clientX;
+        state.lastY = event.clientY;
+        state.lastT = now;
+        state.moved = Math.max(state.moved, Math.hypot(event.clientX - state.downX, event.clientY - state.downY));
+        draw();
+      };
+      canvas.onpointerup = (event: PointerEvent) => {
+        const state = stateRef.current;
+        const wasTap = state.dragging && state.moved < 6;
+        endDrag();
+        // A near-stationary press is a pick, not a drag.
+        if (!wasTap || !onPick) return;
+        const r = Math.min(canvas.getBoundingClientRect().width, canvas.getBoundingClientRect().height) * 0.39;
+        const bounds = canvas.getBoundingClientRect();
+        const dx = (event.clientX - (bounds.left + bounds.width / 2)) / r;
+        const dy = (event.clientY - (bounds.top + bounds.height / 2)) / r;
+        if (dx * dx + dy * dy > 1) return;
+        // Orthographic inverse with tilt: vertical maps to tilted Y, depth
+        // comes from the front-hemisphere root; then un-tilt, then un-spin.
+        const yp = -dy;
+        const zp = Math.sqrt(Math.max(0, 1 - dx * dx - yp * yp));
+        const t = stateRef.current.tilt;
+        const y0 = yp * Math.cos(t) + zp * Math.sin(t);
+        const zd = -yp * Math.sin(t) + zp * Math.cos(t);
+        const a = stateRef.current.angle;
+        const x0 = Math.cos(a) * dx - Math.sin(a) * zd;
+        const z0 = Math.sin(a) * dx + Math.cos(a) * zd;
+        const lat = 90 - Math.acos(Math.max(-1, Math.min(1, y0))) * 180 / Math.PI;
+        const lon = (Math.atan2(z0, -x0) * 180 / Math.PI - 180 + 180 + 360) % 360 - 180;
+        onPick(lat, lon);
+      };
+      canvas.onpointercancel = () => endDrag();
+      canvas.onlostpointercapture = () => endDrag();
     };
 
     const loop = () => {
       const state = stateRef.current;
-      if (!state.dragging && spin) {
-        state.angle += 0.0018;
-        draw();
+      let active = false;
+      if (!state.dragging) {
+        // Inertia after release, eased out — this is what makes the motion
+        // feel physical instead of robotic.
+        if (Math.abs(state.velA) > 0.00002 || Math.abs(state.velT) > 0.00002) {
+          state.angle += state.velA * 16;
+          state.tilt = Math.min(1.0, Math.max(-1.0, state.tilt + state.velT * 16));
+          state.velA *= 0.94;
+          state.velT *= 0.94;
+          active = true;
+        } else if (spin && performance.now() - state.idleAt > 2500) {
+          state.angle += 0.0022;
+          active = true;
+        }
+      } else {
+        active = true;
       }
+      if (active) draw();
       animation = requestAnimationFrame(loop);
     };
     resize = new ResizeObserver(draw);
@@ -298,10 +351,11 @@ export function DotMatrixGlobe({
       cancelled = true;
       cancelAnimationFrame(animation);
       resize.disconnect();
-      canvas.onmousemove = null;
-      canvas.onmouseup = null;
-      canvas.onmousedown = null;
-      canvas.onclick = null;
+      canvas.onpointerdown = null;
+      canvas.onpointermove = null;
+      canvas.onpointerup = null;
+      canvas.onpointercancel = null;
+      canvas.onlostpointercapture = null;
     };
   }, [autoRotate, onPick, points, selected, picked]);
 

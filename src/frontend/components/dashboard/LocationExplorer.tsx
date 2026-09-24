@@ -29,6 +29,7 @@ interface ExploreResult {
     precip_sum_mm: number;
   };
   signals: string[];
+  model_status?: { status?: string; reason?: string } | null;
   model_estimate?: {
     experimental: boolean;
     p_bloom: number;
@@ -125,10 +126,18 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
 
   const w = result?.wash_off;
   const levelStyle = (w && LEVEL_STYLE[w.risk_level]) || LEVEL_STYLE.low;
-  // The pin marks the ASSESSED coordinates — never a (0, 0) default. When no
-  // pilot is near, the picked point itself carries the crosshair.
-  const markerId = result ? (result.nearest_waterbody?.id ?? "__picked__") : undefined;
-  const mapPoints = result ? [{ id: markerId as string, name: result.nearest_waterbody?.name ?? "Picked point", lat: result.latitude, lon: result.longitude, selected: true }] : [];
+  // A pilot only names the point when it is actually near (100 km). Beyond
+  // that the picked coordinates are the location — naming a pin in Argentina
+  // "Western Lake Erie" just because it is the least-far pilot is how the
+  // old readout lied. Same rule gates the calibrated-forecast button below.
+  const nearby = result?.nearest_waterbody && result.nearest_waterbody.distance_km < 100
+    ? result.nearest_waterbody
+    : null;
+  const placeName = nearby?.name ?? (result ? "Picked point" : "");
+  const displayLat = result ? result.latitude.toFixed(2) : (lat || "—");
+  const displayLon = result ? result.longitude.toFixed(2) : (lon || "—");
+  const markerId = result ? (nearby?.id ?? "__picked__") : undefined;
+  const mapPoints = result ? [{ id: markerId as string, name: placeName, lat: result.latitude, lon: result.longitude, selected: true }] : [];
 
   return (
     <div className="glass rounded-2xl border border-border-subtle p-6 md:p-8 relative overflow-hidden">
@@ -147,32 +156,38 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
           points={mapPoints}
           selectedId={markerId}
           onPick={(nextLat, nextLon) => {
-            const nextLatString = String(nextLat);
-            const nextLonString = String(nextLon);
-            setLat(nextLatString);
-            setLon(nextLonString);
-            run(nextLatString, nextLonString);
+            const roundedLat = nextLat.toFixed(2);
+            const roundedLon = nextLon.toFixed(2);
+            setLat(roundedLat);
+            setLon(roundedLon);
+            run(roundedLat, roundedLon);
           }}
+          panel={(
+            <div aria-live="polite">
+              <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-glow-cyan">Coordinates</div>
+              <div className="mt-2 text-sm font-medium text-fg-primary">{placeName}</div>
+              <div className="mt-1 font-mono text-lg tabular text-fg-primary">{displayLat}°</div>
+              <div className="font-mono text-lg tabular text-fg-primary">{displayLon}°</div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <label className="block">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-fg-muted">Lat</span>
+                  <input value={lat} onChange={(e) => setLat(e.target.value)} placeholder="47.38" inputMode="decimal" className="mt-1 w-full bg-bg-deep border border-border-subtle rounded-lg px-2 py-1.5 text-fg-primary font-mono text-xs focus:border-glow-violet outline-none" />
+                </label>
+                <label className="block">
+                  <span className="text-[10px] font-mono uppercase tracking-widest text-fg-muted">Lon</span>
+                  <input value={lon} onChange={(e) => setLon(e.target.value)} placeholder="8.54" inputMode="decimal" className="mt-1 w-full bg-bg-deep border border-border-subtle rounded-lg px-2 py-1.5 text-fg-primary font-mono text-xs focus:border-glow-violet outline-none" />
+                </label>
+              </div>
+              <button onClick={() => run(lat, lon)} disabled={phase === "working"} className="mt-2 w-full px-3 py-2 rounded-lg bg-gradient-to-r from-glow-violet to-glow-cyan text-bg-abyss text-xs font-semibold hover:shadow-glow-md transition-all disabled:opacity-50 whitespace-nowrap">{phase === "working" ? "Fetching…" : "Check this spot"}</button>
+              <button onClick={useGps} disabled={gpsBusy || phase === "working"} className="mt-2 w-full px-3 py-2 rounded-lg bg-glow-cyan/10 border border-glow-cyan/30 text-glow-cyan text-xs font-medium hover:bg-glow-cyan/20 transition-colors disabled:opacity-50 whitespace-nowrap">{gpsBusy ? "Locating…" : "Use my GPS"}</button>
+              <div className="mt-3 flex flex-wrap gap-1.5">
+                {PRESETS.map((preset) => <button key={preset.label} onClick={() => { setLat(preset.lat); setLon(preset.lon); run(preset.lat, preset.lon); }} className="px-2 py-1 rounded-lg text-[11px] font-mono border border-border-subtle text-fg-muted hover:text-glow-cyan hover:border-glow-cyan/40 transition-colors">{preset.label}</button>)}
+              </div>
+              <div className="mt-2 text-[11px] leading-relaxed text-fg-muted">Click the map to move the crosshair — the assessment runs automatically.</div>
+            </div>
+          )}
         />
         <p className="mt-1.5 text-[11px] font-mono text-fg-faint">Offline vector map · click anywhere to run the same live assessment</p>
-      </div>
-
-      <div className="flex flex-col md:flex-row gap-3 md:items-end">
-        <label className="flex-1">
-          <span className="text-xs font-mono uppercase tracking-widest text-fg-muted">Latitude</span>
-          <input value={lat} onChange={(e) => setLat(e.target.value)} placeholder="47.38" inputMode="decimal" className="mt-1 w-full bg-bg-deep border border-border-subtle rounded-lg px-3 py-2.5 text-fg-primary font-mono focus:border-glow-violet outline-none" />
-        </label>
-        <label className="flex-1">
-          <span className="text-xs font-mono uppercase tracking-widest text-fg-muted">Longitude</span>
-          <input value={lon} onChange={(e) => setLon(e.target.value)} placeholder="8.54" inputMode="decimal" className="mt-1 w-full bg-bg-deep border border-border-subtle rounded-lg px-3 py-2.5 text-fg-primary font-mono focus:border-glow-violet outline-none" />
-        </label>
-        <div className="flex gap-2">
-          <button onClick={() => run(lat, lon)} disabled={phase === "working"} className="px-5 py-2.5 rounded-lg bg-gradient-to-r from-glow-violet to-glow-cyan text-bg-abyss text-sm font-semibold hover:shadow-glow-md transition-all disabled:opacity-50 whitespace-nowrap">{phase === "working" ? "Fetching…" : "Check this spot"}</button>
-          <button onClick={useGps} disabled={gpsBusy || phase === "working"} className="px-4 py-2.5 rounded-lg bg-glow-cyan/10 border border-glow-cyan/30 text-glow-cyan text-sm font-medium hover:bg-glow-cyan/20 transition-colors disabled:opacity-50 whitespace-nowrap">{gpsBusy ? "Locating…" : "Use my GPS"}</button>
-        </div>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {PRESETS.map((preset) => <button key={preset.label} onClick={() => { setLat(preset.lat); setLon(preset.lon); run(preset.lat, preset.lon); }} className="px-3 py-1.5 rounded-lg text-xs font-mono border border-border-subtle text-fg-muted hover:text-glow-cyan hover:border-glow-cyan/40 transition-colors">{preset.label} · {preset.lat}, {preset.lon}</button>)}
       </div>
 
       <AnimatePresence mode="wait">
@@ -212,8 +227,9 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
                 <div className="mt-2 space-y-1">{result.model_estimate.drivers.map((driver) => <div key={driver.feature} className="flex items-center gap-2 text-xs"><span className="text-fg-secondary flex-1">{driver.human}</span><span className="font-mono text-fg-muted">{driver.shap_value > 0 ? "+" : ""}{(driver.shap_value * 100).toFixed(1)}%</span></div>)}</div>
                 <p className="mt-2 text-[11px] text-fg-faint">{result.model_estimate.caveats}</p>
               </div>
-            ) : <p className="mt-3 text-[11px] text-fg-faint">No exported model on this deployment yet — the model estimate appears once real-label artifacts are committed.</p>}
-            {result.nearest_waterbody && <button onClick={() => onSelectWaterbody?.(result.nearest_waterbody!.id)} className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-glow-cyan/10 border border-glow-cyan/30 text-glow-cyan text-sm font-medium hover:bg-glow-cyan/20 transition-colors">Open calibrated forecast: {result.nearest_waterbody.name} ({result.nearest_waterbody.distance_km} km away) →</button>}
+            ) : <p className="mt-3 text-[11px] text-fg-faint">No exported model on this deployment yet{result.model_status?.reason ? ` — backend reports: ${result.model_status.reason}` : " — the model estimate appears once real-label artifacts are committed and loadable"}.</p>}
+            {nearby && <button onClick={() => onSelectWaterbody?.(nearby!.id)} className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-glow-cyan/10 border border-glow-cyan/30 text-glow-cyan text-sm font-medium hover:bg-glow-cyan/20 transition-colors">Open calibrated forecast: {nearby.name} ({nearby.distance_km} km away) →</button>}
+            {!nearby && result.nearest_waterbody && <p className="mt-3 text-[11px] text-fg-faint">Nearest pilot {result.nearest_waterbody.name} is {Math.round(result.nearest_waterbody.distance_km).toLocaleString()} km away — too far for its calibrated forecast to apply. Every number above is this spot&apos;s own live assessment.</p>}
             {result && <BloomReport latitude={result.latitude} longitude={result.longitude} waterbodyName={result.nearest_waterbody?.name} />}
             <Advisory />
           </motion.div>

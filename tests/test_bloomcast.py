@@ -1074,6 +1074,8 @@ def test_assess_location_mocked(monkeypatch):
         assert first["cache"]["hit"] is False
         assert first["wash_off"]["risk_score"] >= 0
         assert len(first["daily_outlook"]) == 7
+        assert first["model_status"]["status"] in ("loaded", "fallback")
+        assert first["model_status"]["reason"] is None or isinstance(first["model_status"]["reason"], str)
         second = asyncio.run(infer.assess_location(47.38, 8.54))
         assert second["cache"]["hit"] is True  # TTL served, upstream untouched
     finally:

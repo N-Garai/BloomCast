@@ -364,4 +364,5 @@ def reset_serving_cache() -> None:
     _SERVING.update({
         "path": None, "signature": None, "artifacts": None,
         "reason": "not loaded yet", "loaded_at": None, "load_ms": None,
+        "loads": 0,
     })

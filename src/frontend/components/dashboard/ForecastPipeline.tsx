@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { API } from "@/lib/api";
 import { ErrorState, friendlyError } from "@/components/dashboard/Resilience";
@@ -18,6 +18,11 @@ export function ForecastPipeline({ waterbodyId, waterbodyName, onDone }: { water
   const [done, setDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<any>(null);
+  // onDone rides in a ref: parent re-renders must never restart this
+  // effect (a fresh callback identity would re-trigger the fetch loop and
+  // trap the last step in its loading shimmer indefinitely).
+  const onDoneRef = useRef(onDone);
+  onDoneRef.current = onDone;
 
   useEffect(() => {
     let cancelled = false;
@@ -39,7 +44,7 @@ export function ForecastPipeline({ waterbodyId, waterbodyName, onDone }: { water
           if (cancelled) return;
           setDone(true);
           setSummary(data);
-          onDone?.(data);
+          onDoneRef.current?.(data);
         }, 450);
       })
       .catch((e) => {
@@ -51,7 +56,7 @@ export function ForecastPipeline({ waterbodyId, waterbodyName, onDone }: { water
       cancelled = true;
       clearInterval(timer);
     };
-  }, [waterbodyId, onDone]);
+  }, [waterbodyId]);
 
   return (
     <div className="rounded-2xl border border-border-subtle glass p-5">
