@@ -7,7 +7,7 @@
   "forecast_hit": true,
   "severity_peak": 4,
   "description": "Severe cyanobacteria bloom on Lake Zurich triggered beach closures. BloomCast hindcast shows 5-day predictive lead time.",
-  "source": "Amt f\u00c3\u00bcr Abfall Wasser Energie und Luft (AWEL) Kanton Z\u00c3\u00bcrich",
+  "source": "Amt f\u00fcr Abfall Wasser Energie und Luft (AWEL) Kanton Z\u00fcrich",
   "days": [
     {
       "date": "2022-07-08",

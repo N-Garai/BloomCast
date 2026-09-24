@@ -1,6 +1,6 @@
 {
   "segment_id": "PT-POR-LECA-001",
-  "name": "Le\u00c3\u00a7a Stream",
+  "name": "Le\u00e7a Stream",
   "city": "Porto",
   "country": "PT",
   "risk_score": 0.37,
@@ -8,5 +8,5 @@
   "rainfall_48h_mm": 34.0,
   "dry_days_antecedent": 4.0,
   "impervious_proxy": 0.71,
-  "updated_at": "2026-09-24T04:11:05+00:00"
+  "updated_at": "2026-09-24T06:57:55+00:00"
 }
