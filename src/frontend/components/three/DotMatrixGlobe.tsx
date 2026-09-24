@@ -1,6 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+// Real coastline geometry: ~5.7k land dots + simplified coast rings sampled
+// offline from Natural Earth 110m (see .agent/gen_land_dots.py) and committed
+// as data — no runtime CDN fetch, no tile server, works fully offline.
+import landData from "@/components/maps/land-dots.json";
 
 const RISK_COLORS: Record<string, string> = {
   low: "#00ff88",
@@ -10,46 +14,14 @@ const RISK_COLORS: Record<string, string> = {
   critical: "#ff00aa",
 };
 
-const LAND_REGIONS: Array<[number, number, number, number]> = [
-  [-168, -140, 55, 72],
-  [-141, -55, 48, 70],
-  [-125, -66, 25, 49],
-  [-117, -79, 8, 25],
-  [-58, -20, 60, 84],
-  [-79, -50, -5, 12],
-  [-73, -40, -35, -5],
-  [-73, -53, -56, -35],
-  [-25, -13, 63, 67],
-  [-11, 2, 50, 59],
-  [5, 31, 55, 71],
-  [-10, 15, 36, 51],
-  [15, 45, 40, 55],
-  [-17, 35, 18, 37],
-  [-18, 50, -12, 18],
-  [12, 40, -35, -12],
-  [43, 51, -26, -12],
-  [35, 60, 12, 42],
-  [40, 140, 45, 72],
-  [60, 180, 50, 72],
-  [68, 90, 8, 35],
-  [95, 110, 5, 28],
-  [100, 122, 20, 45],
-  [122, 146, 30, 46],
-  [95, 141, -11, 6],
-  [113, 154, -39, -11],
-  [166, 179, -47, -34],
-  [-180, 180, -90, -63],
-];
-
 function latLonToVec3(lat: number, lon: number, radius = 1): [number, number, number] {
   const phi = (90 - lat) * Math.PI / 180;
   const theta = (lon + 180) * Math.PI / 180;
   return [-radius * Math.sin(phi) * Math.cos(theta), radius * Math.cos(phi), radius * Math.sin(phi) * Math.sin(theta)];
 }
 
-function isLand(lat: number, lon: number) {
-  return LAND_REGIONS.some(([west, east, south, north]) => lon >= west && lon <= east && lat >= south && lat <= north);
-}
+const LAND_DOTS = landData.dots as Array<[number, number]>;
+const COASTS = landData.coasts as Array<Array<[number, number]>>;
 
 function riskFor(wb: any) {
   const p = wb._risk ?? "low";
@@ -72,9 +44,10 @@ export function DotMatrixGlobe({
   picked?: { lat: number; lon: number } | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const visibleRef = useRef(true);
   const stateRef = useRef({
-    angle: 0, tilt: 0.3, velA: 0, velT: 0,
-    dragging: false, lastX: 0, lastY: 0, lastT: 0,
+    angle: -1.309, tilt: 0.3, velA: 0, velT: 0,
+    dragging: false, hovering: false, lastX: 0, lastY: 0, lastT: 0,
     downX: 0, downY: 0, moved: 0, idleAt: 0,
   });
   const reduceMotion = useMemo(
@@ -152,9 +125,9 @@ export function DotMatrixGlobe({
         centerX - radius * 0.35, centerY - radius * 0.4, radius * 0.1,
         centerX, centerY, radius
       );
-      disc.addColorStop(0, "rgba(14, 52, 74, 0.62)");
-      disc.addColorStop(0.55, "rgba(6, 24, 40, 0.55)");
-      disc.addColorStop(1, "rgba(2, 6, 15, 0.9)");
+      disc.addColorStop(0, "rgba(20, 32, 48, 0.62)");
+      disc.addColorStop(0.55, "rgba(13, 20, 32, 0.55)");
+      disc.addColorStop(1, "rgba(5, 8, 15, 0.9)");
       context.beginPath();
       context.arc(centerX, centerY, radius, 0, Math.PI * 2);
       context.fillStyle = disc;
@@ -177,27 +150,48 @@ export function DotMatrixGlobe({
         context.stroke();
       }
       const drawDots = () => {
-        for (let lat = -80; lat <= 80; lat += 3) {
-          for (let lon = -180; lon < 180; lon += 3) {
-            const vec = latLonToVec3(lat, lon, 1.004);
-            const p = project(vec);
-            if (p.z < 0.06) continue;
-            const land = isLand(lat, lon);
-            // Limb darkening: dots fade toward the edge — depth cue.
-            const limb = Math.min(1, Math.max(0, (p.z - 0.06) / 0.5));
-            // Bioluminescent shimmer: each dot breathes on its own phase.
-            const tw = 0.72 + 0.28 * Math.sin(now * 0.0012 + hashPhase(lat, lon));
-            const h = hashPhase(lon, lat);
-            // Rare warm "city-light" sparks among the cyan field.
-            const warm = land && h % 1 < 0.035;
-            const base = land ? (warm ? [255, 205, 140] : [45, 255, 225]) : [10, 70, 95];
-            const alpha = ((land ? 0.6 : 0.3) * tw * (0.35 + 0.65 * limb)).toFixed(3);
-            context.beginPath();
-            context.arc(p.x, p.y, Math.max(1, radius * (land ? 0.0095 : 0.008)), 0, Math.PI * 2);
-            context.fillStyle = `rgba(${base[0]}, ${base[1]}, ${base[2]}, ${alpha})`;
-            context.fill();
+        // Land dots from real coastline data (warm ivory, DepthGlobe-style);
+        // water stays a clean dark sphere — no ocean-dot texture.
+        for (const [lat, lon] of LAND_DOTS) {
+          const vec = latLonToVec3(lat, lon, 1.004);
+          const p = project(vec);
+          if (p.z < 0.06) continue;
+          // Limb darkening: dots fade toward the edge — depth cue.
+          const limb = Math.min(1, Math.max(0, (p.z - 0.06) / 0.5));
+          // Bioluminescent shimmer: each dot breathes on its own phase.
+          const tw = 0.72 + 0.28 * Math.sin(now * 0.0012 + hashPhase(lat, lon));
+          const h = hashPhase(lon, lat);
+          // Rare warm "city-light" sparks among the ivory field.
+          const warm = h % 1 < 0.035;
+          const base = warm ? [255, 205, 140] : [255, 233, 196];
+          const shade = 0.82 + 0.18 * (h % 1);
+          const alpha = (0.62 * tw * (0.35 + 0.65 * limb)).toFixed(3);
+          context.beginPath();
+          context.arc(p.x, p.y, Math.max(1, radius * 0.0095), 0, Math.PI * 2);
+          context.fillStyle = `rgba(${Math.round(base[0] * shade)}, ${Math.round(base[1] * shade)}, ${Math.round(base[2] * shade)}, ${alpha})`;
+          context.fill();
+        }
+        // Coastline outlines: projected ring segments, front hemisphere only.
+        context.lineWidth = Math.max(0.75, ratio * 0.6);
+        context.strokeStyle = "rgba(255, 233, 196, 0.3)";
+        context.beginPath();
+        for (const ring of COASTS) {
+          let pen = false;
+          for (const [lat, lon] of ring) {
+            const p = project(latLonToVec3(lat, lon, 1.004));
+            if (p.z < 0.06) {
+              pen = false;
+              continue;
+            }
+            if (!pen) {
+              context.moveTo(p.x, p.y);
+              pen = true;
+            } else {
+              context.lineTo(p.x, p.y);
+            }
           }
         }
+        context.stroke();
       };
       drawDots();
       for (let lat = -75; lat <= 75; lat += 15) {
@@ -335,7 +329,16 @@ export function DotMatrixGlobe({
       };
       canvas.onpointermove = (event: PointerEvent) => {
         const state = stateRef.current;
-        if (!state.dragging) return;
+        if (!state.dragging) {
+          // Hover pauses the auto-spin (stopOnHover) — tracked without a
+          // re-render; the loop reads it straight from the ref.
+          const bounds = canvas.getBoundingClientRect();
+          const r = Math.min(bounds.width, bounds.height) * 0.39;
+          const dx = (event.clientX - (bounds.left + bounds.width / 2)) / r;
+          const dy = (event.clientY - (bounds.top + bounds.height / 2)) / r;
+          state.hovering = dx * dx + dy * dy <= 1;
+          return;
+        }
         const now = performance.now();
         const dt = Math.max(1, now - state.lastT);
         const dx = event.clientX - state.lastX;
@@ -383,6 +386,12 @@ export function DotMatrixGlobe({
     };
 
     const loop = () => {
+      // Offscreen or tab-hidden: keep the frame request alive but skip all
+      // work (both reference globes gate on visibility the same way).
+      if (document.hidden || !visibleRef.current) {
+        animation = requestAnimationFrame(loop);
+        return;
+      }
       const state = stateRef.current;
       let active = false;
       if (!state.dragging) {
@@ -394,7 +403,7 @@ export function DotMatrixGlobe({
           state.velA *= 0.94;
           state.velT *= 0.94;
           active = true;
-        } else if (spin && performance.now() - state.idleAt > 2500) {
+        } else if (spin && performance.now() - state.idleAt > 2500 && !state.hovering) {
           state.angle += 0.0022;
           active = true;
         } else if (!reduceMotion || performance.now() - state.idleAt <= 2500) {
@@ -410,12 +419,18 @@ export function DotMatrixGlobe({
     };
     resize = new ResizeObserver(draw);
     resize.observe(canvas);
+    const visibility = new IntersectionObserver(
+      ([entry]) => { visibleRef.current = entry?.isIntersecting ?? true; },
+      { rootMargin: "100px" }
+    );
+    visibility.observe(canvas);
     draw();
     animation = requestAnimationFrame(loop);
     return () => {
       cancelled = true;
       cancelAnimationFrame(animation);
       resize.disconnect();
+      visibility.disconnect();
       canvas.onpointerdown = null;
       canvas.onpointermove = null;
       canvas.onpointerup = null;
