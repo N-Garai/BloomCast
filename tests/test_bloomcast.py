@@ -1308,5 +1308,51 @@ def test_broken_artifacts_degrade_to_heuristic_not_500(monkeypatch):
         A.reset_serving_cache()
 
 
+def test_report_reason_never_leaks_keys(monkeypatch):
+    """Secrets must never reach the frontend: provider exceptions echo
+    request headers verbatim (httpx prints the offending Bearer value),
+    and pasted keys carry newlines that must be stripped on load."""
+    import asyncio
+    import api.report as R
+
+    fake_groq = "gsk_" + "A" * 20
+    fake_gemini = "AIza" + "B" * 20
+
+    monkeypatch.setenv("GROQ_API_KEY", f"  {fake_groq}\n")
+    monkeypatch.setenv("GEMINI_API_KEY", fake_gemini)
+    keys = R._provider_keys()
+    assert keys["groq"] == fake_groq
+    assert keys["gemini"] == fake_gemini
+
+    leaked = RuntimeError(
+        f"all configured providers failed: Illegal header value "
+        f"b'Bearer {fake_groq}\n' and {fake_gemini}"
+    )
+    clean = R.sanitize_error(leaked)
+    assert fake_groq not in clean
+    assert fake_gemini not in clean
+    assert "gsk_" not in clean and "AIza" not in clean
+    assert "\n" not in clean
+    assert "[redacted]" in clean
+
+    async def boom(name, key, prompt):
+        raise RuntimeError(f"provider {name} blew up with {fake_groq}")
+
+    async def no_validate(name, lat, lon):
+        return {"name": name, "status": "not_requested",
+                "source": "test", "retrieved_at": "now"}
+
+    monkeypatch.setattr(R, "_call_provider", boom)
+    monkeypatch.setattr(R, "_validate_area", no_validate)
+    assessment = {"latitude": 47.0, "longitude": 8.0,
+                  "model_estimate": {"p_bloom": 0.5, "ci_lo": 0.2,
+                                     "ci_hi": 0.8, "drivers": []}}
+    text, provider, _ctx, _area, degradation = asyncio.run(
+        R.generate_report({}, assessment))
+    assert provider == "template"
+    assert degradation["degraded"] is True
+    assert fake_groq not in degradation["reason"]
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

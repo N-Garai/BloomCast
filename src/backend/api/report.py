@@ -2,6 +2,7 @@
 import asyncio
 import json
 import os
+import re
 from datetime import UTC, datetime
 from math import asin, cos, radians, sin, sqrt
 
@@ -30,10 +31,35 @@ def _utc_now():
 
 
 def _provider_keys():
+    # Pasted keys routinely arrive with trailing newlines/whitespace from the
+    # Render dashboard — an unstripped "\n" makes httpx reject the header
+    # ("Illegal header value") and kills the provider.
     return {
-        "gemini": os.environ.get("GEMINI_API_KEY", ""),
-        "groq": os.environ.get("GROQ_API_KEY", ""),
+        "gemini": os.environ.get("GEMINI_API_KEY", "").strip(),
+        "groq": os.environ.get("GROQ_API_KEY", "").strip(),
     }
+
+
+# Patterns that must never reach a client response or log line. Provider
+# exceptions echo request headers (httpx "Illegal header value" prints the
+# offending Bearer value verbatim), so every surfaced error passes through
+# sanitize_error first — no API key ever comes to the front.
+_KEY_PATTERNS = (
+    r"gsk_[A-Za-z0-9]+",
+    r"AIza[A-Za-z0-9_-]+",
+    r"sk-(?:proj-)?[A-Za-z0-9]+",
+    r"Bearer\s+\S+",
+    r"x-goog-api-key[\"']?\s*[:=]\s*\S+",
+)
+
+
+def sanitize_error(exc):
+    """Redact secrets from an exception before it leaves the backend."""
+    text = str(exc)
+    for pattern in _KEY_PATTERNS:
+        text = re.sub(pattern, "[redacted]", text)
+    text = re.sub(r"[\r\n]+", " ", text)
+    return text[:500]
 
 
 def providers_configured():
@@ -381,7 +407,7 @@ async def generate_report(body, assessment):
     except Exception as exc:  # noqa: BLE001 - degrade to template
         return _template_report(context), "template", context, area, {
             "degraded": True,
-            "reason": f"LLM generation timed out or failed: {exc}",
+            "reason": f"LLM generation timed out or failed: {sanitize_error(exc)}",
         }
     if not _is_valid_report(text, context):
         try:
@@ -389,7 +415,7 @@ async def generate_report(body, assessment):
         except Exception as exc:  # noqa: BLE001 - one retry then template
             return _template_report(context), "template", context, area, {
                 "degraded": True,
-                "reason": f"Report number check failed and retry failed: {exc}",
+                "reason": f"Report number check failed and retry failed: {sanitize_error(exc)}",
             }
     if not _is_valid_report(text, context):
         return _template_report(context), "template", context, area, {

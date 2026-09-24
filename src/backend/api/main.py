@@ -640,7 +640,7 @@ async def report(request: Request):
                              "reason": str(exc)}, status_code=503)
     except Exception as exc:  # noqa: BLE001 - provider failure becomes a clear degraded response
         return JSONResponse({"status": "unavailable", "message": "AI reports unavailable",
-                             "reason": f"report provider failed: {exc}"}, status_code=502)
+                             "reason": f"report provider failed: {report_api.sanitize_error(exc)}"}, status_code=502)
     return {
         "status": "ok",
         "report": text,
