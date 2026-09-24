@@ -7,13 +7,22 @@ export const ADVISORY = "BloomCast outputs are advisory support and never a safe
 
 export function friendlyError(error: unknown, kind: "weather" | "forecast" | "data" = "data") {
   const message = typeof error === "object" && error !== null && "message" in error ? String((error as { message?: unknown }).message ?? error) : String(error);
-  if (message.includes("429") || message.includes("Retry-After")) {
+  if (message.includes("429") || message.includes("Retry-After") || message.includes("Too Many Requests")) {
     return "The service is busy right now. Wait a moment, then try again.";
+  }
+  // fetch() throws TypeError ("Failed to fetch") when the backend itself is
+  // unreachable — blaming the weather service for that misdiagnoses every
+  // outage, so it gets its own message.
+  if (message.includes("Failed to fetch") || message.includes("NetworkError") || message.includes("Load failed")) {
+    return "Cannot reach the BloomCast backend — check the API is running, then try again.";
   }
   if (message.includes("Network") || message.includes("offline")) {
     return "You are offline. Reconnect, then try again.";
   }
-  if (kind === "weather") return "Weather service is busy — try again in a minute.";
+  if (/HTTP 5\d\d/.test(message)) {
+    return "The service hit a problem responding — try again in a minute.";
+  }
+  if (kind === "weather") return "Weather data is unavailable right now — try again in a minute.";
   if (kind === "forecast") return "Forecast data is unavailable right now.";
   return "This data is unavailable right now. Try again.";
 }

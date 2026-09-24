@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { API } from "@/lib/api";
 import { VectorMap } from "@/components/maps/VectorMap";
@@ -67,6 +67,12 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
   const [step, setStep] = useState(0);
   const [result, setResult] = useState<ExploreResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [picked, setPicked] = useState<{ lat: number; lon: number } | null>(null);
+  const [retryNote, setRetryNote] = useState<string | null>(null);
+  // Rapid map clicks must not pile up in-flight assessments (each costs two
+  // upstream calls): the previous request is aborted and the new one waits
+  // 600 ms so a drag-click burst becomes a single fetch.
+  const flight = useRef<{ timer?: ReturnType<typeof setTimeout>; ctrl?: AbortController; autoRetried?: boolean }>({});
 
   useEffect(() => {
     if (phase !== "working") return;
@@ -82,18 +88,39 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
       setPhase("error");
       return;
     }
+    setPicked({ lat: la, lon: lo });
     setPhase("working");
     setStep(0);
     setError(null);
+    setRetryNote(null);
     // The previous result stays mounted while the new fetch runs — the
     // working trace is updated, never blanked.
+    clearTimeout(flight.current.timer);
+    flight.current.ctrl?.abort();
+    flight.current.autoRetried = false;
+    flight.current.timer = setTimeout(() => void fetchAssessment(la, lo), 600);
+  };
+
+  const fetchAssessment = async (la: number, lo: number) => {
+    const ctrl = new AbortController();
+    flight.current.ctrl = ctrl;
     try {
-      const response = await fetch(`${API}/v1/explore?lat=${la}&lon=${lo}`);
+      const response = await fetch(`${API}/v1/explore?lat=${la}&lon=${lo}`, { signal: ctrl.signal });
+      if (response.status === 429 && !flight.current.autoRetried) {
+        // One automatic retry honoring the server's backoff, then stop —
+        // hammering a throttled upstream is what causes these errors.
+        flight.current.autoRetried = true;
+        const waitS = Math.min(Math.max(Number(response.headers.get("Retry-After")) || 20, 1), 120);
+        setRetryNote(`Weather service is throttling requests — retrying automatically in ${waitS}s…`);
+        flight.current.timer = setTimeout(() => void fetchAssessment(la, lo), waitS * 1000);
+        return;
+      }
       const data = await response.json();
       if (!response.ok) throw new Error(data?.detail ?? `HTTP ${response.status}`);
       setResult(data as ExploreResult);
       setPhase("done");
     } catch (e) {
+      if (e instanceof DOMException && e.name === "AbortError") return;
       setError(friendlyError(e, "weather"));
       setPhase("error");
     }
@@ -126,18 +153,21 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
 
   const w = result?.wash_off;
   const levelStyle = (w && LEVEL_STYLE[w.risk_level]) || LEVEL_STYLE.low;
-  // A pilot only names the point when it is actually near (100 km). Beyond
-  // that the picked coordinates are the location — naming a pin in Argentina
-  // "Western Lake Erie" just because it is the least-far pilot is how the
-  // old readout lied. Same rule gates the calibrated-forecast button below.
-  const nearby = result?.nearest_waterbody && result.nearest_waterbody.distance_km < 100
-    ? result.nearest_waterbody
+  // The pin follows the PICK, not the result — it appears the instant you
+  // click, even if the fetch then fails. A pilot only names the pin when the
+  // finished assessment is for the same spot and the pilot is actually near
+  // (100 km); otherwise it stays "Picked point".
+  const matchesResult = result && picked
+    && result.latitude.toFixed(2) === picked.lat.toFixed(2)
+    && result.longitude.toFixed(2) === picked.lon.toFixed(2);
+  const nearby = matchesResult && result!.nearest_waterbody && result!.nearest_waterbody.distance_km < 100
+    ? result!.nearest_waterbody
     : null;
-  const placeName = nearby?.name ?? (result ? "Picked point" : "");
-  const displayLat = result ? result.latitude.toFixed(2) : (lat || "—");
-  const displayLon = result ? result.longitude.toFixed(2) : (lon || "—");
-  const markerId = result ? (nearby?.id ?? "__picked__") : undefined;
-  const mapPoints = result ? [{ id: markerId as string, name: placeName, lat: result.latitude, lon: result.longitude, selected: true }] : [];
+  const placeName = nearby?.name ?? (picked ? "Picked point" : "");
+  const displayLat = picked ? picked.lat.toFixed(2) : (lat || "—");
+  const displayLon = picked ? picked.lon.toFixed(2) : (lon || "—");
+  const markerId = picked ? (nearby?.id ?? "__picked__") : undefined;
+  const mapPoints = picked ? [{ id: markerId as string, name: placeName, lat: picked.lat, lon: picked.lon, selected: true }] : [];
 
   return (
     <div className="glass rounded-2xl border border-border-subtle p-6 md:p-8 relative overflow-hidden">
@@ -199,7 +229,7 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
             })}
           </motion.div>
         )}
-        {phase === "error" && error && <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-5"><ErrorState title="Live fetch failed" message={error} onRetry={() => run(lat, lon)} /></motion.div>}
+        {phase === "error" && error && <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="mt-5"><ErrorState title="Live fetch failed" message={error} onRetry={() => run(lat, lon)} />{retryNote && <p className="mt-2 text-[11px] font-mono text-fg-muted">{retryNote}</p>}</motion.div>}
         {(phase === "done" || (phase === "working" && result)) && result && w && (
           <motion.div key="done" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-5 rounded-xl border border-border-subtle bg-bg-deep/50 p-5">
             {phase === "working" && <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-glow-violet/40 bg-glow-violet/10 px-3 py-1 font-mono text-[10px] uppercase tracking-widest text-glow-violet"><span className="h-1.5 w-1.5 rounded-full bg-glow-violet animate-pulse" /> Updating assessment…</div>}
