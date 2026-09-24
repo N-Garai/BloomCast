@@ -397,14 +397,19 @@ def test_artifact_roundtrip_matches(tmp_path):
 def test_committed_artifacts_are_real():
     import json
 
-    meta_path = SRC / "backend" / "ml" / "artifacts" / "meta.json"
-    if not meta_path.exists():
-        return
-    meta = json.loads(meta_path.read_text())
-    assert meta.get("training_source") == "tick-tick-bloom", (
-        "committed model artifacts must be real-label trained — "
-        "see docs/kaggle-training.md"
-    )
+    artifacts = SRC / "backend" / "ml" / "artifacts"
+    # BOTH variants: the weather-only bundle is what actually serves live
+    # traffic, so a synthetic weather_only_meta must trip the same gate
+    # (it once shipped while only meta.json was checked).
+    for name in ("meta.json", "weather_only_meta.json"):
+        meta_path = artifacts / name
+        if not meta_path.exists():
+            continue
+        meta = json.loads(meta_path.read_text())
+        assert meta.get("training_source") == "tick-tick-bloom", (
+            f"committed {name} must be real-label trained - "
+            "see docs/kaggle-training.md"
+        )
 
 
 # --- report endpoint (no keys configured → honest unavailable) -------------

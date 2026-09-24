@@ -9,6 +9,7 @@ export function BloomReport({ latitude, longitude, waterbodyName }: { latitude: 
   const [report, setReport] = useState<string | null>(null);
   const [provider, setProvider] = useState<string | null>(null);
   const [degraded, setDegraded] = useState(false);
+  const [degradeReason, setDegradeReason] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -18,6 +19,7 @@ export function BloomReport({ latitude, longitude, waterbodyName }: { latitude: 
     setError(null);
     setReport(null);
     setDegraded(false);
+    setDegradeReason(null);
     try {
       const response = await fetch(`${API}/v1/report`, {
         method: "POST",
@@ -29,6 +31,10 @@ export function BloomReport({ latitude, longitude, waterbodyName }: { latitude: 
       setReport(data?.report ?? "The report service did not return a report.");
       setProvider(data?.provider ?? null);
       setDegraded(Boolean(data?.degraded?.degraded));
+      // The backend always explains WHY it fell back (provider error text
+      // or the failed validation step) — surface it so "template" is a
+      // diagnosis, not a shrug.
+      setDegradeReason(typeof data?.degraded?.reason === "string" ? data.degraded.reason : null);
     } catch (e) {
       setError("Assessment unavailable — the live result remains available below.");
     } finally {
@@ -74,6 +80,7 @@ export function BloomReport({ latitude, longitude, waterbodyName }: { latitude: 
       {report && (
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="mt-4 rounded-lg border border-border-subtle bg-bg-deep/50 p-4 text-xs leading-relaxed text-fg-secondary">
           <div className="font-mono text-[10px] uppercase tracking-widest text-fg-muted">What / Why / Cause to effect / What to check next {provider && <span className="text-glow-violet">· {provider}</span>}{degraded && <span className="text-glow-yellow"> · template fallback</span>}</div>
+          {degraded && degradeReason && <p className="mt-2 rounded-lg border border-glow-yellow/30 bg-glow-yellow/5 px-3 py-2 font-mono text-[11px] text-glow-yellow">Fallback reason: {degradeReason}</p>}
           <p className="mt-2 whitespace-pre-line">{report}</p>
           <p className="mt-2 text-fg-faint">Generated from the selected location&apos;s live weather, wash-off, model, and stream signals. Review with local guidance before acting.</p>
           <Advisory />
