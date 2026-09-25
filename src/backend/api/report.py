@@ -632,6 +632,9 @@ def _section_problems(key, parsed, context):
     text = texts.get(key, "")
     if not text.strip():
         return [f"{key}: empty text"]
+    if not _section_length_ok(key, text):
+        return [f"{key}: write at least two full sentences in plain "
+                "simple words"]
     model = context.get("model_estimate") or {}
     if key == "what":
         for name in ("p_bloom", "ci_lo", "ci_hi"):
@@ -690,26 +693,38 @@ async def _regenerate_section(key, context):
     if key == "what":
         instruction = ("Summarize what was assessed (location, data time) "
                        "and state the headline estimate with its exact "
-                       "decimals.")
+                       "decimals. Write at least two full sentences in plain "
+                       "simple words a 12-year-old understands: first what "
+                       "was checked, then what the number means in everyday "
+                       "language.")
         keys = (', "p_bloom_cited": <exact p_bloom decimal>, '
                 '"ci_lo_cited": <exact ci_lo decimal>, '
                 '"ci_hi_cited": <exact ci_hi decimal>')
     elif key == "why":
         instruction = ("Explain in plain words why the model leans this way, "
-                       "using only the supplied drivers and signals.")
+                       "using only the supplied drivers and signals. Write at "
+                       "least two full sentences a 12-year-old understands: "
+                       "translate each driver into everyday words (say what "
+                       "warm water or calm wind actually does), never the "
+                       "raw feature names.")
         keys = ""
     elif key == "cause_effect":
         names = [str(d.get("human") or d.get("feature"))
                  for d in (context.get("drivers") or [])
                  if isinstance(d, dict) and (d.get("human") or d.get("feature"))]
-        instruction = ("Lay out the cause-and-effect chain, naming every "
-                       "supplied driver by name."
+        instruction = ("Lay out the cause-and-effect chain step by step in "
+                       "plain simple words a 12-year-old understands, naming "
+                       "every supplied driver by name. Write at least two "
+                       "full sentences: first what is happening in the water, "
+                       "then how the factors combine into the risk."
                        + (" Use these exact driver names: "
                           + "; ".join(names) + "." if names else ""))
         keys = ""
     else:
         instruction = ("Say concretely what to check next before acting on "
-                       "this estimate.")
+                       "this estimate. Write at least two full sentences in "
+                       "plain simple words: first what to watch, then when "
+                       "to come back and recheck.")
         keys = ""
     prompt = build_section_prompt(context, key, instruction, keys)
     try:
@@ -730,10 +745,23 @@ async def _regenerate_section(key, context):
     return str(parsed["text"]).strip(), provider, cited
 
 
+def _section_length_ok(key, text):
+    """Every section must read as an explanation, not a fragment: at least
+    two full sentences and a small word floor. The floor is deliberately low
+    (8) — length is a backstop against one-liners, not a literary standard;
+    real sections run far longer."""
+    words = len(re.findall(r"[A-Za-z0-9%°.,-]+", text or ""))
+    sentences = len(re.findall(r"[.!?]+", text or ""))
+    return sentences >= 2 and words >= 8
+
+
 def _validate_section_text(key, text, parsed, context):
     """Validate regenerated section text (shared checks with kept sections).
     `parsed` carries the cited decimals for the what-section."""
     problems = []
+    if not _section_length_ok(key, text):
+        problems.append(f"{key}: write at least two full sentences in plain "
+                        "simple words")
     if key == "what":
         model = context.get("model_estimate") or {}
         for name in ("p_bloom", "ci_lo", "ci_hi"):

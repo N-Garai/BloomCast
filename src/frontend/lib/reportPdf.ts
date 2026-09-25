@@ -58,8 +58,28 @@ const MARGIN = 15;
 const CONTENT_W = PAGE_W - MARGIN * 2;
 const BOTTOM = PAGE_H - 18;
 
-function riskColor(level: string): [number, number, number] {
-  const l = (level ?? "").toLowerCase();
+/**
+ * WinAnsi sanitize: jsPDF core fonts only encode WinAnsi, so anything
+ * outside it (→ — – “ ” …) renders as mojibake like "Cause!’effect".
+ * Map the common cases to ASCII twins, drop the rest. ° is WinAnsi-safe.
+ */
+function san(str: string): string {
+  return str
+    .replace(/→/g, "->")
+    .replace(/—/g, "-")
+    .replace(/–/g, "-")
+    .replace(/−/g, "-")
+    .replace(/[‘’]/g, "'")
+    .replace(/[“”]/g, '"')
+    .replace(/…/g, "...")
+    .replace(/×/g, "x")
+    .replace(/≥/g, ">=")
+    .replace(/≤/g, "<=")
+    .replace(/•/g, "-")
+    .replace(/[^\x20-\x7E\xA0-\xFF]/g, "");
+}
+
+function riskColor(level: string): [number, number, number] {  const l = (level ?? "").toLowerCase();
   if (l === "low") return INK.green;
   if (l === "moderate") return [255, 204, 0];
   if (l === "elevated") return [255, 136, 0];
@@ -105,17 +125,18 @@ export function downloadReportPdf(input: ReportPdfInput) {
     doc.setFontSize(opts?.size ?? 9.5);
     doc.setTextColor(...(opts?.color ?? INK.primary));
     doc.setFont(opts?.font ?? "helvetica", opts?.style ?? "normal");
-    doc.text(str, x, yy);
+    doc.text(san(str), x, yy);
   };
   const wrapped = (str: string, maxW: number, size = 9.5): string[] =>
-    doc.splitTextToSize(str, maxW) as string[];
-  const paragraph = (str: string, size = 9.5, color: [number, number, number] = INK.secondary, gap = 4.5) => {
+    doc.splitTextToSize(san(str), maxW) as string[];
+  const paragraph = (str: string, size = 9.5, color: [number, number, number] = INK.secondary, gap = 4.5, align: "left" | "center" = "left", style = "normal") => {
     const lines = wrapped(str, CONTENT_W, size);
     need(lines.length * gap + 2);
     doc.setFontSize(size);
     doc.setTextColor(...color);
-    doc.setFont("helvetica", "normal");
-    doc.text(lines, MARGIN, y);
+    doc.setFont("helvetica", style);
+    if (align === "center") doc.text(lines, PAGE_W / 2, y, { align: "center" });
+    else doc.text(lines, MARGIN, y);
     y += lines.length * gap + 2;
   };
   const kicker = (str: string) => {
@@ -257,7 +278,7 @@ export function downloadReportPdf(input: ReportPdfInput) {
     if (m.caveats) paragraph(m.caveats, 8, INK.faint);
   }
 
-  // ---- Report sections ----
+  // ---- Report sections: headings lead, body smaller, italic, centered ----
   need(14);
   kicker(`GROUNDED REPORT${input.provider ? ` · ${input.provider.toUpperCase()}` : ""}`);
   const HEADINGS = ["What", "Why", "Cause→effect chain", "What to check next", "Disclaimer"];
@@ -268,11 +289,11 @@ export function downloadReportPdf(input: ReportPdfInput) {
       return;
     }
     if (HEADINGS.includes(line.trim())) {
-      need(10);
-      text(line.trim(), MARGIN, y + 4, { size: 10.5, style: "bold" });
-      y += 8;
+      need(11);
+      text(line.trim(), MARGIN, y + 4, { size: 12.5, style: "bold" });
+      y += 9;
     } else {
-      paragraph(line, 9.5, INK.secondary);
+      paragraph(line, 9, INK.secondary, 4.2, "center", "italic");
       y -= 2;
     }
   });

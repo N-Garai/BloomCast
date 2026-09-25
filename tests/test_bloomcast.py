@@ -470,10 +470,10 @@ def test_report_uses_server_assessment_and_verified_provider(monkeypatch):
         assert "feature_0" in prompt
         import json as _json
         return _json.dumps({
-            "what": "The model estimate is 0.42 with interval 0.25 to 0.6.",
-            "why": "The supplied features explain the result.",
-            "cause_effect": "Feature 0 changed.",
-            "check_next": "Check the next weather window.",
+            "what": "The model estimate is 0.42 with interval 0.25 to 0.6. That means about four days in ten would bloom.",
+            "why": "The supplied features explain the result. Warm water and calm air push the risk higher.",
+            "cause_effect": "Feature 0 changed. That change raised the score.",
+            "check_next": "Check the next weather window. Come back after new data arrives.",
             "disclaimer": "Advisory only — not a safety determination.",
             "p_bloom_cited": 0.42,
             "ci_lo_cited": 0.25,
@@ -1410,11 +1410,11 @@ def test_report_validation_accepts_json_contract(monkeypatch):
 
     def draft(**overrides):
         base = {
-            "what": "Assessment of 21.63, -13.38 with 69.92% risk.",
-            "why": "Warm weather.",
-            "cause_effect": "Recent warm temperatures drove risk.",
-            "check_next": "Recheck later.",
-            "disclaimer": "Advisory only \u2014 not a safety determination.",
+            "what": "Assessment shows 69.92% risk. That is high enough to watch closely.",
+            "why": "Warm weather pushed the score up. Calm air helped it stay high.",
+            "cause_effect": "Recent warm temperatures drove risk. The heat built up over several days.",
+            "check_next": "Recheck later today. Come back after new data arrives.",
+            "disclaimer": "Advisory only — not a safety determination.",
             "p_bloom_cited": 0.6992,
             "ci_lo_cited": 0.3992,
             "ci_hi_cited": 0.9992,
@@ -1714,17 +1714,17 @@ def test_report_keeps_good_sections_regenerates_bad_ones(monkeypatch):
         # regenerations carry only {"text": ...}.
         if '"cause_effect"' in prompt:
             return _json.dumps({
-                "what": "KEPT what 0.42, interval 0.25 to 0.6.",
-                "why": "KEPT why.",
+                "what": "KEPT what 0.42, interval 0.25 to 0.6. It stays as written here.",
+                "why": "KEPT why for this spot. It stays as written too.",
                 "cause_effect": "No drivers mentioned here.",
-                "check_next": "KEPT next.",
-                "disclaimer": "Advisory only \u2014 not a safety determination.",
+                "check_next": "KEPT next for later. It stays as written too.",
+                "disclaimer": "Advisory only — not a safety determination.",
                 "p_bloom_cited": 0.42,
                 "ci_lo_cited": 0.25,
                 "ci_hi_cited": 0.6,
             }), "gemini"
         return _json.dumps({
-            "text": "FIXED cause naming temp_mean_7d with 0.42.",
+            "text": "FIXED cause naming temp_mean_7d with 0.42. It now passes all checks.",
             "p_bloom_cited": 0.42,
             "ci_lo_cited": 0.25,
             "ci_hi_cited": 0.6,
