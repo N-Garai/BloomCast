@@ -379,6 +379,51 @@ def _mentions_driver(cause, feature, human):
     return False
 
 
+def _context_numbers(context):
+    """Every numeric value anywhere in the measured context. A section may
+    only cite these (plus small day-counts) — anything else is invention."""
+    nums = set()
+
+    def walk(node):
+        if isinstance(node, bool):
+            return
+        if isinstance(node, (int, float)):
+            nums.add(float(node))
+            return
+        if isinstance(node, str):
+            for match in re.finditer(r"(\d+(?:\.\d+)?)\s*(%)?", node):
+                value = float(match.group(1))
+                nums.add(value / 100.0 if match.group(2) else value)
+            return
+        if isinstance(node, dict):
+            for value in node.values():
+                walk(value)
+            return
+        if isinstance(node, (list, tuple)):
+            for value in node:
+                walk(value)
+
+    walk(context)
+    return nums
+
+
+def _prose_numbers_ok(text, allowed):
+    """Every number in the prose must be an allowed one (exact decimal or
+    its percentage, small tolerance). Small integers (day counts, "8th
+    grade") are always fine; anything else must match the context."""
+    for match in re.finditer(r"(\d+(?:\.\d+)?)\s*(%)?", text or ""):
+        value = float(match.group(1))
+        if match.group(2):
+            value /= 100.0
+        if value.is_integer() and 0 <= value <= 31:
+            continue
+        if any(abs(value - known) <= max(0.005, abs(known) * 1e-3)
+               for known in allowed):
+            continue
+        return False
+    return True
+
+
 def _parse_json_object(text, required_keys):
     """Parse a provider JSON reply (tolerating markdown fences). Returns the
     dict when every required key holds a string or number and the text fields
@@ -565,11 +610,146 @@ def _template_report(context):
     return f"{what}\n\n{why}\n\n{cause}\n\n{check}\n\nDisclaimer\n{DISCLAIMER}\n"
 
 
+def _section_problems(key, parsed, context):
+    """Problems for one section of an already-parsed full reply (empty when
+    the section is keepable). Split out so kept sections survive while only
+    failed ones regenerate."""
+    problems = []
+    texts = {"what": str(parsed.get("what", "") or ""),
+             "why": str(parsed.get("why", "") or ""),
+             "cause_effect": str(parsed.get("cause_effect", "") or ""),
+             "check_next": str(parsed.get("check_next", "") or "")}
+    text = texts.get(key, "")
+    if not text.strip():
+        return [f"{key}: empty text"]
+    model = context.get("model_estimate") or {}
+    if key == "what":
+        for name in ("p_bloom", "ci_lo", "ci_hi"):
+            value = model.get(name)
+            if value is None:
+                continue
+            try:
+                cited = float(parsed.get(f"{name}_cited"))
+            except (TypeError, ValueError):
+                problems.append(f"{key}: {name}_cited must equal exactly {value}")
+                continue
+            if abs(cited - float(value)) > 0.0005:
+                problems.append(f"{key}: {name}_cited must equal exactly {value}")
+    if key == "cause_effect":
+        for driver in context.get("drivers") or []:
+            if not isinstance(driver, dict) or not driver.get("feature"):
+                continue
+            if not _mentions_driver(text, driver["feature"],
+                                    driver.get("human", "")):
+                problems.append(f"{key}: must name driver {driver['feature']}")
+    if not _prose_numbers_ok(text, _context_numbers(context)):
+        problems.append(f"{key}: cites a number not present in the inputs")
+    return problems
+
+
+def build_section_prompt(context, key, instruction, extra_keys):
+    """Prompt for regenerating ONE section: same grounding rules, narrow
+    task, exact JSON keys."""
+    return (
+        "You are BloomCast's grounded report writer.\n"
+        "Use only the MEASURED_AND_COMPUTED values and the GENERAL_BACKGROUND "
+        "snippet below. Keep it at an eighth-grade reading level. "
+        "Do not add local facts, measurements, names, causes, or recommendations "
+        "that are not present in those two sections. Never invent a number: "
+        "every number you write must already appear in MEASURED_AND_COMPUTED "
+        "(small day-counts aside). "
+        + instruction + "\n"
+        "Respond with a single JSON object and nothing else — no markdown "
+        "fences, no prose outside the JSON — with exactly these keys:\n"
+        '{"text": "..."' + extra_keys + '}\n\n'
+        + _measured_block(context)
+    )
+
+
+def _measured_block(context):
+    measured = json.dumps(context, sort_keys=True, separators=(",", ":"))
+    return ("MEASURED_AND_COMPUTED\n" + measured + "\n\n"
+            "GENERAL_BACKGROUND\n" + _background(context))
+
+
+async def _regenerate_section(key, context):
+    """Regenerate ONE failed section (provider fallback included). Returns
+    (text, provider, cited_dict). Raises RuntimeError when it cannot be
+    produced honestly — the caller then degrades the whole report rather
+    than mixing in an unvalidated paragraph."""
+    if key == "what":
+        instruction = ("Summarize what was assessed (location, data time) "
+                       "and state the headline estimate with its exact "
+                       "decimals.")
+        keys = (', "p_bloom_cited": <exact p_bloom decimal>, '
+                '"ci_lo_cited": <exact ci_lo decimal>, '
+                '"ci_hi_cited": <exact ci_hi decimal>')
+    elif key == "why":
+        instruction = ("Explain in plain words why the model leans this way, "
+                       "using only the supplied drivers and signals.")
+        keys = ""
+    elif key == "cause_effect":
+        instruction = ("Lay out the cause-and-effect chain, naming every "
+                       "supplied driver by name.")
+        keys = ""
+    else:
+        instruction = ("Say concretely what to check next before acting on "
+                       "this estimate.")
+        keys = ""
+    prompt = build_section_prompt(context, key, instruction, keys)
+    try:
+        raw, provider = await asyncio.wait_for(
+            _generate_with_fallback(prompt), timeout=14.0)
+    except Exception as exc:  # noqa: BLE001 - caller degrades to template
+        raise RuntimeError(f"section {key}: provider error: "
+                           f"{sanitize_error(exc)}") from exc
+    parsed = _parse_json_object(raw, ("text",))
+    if parsed is None or not str(parsed.get("text", "")).strip():
+        raise RuntimeError(f"section {key}: not valid section JSON")
+    problems = _validate_section_text(key, str(parsed["text"]).strip(),
+                                      parsed, context)
+    if problems:
+        raise RuntimeError(f"section {key}: " + "; ".join(problems))
+    cited = {name: parsed.get(f"{name}_cited")
+             for name in ("p_bloom", "ci_lo", "ci_hi")}
+    return str(parsed["text"]).strip(), provider, cited
+
+
+def _validate_section_text(key, text, parsed, context):
+    """Validate regenerated section text (shared checks with kept sections).
+    `parsed` carries the cited decimals for the what-section."""
+    problems = []
+    if key == "what":
+        model = context.get("model_estimate") or {}
+        for name in ("p_bloom", "ci_lo", "ci_hi"):
+            value = model.get(name)
+            if value is None:
+                continue
+            try:
+                cited = float(parsed.get(f"{name}_cited"))
+            except (TypeError, ValueError):
+                problems.append(f"{key}: {name}_cited must equal exactly {value}")
+                continue
+            if abs(cited - float(value)) > 0.0005:
+                problems.append(f"{key}: {name}_cited must equal exactly {value}")
+    if key == "cause_effect":
+        for driver in context.get("drivers") or []:
+            if not isinstance(driver, dict) or not driver.get("feature"):
+                continue
+            if not _mentions_driver(text, driver["feature"],
+                                    driver.get("human", "")):
+                problems.append(f"{key}: must name driver {driver['feature']}")
+    if not _prose_numbers_ok(text, _context_numbers(context)):
+        problems.append(f"{key}: cites a number not present in the inputs")
+    return problems
+
+
 async def generate_report(body, assessment):
-    """One LLM call (Gemini primary, Groq fallback), validated as data, with
-    a single correction retry. One call — not one per section — because each
-    call spends free-tier quota on both vendors, and quota is the binding
-    constraint this endpoint operates under."""
+    """One cheap LLM call first; validated sections are KEPT and only failed
+    sections regenerate (each with provider fallback). A whole-report retry
+    would discard good paragraphs and burn quota re-generating them — under
+    free-tier limits, kept sections are the difference between a report and
+    a template."""
     keys = _provider_keys()
     if not any(keys.values()):
         raise NoKeyError("AI reports are not configured on this deployment")
@@ -578,35 +758,70 @@ async def generate_report(body, assessment):
                                 assessment.get("latitude"),
                                 assessment.get("longitude"))
     context["area_validation"] = area
-    prompt = build_prompt(context)
+    order = ("what", "why", "cause_effect", "check_next")
     try:
-        text, provider = await asyncio.wait_for(_generate_with_fallback(prompt), timeout=20.0)
+        text, provider = await asyncio.wait_for(
+            _generate_with_fallback(build_prompt(context)), timeout=20.0)
     except Exception as exc:  # noqa: BLE001 - degrade to template
         return _template_report(context), "template", context, area, {
             "degraded": True,
             "reason": f"LLM generation timed out or failed: {sanitize_error(exc)}",
         }
-    if not _is_valid_report(text, context):
-        # Retry once with the exact failures spelled out — a second identical
-        # prompt usually fails the identical way; a correction prompt that
-        # names the missing numbers typically passes.
-        correction = (
-            "\n\nSTRICT CORRECTION — your previous draft failed validation "
-            "for these reasons; fix every one, keep everything else:\n- "
-            + "\n- ".join(validation_feedback(text, context))
-        )
-        try:
-            text, provider = await asyncio.wait_for(
-                _generate_with_fallback(prompt + correction), timeout=20.0)
-        except Exception as exc:  # noqa: BLE001 - one retry then template
-            return _template_report(context), "template", context, area, {
-                "degraded": True,
-                "reason": f"Report number check failed and retry failed: {sanitize_error(exc)}",
-            }
-    if not _is_valid_report(text, context):
-        return _template_report(context), "template", context, area, {
-            "degraded": True,
-            "reason": "Report number check failed; template report used",
-        }
     parsed = _parse_json_report(text)
-    return _render_report_text(parsed), provider, context, area, {"degraded": False, "reason": None}
+    kept = {}
+    providers = [provider]
+    if parsed is not None:
+        for key in order:
+            if not _section_problems(key, parsed, context):
+                kept[key] = str(parsed[key]).strip()
+    failed = [key for key in order if key not in kept]
+    if not failed:
+        assembled = {
+            'what': kept['what'],
+            'why': kept['why'],
+            'cause_effect': kept['cause_effect'],
+            'check_next': kept['check_next'],
+            'disclaimer': DISCLAIMER,
+            'p_bloom_cited': parsed.get('p_bloom_cited'),
+            'ci_lo_cited': parsed.get('ci_lo_cited'),
+            'ci_hi_cited': parsed.get('ci_hi_cited'),
+        }
+        return (_render_report_text(assembled), provider, context, area,
+                {'degraded': False, 'reason': None})
+    # Regenerate ONLY the failed sections; kept ones are never re-rolled,
+    # and each regeneration carries provider fallback inside.
+    texts = dict(kept)
+    cited = {name: (parsed or {}).get(f'{name}_cited')
+             for name in ('p_bloom', 'ci_lo', 'ci_hi')}
+    for key in failed:
+        try:
+            section_text, section_provider, section_cited = await asyncio.wait_for(
+                _regenerate_section(key, context), timeout=20.0)
+        except Exception:
+            still_failing = [key]
+            break
+        texts[key] = section_text
+        providers.append(section_provider)
+        if key == 'what':
+            cited = dict(section_cited)
+    else:
+        still_failing = []
+    if still_failing:
+        return _template_report(context), 'template', context, area, {
+            'degraded': True,
+            'reason': 'Report sections failed: ' + ', '.join(still_failing)
+                      + '; template report used',
+        }
+    assembled = {
+        'what': texts['what'],
+        'why': texts['why'],
+        'cause_effect': texts['cause_effect'],
+        'check_next': texts['check_next'],
+        'disclaimer': DISCLAIMER,
+        'p_bloom_cited': cited.get('p_bloom'),
+        'ci_lo_cited': cited.get('ci_lo'),
+        'ci_hi_cited': cited.get('ci_hi'),
+    }
+    label = providers[0] if len(set(providers)) == 1 else '+'.join(sorted(set(providers)))
+    return (_render_report_text(assembled), label, context, area,
+            {'degraded': False, 'reason': None})

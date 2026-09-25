@@ -530,7 +530,9 @@ def test_report_retries_once_then_uses_template(monkeypatch):
     assert payload["provider"] == "template"
     assert payload["degraded"]["degraded"] is True
     assert "0.4" in payload["report"]
-    # One call plus one correction retry, then the template.
+    # Initial call plus the first section regeneration failing fast —
+    # the loop breaks on the first unfixable section instead of burning
+    # calls on the rest, then degrades to the template.
     assert calls == 2
 
 
@@ -1670,6 +1672,75 @@ def test_template_report_explains_itself():
     assert "built-in summary" in lowered
     assert "nothing here is guessed" in lowered or "made up" in lowered
     assert "0.5" in text and "0.2" in text and "0.8" in text
+
+
+def test_report_keeps_good_sections_regenerates_bad_ones(monkeypatch):
+    """Keep-partial contract: validated sections from the first reply survive;
+    only failed sections regenerate (via the fallback provider). The final
+    report mixes kept + regenerated text and labels both providers."""
+    import asyncio
+    import json as _json
+    import api.report as R
+    from fastapi.testclient import TestClient
+    from api.main import app
+
+    assessment = {
+        "latitude": 47.3, "longitude": 8.5,
+        "provenance": "weather-only-model",
+        "fetched_at": "2026-09-23T15:00:00+00:00",
+        "feature_names": ["temp_mean_7d"],
+        "feature_row": [22.0],
+        "model_estimate": {
+            "p_bloom": 0.42, "ci_lo": 0.25, "ci_hi": 0.6,
+            "drivers": [{"feature": "temp_mean_7d",
+                         "human": "Recent warm temperatures"}],
+        },
+        "wash_off": {"risk_score": 0.4}, "signals": [],
+        "nearest_waterbody": None,
+    }
+
+    async def fake_assess(*args, **kwargs):
+        return assessment
+
+    monkeypatch.setattr(R, "assess_location", fake_assess)
+
+    async def fake_validate_area(*args, **kwargs):
+        return {"status": "not_requested"}
+
+    monkeypatch.setattr(R, "_validate_area", fake_validate_area)
+
+    async def fake_generate(prompt):
+        # Whole-report prompt carries the full key template; section
+        # regenerations carry only {"text": ...}.
+        if '"cause_effect"' in prompt:
+            return _json.dumps({
+                "what": "KEPT what 0.42, interval 0.25 to 0.6.",
+                "why": "KEPT why.",
+                "cause_effect": "No drivers mentioned here.",
+                "check_next": "KEPT next.",
+                "disclaimer": "Advisory only \u2014 not a safety determination.",
+                "p_bloom_cited": 0.42,
+                "ci_lo_cited": 0.25,
+                "ci_hi_cited": 0.6,
+            }), "gemini"
+        return _json.dumps({
+            "text": "FIXED cause naming temp_mean_7d with 0.42.",
+            "p_bloom_cited": 0.42,
+            "ci_lo_cited": 0.25,
+            "ci_hi_cited": 0.6,
+        }), "groq"
+
+    monkeypatch.setattr(R, "_generate_with_fallback", fake_generate)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    client = TestClient(app, raise_server_exceptions=False)
+    response = client.post("/v1/report", json={"lat": 47.3, "lon": 8.5})
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["provider"] == "gemini+groq"
+    assert payload["degraded"]["degraded"] is False
+    assert "KEPT what" in payload["report"]
+    assert "FIXED cause naming temp_mean_7d" in payload["report"]
 
 
 if __name__ == "__main__":
