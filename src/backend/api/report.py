@@ -146,47 +146,6 @@ REPORT_KEYS = ("what", "why", "cause_effect", "check_next", "disclaimer",
 # failure retries one paragraph instead of the whole report, and validation
 # is per-section data instead of whole-prose wording. The disclaimer is a
 # fixed legal line and is never generated.
-SECTION_SPECS = {
-    "what": ("Summarize what was assessed (location, data time) and state "
-             "the headline estimate with its exact decimals.", True),
-    "why": ("Explain in plain words why the model leans this way, using "
-            "only the supplied drivers and signals.", False),
-    "cause_effect": ("Lay out the cause-and-effect chain, naming every "
-                     "supplied driver by name.", False),
-    "check_next": ("Say concretely what to check next before acting on "
-                   "this estimate.", False),
-}
-
-
-def _measured_block(context):
-    measured = json.dumps(context, sort_keys=True, separators=(",", ":"))
-    return ("MEASURED_AND_COMPUTED\n" + measured + "\n\n"
-            "GENERAL_BACKGROUND\n" + _background(context))
-
-
-def build_section_prompt(context, key):
-    instruction, needs_numbers = SECTION_SPECS[key]
-    keys = '{"text": "..."'
-    if needs_numbers:
-        keys += (', "p_bloom_cited": <exact p_bloom decimal, e.g. 0.6992>, '
-                 '"ci_lo_cited": <exact ci_lo decimal>, '
-                 '"ci_hi_cited": <exact ci_hi decimal>')
-    keys += '}'
-    return (
-        "You are BloomCast's grounded report writer.\n"
-        "Use only the MEASURED_AND_COMPUTED values and the GENERAL_BACKGROUND "
-        "snippet below. Keep it at an eighth-grade reading level. "
-        "Do not add local facts, measurements, names, causes, or recommendations "
-        "that are not present in those two sections. Never invent a number: "
-        "every number you write must already appear in MEASURED_AND_COMPUTED "
-        "(small day-counts aside). "
-        + instruction + "\n"
-        "Respond with a single JSON object and nothing else — no markdown "
-        "fences, no prose outside the JSON — with exactly these keys:\n"
-        + keys + "\n\n" + _measured_block(context)
-    )
-
-
 def build_prompt(context):
     measured = json.dumps(context, sort_keys=True, separators=(",", ":"))
     return (
@@ -271,10 +230,45 @@ async def _groq_report(key, prompt):
         raise RuntimeError(f"unexpected Groq response shape: {exc}") from exc
 
 
+def _rate_limit_wait(exc):
+    """Seconds to wait on a provider 429: honor its Retry-After header when
+    present (both vendors document it), else None (caller falls through to
+    the next provider immediately). Capped so one call never stalls the
+    request beyond a few seconds."""
+    response = getattr(exc, "response", None)
+    headers = getattr(response, "headers", None) or {}
+    for name in ("retry-after", "Retry-After"):
+        if name in headers:
+            try:
+                return min(15.0, max(1.0, float(str(headers[name]).split(",")[0].strip())))
+            except (TypeError, ValueError):
+                continue
+    return None
+
+
 async def _call_provider(name, key, prompt):
-    if name == "gemini":
-        return await _gemini_report(key, prompt)
-    return await _groq_report(key, prompt)
+    """One provider with a single Retry-After-aware retry on 429.
+
+    Rate limits are transient by design — both Gemini and Groq document
+    429 + Retry-After — so a throttled first attempt waits out the hint and
+    tries once more before yielding to the next provider. Any other error
+    fails fast: retrying a 401/404 is pure quota burn."""
+    import httpx
+
+    for attempt in ("initial", "after-backoff"):
+        try:
+            if name == "gemini":
+                return await _gemini_report(key, prompt)
+            return await _groq_report(key, prompt)
+        except httpx.HTTPStatusError as exc:
+            response = exc.response
+            if (attempt == "initial" and response is not None
+                    and response.status_code == 429):
+                wait = _rate_limit_wait(exc)
+                if wait is not None:
+                    await asyncio.sleep(wait)
+                    continue
+            raise
 
 
 async def _generate_with_fallback(prompt):
@@ -375,35 +369,6 @@ async def _validate_area(name, latitude, longitude):
     }
 
 
-def _normalize_section_text(text):
-    """Canonicalize text for validation: lowercase, unify arrows/dashes and
-    whitespace so "Cause → effect chain" and "Cause-effect chain" count as
-    the specified "Cause→effect chain" section. Matching stays strict on
-    numbers (handled separately) — only headings get flexibility."""
-    out = text.lower()
-    for char in ("→", "—", "–", "-", ":", ">"):
-        out = out.replace(char, " ")
-    return re.sub(r"\s+", " ", out).strip()
-
-
-def _mentions_number(text, value):
-    """True when the text cites a number equal to value — either as the exact
-    decimal ("0.6992") or as its percentage ("69.92%"). Both are verifiable
-    citations of the same number; what is forbidden is a *different* number.
-    Tolerance is half a percentage point to absorb 0.699→69.9% rounding."""
-    try:
-        target = float(value)
-    except (TypeError, ValueError):
-        return False
-    for match in re.finditer(r"(\d+(?:\.\d+)?)\s*(%)?", text):
-        mentioned = float(match.group(1))
-        if match.group(2):
-            mentioned /= 100.0
-        if abs(mentioned - target) <= 0.005:
-            return True
-    return False
-
-
 def _mentions_driver(cause, feature, human):
     """Driver cited when its key or human name appears modulo case and
     punctuation ("heat_wave_flag" matches "heat wave flag")."""
@@ -412,51 +377,6 @@ def _mentions_driver(cause, feature, human):
         if re.sub(r"[^a-z0-9]+", "", alias.lower()) in norm:
             return True
     return False
-
-
-def _context_numbers(context):
-    """Every numeric value anywhere in the measured context (plus small day
-    counts, which prose legitimately uses). A section may only cite these."""
-    nums = set()
-
-    def walk(node):
-        if isinstance(node, bool):
-            return
-        if isinstance(node, (int, float)):
-            nums.add(float(node))
-            return
-        if isinstance(node, str):
-            for match in re.finditer(r"(\d+(?:\.\d+)?)\s*(%)?", node):
-                value = float(match.group(1))
-                nums.add(value / 100.0 if match.group(2) else value)
-            return
-        if isinstance(node, dict):
-            for value in node.values():
-                walk(value)
-            return
-        if isinstance(node, (list, tuple)):
-            for value in node:
-                walk(value)
-
-    walk(context)
-    return nums
-
-
-def _prose_numbers_ok(text, allowed):
-    """Every number in the prose must be an allowed one (exact decimal or
-    its percentage, small tolerance). Small integers (day counts, "8th
-    grade") are always fine; anything else must match the context."""
-    for match in re.finditer(r"(\d+(?:\.\d+)?)\s*(%)?", text or ""):
-        value = float(match.group(1))
-        if match.group(2):
-            value /= 100.0
-        if value.is_integer() and 0 <= value <= 31:
-            continue
-        if any(abs(value - known) <= max(0.005, abs(known) * 1e-3)
-               for known in allowed):
-            continue
-        return False
-    return True
 
 
 def _parse_json_object(text, required_keys):
@@ -618,9 +538,15 @@ def _template_report(context):
         area_text = ""
     what = (
         f"What\nBloomCast assessed {location} using live weather data fetched at {fetched}.{area_text}\n"
-        f"{score_text}"
+        f"{score_text}\n"
+        "The AI writer could not be reached right now, so you are reading "
+        "the built-in summary instead of an AI-written report. It is shorter "
+        "and plainer, but every number in it comes straight from your live "
+        "assessment above — nothing here is guessed or made up. You can try "
+        "the Generate report button again in a minute for the full write-up."
     )
-    why = f"Why\nThe report uses the supplied feature row and model output. {driver_text}."
+    why = (f"Why\nThese are the strongest signals in your data: {driver_text}. "
+           "Bigger values push the risk higher.")
     if drivers:
         cause = (
             "Cause→effect chain\n"
@@ -639,75 +565,11 @@ def _template_report(context):
     return f"{what}\n\n{why}\n\n{cause}\n\n{check}\n\nDisclaimer\n{DISCLAIMER}\n"
 
 
-def _validate_section(key, parsed, context):
-    """Validate one generated section's DATA. Returns a list of problems
-    (empty when valid) so the retry can demand exactly what's missing."""
-    problems = []
-    text = str(parsed.get("text", "") or "")
-    if not text.strip():
-        return [f"{key}: empty text"]
-    if len(text) > 2000:
-        problems.append(f"{key}: too long, be concise")
-    if key == "what":
-        model = context.get("model_estimate") or {}
-        for name in ("p_bloom", "ci_lo", "ci_hi"):
-            value = model.get(name)
-            if value is None:
-                continue
-            try:
-                cited = float(parsed.get(f"{name}_cited"))
-            except (TypeError, ValueError):
-                problems.append(f"{key}: {name}_cited must equal exactly {value}")
-                continue
-            if abs(cited - float(value)) > 0.0005:
-                problems.append(f"{key}: {name}_cited must equal exactly {value}")
-    if key == "cause_effect":
-        for driver in context.get("drivers") or []:
-            if not isinstance(driver, dict) or not driver.get("feature"):
-                continue
-            if not _mentions_driver(text, driver["feature"],
-                                    driver.get("human", "")):
-                problems.append(f"{key}: must name driver {driver['feature']}")
-    if not _prose_numbers_ok(text, _context_numbers(context)):
-        problems.append(f"{key}: cites a number not present in the inputs")
-    return problems
-
-
-async def _generate_section(key, context):
-    """Generate and validate one section (provider fallback included).
-    Returns (text, provider, cited_dict). Raises RuntimeError naming the
-    failed checks when the section cannot be produced honestly."""
-    prompt = build_section_prompt(context, key)
-    last_problems: list = ["no attempt yet"]
-    provider = "template"
-    for attempt in ("initial", "correction"):
-        if attempt == "correction":
-            prompt = prompt + (
-                "\n\nSTRICT CORRECTION — your previous draft failed "
-                "validation for these reasons; fix every one, keep "
-                "everything else:\n- " + "\n- ".join(last_problems)
-            )
-        try:
-            raw, provider = await asyncio.wait_for(
-                _generate_with_fallback(prompt), timeout=14.0)
-        except Exception as exc:  # noqa: BLE001 - provider errors, retry/caller decides
-            last_problems = [f"provider error: {sanitize_error(exc)}"]
-            continue
-        parsed = _parse_json_object(raw, ("text",))
-        if parsed is None or not str(parsed.get("text", "")).strip():
-            last_problems = ["respond with a single JSON object with a "
-                             "non-empty text field"]
-            continue
-        last_problems = _validate_section(key, parsed, context)
-        if not last_problems:
-            cited = {name: parsed.get(f"{name}_cited")
-                     for name in ("p_bloom", "ci_lo", "ci_hi")}
-            return str(parsed["text"]).strip(), provider, cited
-    raise RuntimeError(f"section {key}: " + "; ".join(last_problems))
 async def generate_report(body, assessment):
-    """Assemble the report section by section (in parallel): each section is
-    generated and validated on its own, so one bad paragraph retries alone
-    instead of sinking the whole report into the template fallback."""
+    """One LLM call (Gemini primary, Groq fallback), validated as data, with
+    a single correction retry. One call — not one per section — because each
+    call spends free-tier quota on both vendors, and quota is the binding
+    constraint this endpoint operates under."""
     keys = _provider_keys()
     if not any(keys.values()):
         raise NoKeyError("AI reports are not configured on this deployment")
@@ -716,29 +578,35 @@ async def generate_report(body, assessment):
                                 assessment.get("latitude"),
                                 assessment.get("longitude"))
     context["area_validation"] = area
-    order = tuple(SECTION_SPECS)
+    prompt = build_prompt(context)
     try:
-        sections = await asyncio.wait_for(
-            asyncio.gather(*(_generate_section(key, context) for key in order)),
-            timeout=25.0,
-        )
+        text, provider = await asyncio.wait_for(_generate_with_fallback(prompt), timeout=20.0)
     except Exception as exc:  # noqa: BLE001 - degrade to template
         return _template_report(context), "template", context, area, {
             "degraded": True,
             "reason": f"LLM generation timed out or failed: {sanitize_error(exc)}",
         }
-    texts = dict(zip(order, sections, strict=False))
-    parsed = {
-        "what": texts["what"][0],
-        "why": texts["why"][0],
-        "cause_effect": texts["cause_effect"][0],
-        "check_next": texts["check_next"][0],
-        "disclaimer": DISCLAIMER,
-        "p_bloom_cited": texts["what"][2].get("p_bloom"),
-        "ci_lo_cited": texts["what"][2].get("ci_lo"),
-        "ci_hi_cited": texts["what"][2].get("ci_hi"),
-    }
-    providers = {text[1] for text in texts.values()}
-    provider = texts["what"][1] if len(providers) == 1 else "+".join(sorted(providers))
-    return (_render_report_text(parsed), provider, context, area,
-            {"degraded": False, "reason": None})
+    if not _is_valid_report(text, context):
+        # Retry once with the exact failures spelled out — a second identical
+        # prompt usually fails the identical way; a correction prompt that
+        # names the missing numbers typically passes.
+        correction = (
+            "\n\nSTRICT CORRECTION — your previous draft failed validation "
+            "for these reasons; fix every one, keep everything else:\n- "
+            + "\n- ".join(validation_feedback(text, context))
+        )
+        try:
+            text, provider = await asyncio.wait_for(
+                _generate_with_fallback(prompt + correction), timeout=20.0)
+        except Exception as exc:  # noqa: BLE001 - one retry then template
+            return _template_report(context), "template", context, area, {
+                "degraded": True,
+                "reason": f"Report number check failed and retry failed: {sanitize_error(exc)}",
+            }
+    if not _is_valid_report(text, context):
+        return _template_report(context), "template", context, area, {
+            "degraded": True,
+            "reason": "Report number check failed; template report used",
+        }
+    parsed = _parse_json_report(text)
+    return _render_report_text(parsed), provider, context, area, {"degraded": False, "reason": None}

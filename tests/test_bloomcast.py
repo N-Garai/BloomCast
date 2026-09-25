@@ -470,7 +470,11 @@ def test_report_uses_server_assessment_and_verified_provider(monkeypatch):
         assert "feature_0" in prompt
         import json as _json
         return _json.dumps({
-            "text": "Feature 0 notes 0.42, interval 0.25 to 0.6.",
+            "what": "The model estimate is 0.42 with interval 0.25 to 0.6.",
+            "why": "The supplied features explain the result.",
+            "cause_effect": "Feature 0 changed.",
+            "check_next": "Check the next weather window.",
+            "disclaimer": "Advisory only — not a safety determination.",
             "p_bloom_cited": 0.42,
             "ci_lo_cited": 0.25,
             "ci_hi_cited": 0.6,
@@ -526,9 +530,8 @@ def test_report_retries_once_then_uses_template(monkeypatch):
     assert payload["provider"] == "template"
     assert payload["degraded"]["degraded"] is True
     assert "0.4" in payload["report"]
-    # 4 sections, each tried twice (initial + correction): per-section
-    # retries replace the old single whole-report retry.
-    assert calls == 8
+    # One call plus one correction retry, then the template.
+    assert calls == 2
 
 
 def test_explore_live_row_and_estimate():
@@ -1617,6 +1620,56 @@ def test_infer_score_uses_browser_windows_without_upstream(monkeypatch):
         assert no_archive.json()["past_30d"]["status"] == "unavailable"
     finally:
         infer.configure_cache(900)
+
+
+def test_report_429_backs_off_then_retries(monkeypatch):
+    """A provider 429 waits out Retry-After and retries the SAME provider
+    once before yielding to the next — hammering through a rate limit is
+    what turns a 2-second hiccup into a hard failure."""
+    import asyncio
+    import httpx
+    import api.report as R
+
+    calls = []
+
+    def rate_limited():
+        request = httpx.Request("POST", "https://example.test/x")
+        response = httpx.Response(429, headers={"retry-after": "0"},
+                                  request=request)
+        return httpx.HTTPStatusError("throttled", request=request,
+                                     response=response)
+
+    async def flaky(key, prompt):
+        calls.append(1)
+        if len(calls) == 1:
+            raise rate_limited()
+        return "recovered", "gemini"
+
+    sleeps = []
+    real_sleep = asyncio.sleep
+    monkeypatch.setattr(R, "_gemini_report", flaky)
+    monkeypatch.setattr(R.asyncio, "sleep",
+                        lambda s: (sleeps.append(s), real_sleep(0))[1])
+    text, provider = asyncio.run(R._call_provider("gemini", "k", "p"))
+    assert (text, provider) == ("recovered", "gemini")
+    assert len(calls) == 2 and len(sleeps) == 1
+
+
+def test_template_report_explains_itself():
+    """The fallback must read as a plain explanation, not a shrug: what
+    happened, that nothing is invented, and what to do next."""
+    import api.report as R
+
+    context = {"latitude": 1.0, "longitude": 2.0,
+               "fetched_at": "2026-09-25T00:00:00+00:00",
+               "model_estimate": {"p_bloom": 0.5, "ci_lo": 0.2, "ci_hi": 0.8},
+               "drivers": [], "signals": [], "wash_off": {},
+               "spectral_prior": {}, "caveats": []}
+    text = R._template_report(context)
+    lowered = text.lower()
+    assert "built-in summary" in lowered
+    assert "nothing here is guessed" in lowered or "made up" in lowered
+    assert "0.5" in text and "0.2" in text and "0.8" in text
 
 
 if __name__ == "__main__":
