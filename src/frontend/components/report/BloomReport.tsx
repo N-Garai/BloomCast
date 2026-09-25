@@ -4,13 +4,20 @@ import { useState } from "react";
 import { motion } from "framer-motion";
 import { API } from "@/lib/api";
 import { Advisory } from "@/components/dashboard/Resilience";
+import { downloadReportPdf, type ReportPdfInput } from "@/lib/reportPdf";
 
-export function BloomReport({ latitude, longitude, waterbodyName }: { latitude: number; longitude: number; waterbodyName?: string }) {
+export function BloomReport({ latitude, longitude, waterbodyName, assessment }: {
+  latitude: number;
+  longitude: number;
+  waterbodyName?: string;
+  assessment?: any;
+}) {
   const [report, setReport] = useState<string | null>(null);
   const [provider, setProvider] = useState<string | null>(null);
   const [degraded, setDegraded] = useState(false);
   const [degradeReason, setDegradeReason] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -54,7 +61,51 @@ export function BloomReport({ latitude, longitude, waterbodyName }: { latitude: 
   };
 
   const print = () => {
-    window.print();
+    // A standalone PDF of just this report — never a screenshot of the page.
+    if (!assessment) return;
+    setPrinting(true);
+    try {
+      const w = assessment.wash_off ?? {};
+      const week = assessment.week_ahead ?? {};
+      const estimate = assessment.model_estimate ?? null;
+      const input: ReportPdfInput = {
+        latitude: assessment.latitude ?? latitude,
+        longitude: assessment.longitude ?? longitude,
+        placeName: waterbodyName ?? assessment.nearest_waterbody?.name ?? "Picked point",
+        fetchedAt: assessment.fetched_at,
+        provenance: assessment.provenance,
+        headlineRiskPct: Math.round((w.risk_score ?? 0) * 100),
+        headlineRiskLevel: w.risk_level ?? "low",
+        rainfall48hMm: w.rainfall_48h_mm ?? "—",
+        dryDays: w.dry_days_antecedent ?? "—",
+        weekTempC: week.temp_mean_c ?? null,
+        weekWindMs: week.wind_mean_ms ?? null,
+        signals: Array.isArray(assessment.signals) ? assessment.signals : [],
+        trajectory: Array.isArray(assessment.daily_outlook)
+          ? assessment.daily_outlook.map((d: any) => ({ date: String(d.date ?? ""), risk: Number(d.risk_score ?? 0) }))
+          : [],
+        past30d: assessment.past_30d
+          ? `Past 30 days here: ${assessment.past_30d.temp_mean_c ?? "—"}°C mean · ${assessment.past_30d.precip_sum_mm ?? "—"} mm rain — the baseline behind this outlook.`
+          : null,
+        methodLine: assessment.method ?? null,
+        modelEstimate: estimate ? {
+          pct: Math.round((estimate.p_bloom ?? 0) * 100),
+          ciLo: Math.round((estimate.ci_lo ?? 0) * 100),
+          ciHi: Math.round((estimate.ci_hi ?? 0) * 100),
+          drivers: Array.isArray(estimate.drivers) ? estimate.drivers.slice(0, 5).map((d: any) => ({
+            human: String(d.human ?? d.feature ?? ""),
+            contribution: `${d.shap_value > 0 ? "+" : ""}${((d.shap_value ?? 0) * 100).toFixed(1)}%`,
+          })) : [],
+          trainingLine: estimate.training_source ? `${estimate.training_source}${estimate.model_version ? ` · ${estimate.model_version}` : ""}` : null,
+          caveats: estimate.caveats ?? null,
+        } : null,
+        reportText: report ?? "(No AI report generated yet — press Generate report first.)",
+        provider,
+      };
+      downloadReportPdf(input);
+    } finally {
+      setPrinting(false);
+    }
   };
 
   return (
@@ -71,8 +122,8 @@ export function BloomReport({ latitude, longitude, waterbodyName }: { latitude: 
           <button onClick={copy} disabled={!report || copied} className="rounded-lg border border-border-subtle px-3 py-2 text-xs text-fg-secondary hover:text-glow-cyan disabled:opacity-40">
             {copied ? "Copied" : "Copy"}
           </button>
-          <button onClick={print} disabled={!report} className="rounded-lg border border-border-subtle px-3 py-2 text-xs text-fg-secondary hover:text-glow-cyan disabled:opacity-40">
-            Print
+          <button onClick={print} disabled={!assessment || printing} className="rounded-lg border border-border-subtle px-3 py-2 text-xs text-fg-secondary hover:text-glow-cyan disabled:opacity-40">
+            {printing ? "Preparing…" : "PDF"}
           </button>
         </div>
       </div>

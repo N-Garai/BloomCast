@@ -302,7 +302,7 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
             ) : <p className="mt-3 text-[11px] text-fg-faint">No exported model on this deployment yet{result.model_status?.reason ? ` — backend reports: ${result.model_status.reason}` : " — the model estimate appears once real-label artifacts are committed and loadable"}.</p>}
             {nearby && <button onClick={() => onSelectWaterbody?.(nearby!.id)} className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-glow-cyan/10 border border-glow-cyan/30 text-glow-cyan text-sm font-medium hover:bg-glow-cyan/20 transition-colors">Open calibrated forecast: {nearby.name} ({nearby.distance_km} km away) →</button>}
             {!nearby && result.nearest_waterbody && <p className="mt-3 text-[11px] text-fg-faint">Nearest pilot {result.nearest_waterbody.name} is {Math.round(result.nearest_waterbody.distance_km).toLocaleString()} km away — too far for its calibrated forecast to apply. Every number above is this spot&apos;s own live assessment.</p>}
-            {result && <BloomReport latitude={result.latitude} longitude={result.longitude} waterbodyName={nearby?.name} />}
+            {result && <BloomReport latitude={result.latitude} longitude={result.longitude} waterbodyName={nearby?.name} assessment={result} />}
           </motion.div>
         )}
       </AnimatePresence>

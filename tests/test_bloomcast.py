@@ -1743,5 +1743,18 @@ def test_report_keeps_good_sections_regenerates_bad_ones(monkeypatch):
     assert "FIXED cause naming temp_mean_7d" in payload["report"]
 
 
+def test_driver_match_tolerates_paraphrase_not_evasion(monkeypatch):
+    """Multi-word driver names survive LLM paraphrase (majority of
+    significant words) but a lone generic noun does not count."""
+    import api.report as R
+
+    assert R._mentions_driver("Warm temperatures boost algae growth.",
+                              "temp_mean_7d", "Recent warm temperatures") is True
+    assert R._mentions_driver("Temperatures are high today.",
+                              "temp_mean_7d", "Recent warm temperatures") is False
+    assert R._mentions_driver("heat wave flag raised.",
+                              "heat_wave_flag", "") is True
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

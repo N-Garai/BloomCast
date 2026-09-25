@@ -370,13 +370,23 @@ async def _validate_area(name, latitude, longitude):
 
 
 def _mentions_driver(cause, feature, human):
-    """Driver cited when its key or human name appears modulo case and
-    punctuation ("heat_wave_flag" matches "heat wave flag")."""
+    """Driver cited when its key matches exactly, or a majority of its human
+    name's significant words appear ("warm temperatures" counts for "Recent
+    warm temperatures"; bare "temperatures" does not). Exact key match stays
+    the strongest signal; word-majority tolerates the paraphrase LLMs
+    inevitably apply to multi-word names."""
     norm = re.sub(r"[^a-z0-9]+", "", cause.lower())
-    for alias in {str(feature), str(human)}:
-        if re.sub(r"[^a-z0-9]+", "", alias.lower()) in norm:
-            return True
-    return False
+    key = re.sub(r"[^a-z0-9]+", "", str(feature).lower())
+    if key and key in norm:
+        return True
+    words = [w for w in re.split(r"[^a-z0-9]+", str(human).lower())
+             if len(w) > 3]
+    if not words:
+        return False
+    import math
+    need = max(1, math.ceil(len(words) / 2))
+    hits = sum(1 for w in words if w in norm)
+    return hits >= need
 
 
 def _context_numbers(context):
@@ -689,8 +699,13 @@ async def _regenerate_section(key, context):
                        "using only the supplied drivers and signals.")
         keys = ""
     elif key == "cause_effect":
+        names = [str(d.get("human") or d.get("feature"))
+                 for d in (context.get("drivers") or [])
+                 if isinstance(d, dict) and (d.get("human") or d.get("feature"))]
         instruction = ("Lay out the cause-and-effect chain, naming every "
-                       "supplied driver by name.")
+                       "supplied driver by name."
+                       + (" Use these exact driver names: "
+                          + "; ".join(names) + "." if names else ""))
         keys = ""
     else:
         instruction = ("Say concretely what to check next before acting on "
