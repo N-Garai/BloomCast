@@ -3,6 +3,7 @@ import asyncio
 import json
 import os
 import re
+import time
 from datetime import UTC, datetime
 from math import asin, cos, radians, sin, sqrt
 
@@ -71,9 +72,39 @@ def providers_configured():
     return any(_provider_keys().values())
 
 
+# Successful LLM reports cached by (coords, model version, rounded score):
+# pressing Generate twice on the same assessment must not spend quota twice.
+_REPORT_CACHE: dict = {}
+_REPORT_CACHE_TTL_S = 3600.0
+_REPORT_CACHE_MAX = 500
+
+
+def _remember_report(cache_key, text, provider):
+    """Cache a validated LLM report (never templates)."""
+    while len(_REPORT_CACHE) >= _REPORT_CACHE_MAX:
+        oldest = min(_REPORT_CACHE, key=lambda k: _REPORT_CACHE[k][0])
+        _REPORT_CACHE.pop(oldest, None)
+    _REPORT_CACHE[cache_key] = (time.monotonic(), text, provider)
+
+
+def _report_cache_key(assessment):
+    model = assessment.get("model_estimate") or {}
+    score = model.get("p_bloom")
+    if score is None:
+        wash = assessment.get("wash_off") or {}
+        score = wash.get("risk_score")
+    try:
+        rounded = round(float(score), 3)
+    except (TypeError, ValueError):
+        rounded = "none"
+    return (
+        f"{assessment.get('latitude')},{assessment.get('longitude')}"
+        f"|{model.get('model_version') or 'unversioned'}|{rounded}"
+    )
+
+
 async def assess_location(latitude, longitude):
     return await _infer_assess_location(latitude, longitude)
-
 
 def _number_token(value):
     if value is None or isinstance(value, bool):
@@ -801,6 +832,14 @@ async def generate_report(body, assessment):
                                 assessment.get("latitude"),
                                 assessment.get("longitude"))
     context["area_validation"] = area
+    cache_key = _report_cache_key(assessment)
+    cached = _REPORT_CACHE.get(cache_key)
+    if cached is not None:
+        saved_at, cached_text, cached_provider = cached
+        if time.monotonic() - saved_at < _REPORT_CACHE_TTL_S:
+            return (cached_text, cached_provider, context, area,
+                    {"degraded": False, "reason": None})
+        _REPORT_CACHE.pop(cache_key, None)
     order = ("what", "why", "cause_effect", "check_next")
     try:
         text, provider = await asyncio.wait_for(
@@ -829,7 +868,9 @@ async def generate_report(body, assessment):
             'ci_lo_cited': parsed.get('ci_lo_cited'),
             'ci_hi_cited': parsed.get('ci_hi_cited'),
         }
-        return (_render_report_text(assembled), provider, context, area,
+        rendered = _render_report_text(assembled)
+        _remember_report(cache_key, rendered, provider)
+        return (rendered, provider, context, area,
                 {'degraded': False, 'reason': None})
     # Regenerate ONLY the failed sections; kept ones are never re-rolled,
     # and each regeneration carries provider fallback inside.
@@ -866,5 +907,7 @@ async def generate_report(body, assessment):
         'ci_hi_cited': cited.get('ci_hi'),
     }
     label = providers[0] if len(set(providers)) == 1 else '+'.join(sorted(set(providers)))
-    return (_render_report_text(assembled), label, context, area,
+    rendered = _render_report_text(assembled)
+    _remember_report(cache_key, rendered, label)
+    return (rendered, label, context, area,
             {'degraded': False, 'reason': None})

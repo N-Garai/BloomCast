@@ -23,14 +23,14 @@ export function DuplicatedLabelButton({
       href={href}
       className={`group relative overflow-hidden inline-flex h-12 items-center justify-center px-8 rounded-xl text-sm tracking-wide transition-all ${styles} ${className}`}
     >
-      <span className="block transition-transform duration-300 group-hover:-translate-y-full">
-        {label}
-      </span>
-      <span
-        aria-hidden
-        className="absolute inset-0 flex items-center justify-center translate-y-full transition-transform duration-300 group-hover:translate-y-0"
-      >
-        {label}
+      {/* Rolling label: a one-line window; the two-line column slides up by
+          exactly one line on hover. The old version translated each span by
+          its own height inside a 48px box, so both lines stayed visible. */}
+      <span className="block h-[1.5em] overflow-hidden leading-[1.5em]">
+        <span className="flex flex-col transition-transform duration-300 group-hover:-translate-y-1/2 motion-reduce:transition-none motion-reduce:group-hover:translate-y-0">
+          <span className="block">{label}</span>
+          <span aria-hidden className="block">{label}</span>
+        </span>
       </span>
     </Link>
   );

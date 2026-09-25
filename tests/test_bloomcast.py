@@ -450,6 +450,7 @@ def test_report_uses_server_assessment_and_verified_provider(monkeypatch):
         "signals": ["warm week"],
         "nearest_waterbody": None,
     }
+    R._REPORT_CACHE.clear()
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     async def fake_assess(*args, **kwargs):
         return assessment
@@ -505,6 +506,7 @@ def test_report_retries_once_then_uses_template(monkeypatch):
         "wash_off": {"risk_score": 0.4}, "signals": [], "nearest_waterbody": None,
     }
     calls = 0
+    R._REPORT_CACHE.clear()
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     async def fake_assess(*args, **kwargs):
         return assessment
@@ -1731,6 +1733,7 @@ def test_report_keeps_good_sections_regenerates_bad_ones(monkeypatch):
         }), "groq"
 
     monkeypatch.setattr(R, "_generate_with_fallback", fake_generate)
+    R._REPORT_CACHE.clear()
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     monkeypatch.setenv("GROQ_API_KEY", "test-key")
     client = TestClient(app, raise_server_exceptions=False)
@@ -1754,6 +1757,63 @@ def test_driver_match_tolerates_paraphrase_not_evasion(monkeypatch):
                               "temp_mean_7d", "Recent warm temperatures") is False
     assert R._mentions_driver("heat wave flag raised.",
                               "heat_wave_flag", "") is True
+
+
+def test_report_cache_reuses_validated_text(monkeypatch):
+    """Repeat Generate presses on the same assessment must not spend quota:
+    the second identical request returns the cached validated text without
+    calling any provider."""
+    import asyncio
+    import json as _json
+    import api.report as R
+
+    R._REPORT_CACHE.clear()
+    assessment = {
+        "latitude": 60.0, "longitude": 11.0,
+        "provenance": "weather-only-model",
+        "fetched_at": "2026-09-23T15:00:00+00:00",
+        "feature_names": ["temp_mean_7d"],
+        "feature_row": [22.0],
+        "model_estimate": {
+            "p_bloom": 0.5, "ci_lo": 0.2, "ci_hi": 0.8,
+            "drivers": [{"feature": "temp_mean_7d",
+                         "human": "Recent warm temperatures"}],
+        },
+        "wash_off": {"risk_score": 0.4}, "signals": [],
+        "nearest_waterbody": None,
+    }
+    calls = []
+
+    async def fake_assess(*args, **kwargs):
+        return assessment
+
+    monkeypatch.setattr(R, "assess_location", fake_assess)
+
+    async def fake_validate_area(*args, **kwargs):
+        return {"status": "not_requested"}
+
+    monkeypatch.setattr(R, "_validate_area", fake_validate_area)
+
+    async def fake_generate(prompt):
+        calls.append(1)
+        return _json.dumps({
+            "what": "Cached what 0.5, interval 0.2 to 0.8. Stays valid.",
+            "why": "Cached why here today. It stays valid too.",
+            "cause_effect": "Recent warm temperatures drove it. Heat built up.",
+            "check_next": "Recheck soon today. Come back after new data arrives.",
+            "disclaimer": "Advisory only \u2014 not a safety determination.",
+            "p_bloom_cited": 0.5,
+            "ci_lo_cited": 0.2,
+            "ci_hi_cited": 0.8,
+        }), "groq"
+
+    monkeypatch.setattr(R, "_generate_with_fallback", fake_generate)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    first = asyncio.run(R.generate_report({}, assessment))
+    second = asyncio.run(R.generate_report({}, assessment))
+    assert len(calls) == 1
+    assert first[0] == second[0] and first[1] == second[1] == "groq"
+    assert first[4] == {"degraded": False, "reason": None}
 
 
 if __name__ == "__main__":
