@@ -57,6 +57,10 @@ const PAGE_H = 297;
 const MARGIN = 15;
 const CONTENT_W = PAGE_W - MARGIN * 2;
 const BOTTOM = PAGE_H - 18;
+// Report prose lives in a narrower centered column: equal space on the
+// left and right, body left-aligned like proper paragraphs.
+const BODY_X = 28;
+const BODY_W = PAGE_W - BODY_X * 2;
 
 /**
  * WinAnsi sanitize: jsPDF core fonts only encode WinAnsi, so anything
@@ -129,14 +133,14 @@ export function downloadReportPdf(input: ReportPdfInput) {
   };
   const wrapped = (str: string, maxW: number, size = 9.5): string[] =>
     doc.splitTextToSize(san(str), maxW) as string[];
-  const paragraph = (str: string, size = 9.5, color: [number, number, number] = INK.secondary, gap = 4.5, align: "left" | "center" = "left", style = "normal") => {
-    const lines = wrapped(str, CONTENT_W, size);
+  const paragraph = (str: string, size = 9.5, color: [number, number, number] = INK.secondary, gap = 4.5, align: "left" | "center" = "left", style = "normal", x = MARGIN, w = CONTENT_W) => {
+    const lines = doc.splitTextToSize(san(str), w) as string[];
     need(lines.length * gap + 2);
     doc.setFontSize(size);
     doc.setTextColor(...color);
     doc.setFont("helvetica", style);
-    if (align === "center") doc.text(lines, PAGE_W / 2, y, { align: "center" });
-    else doc.text(lines, MARGIN, y);
+    if (align === "center") doc.text(lines, x + w / 2, y, { align: "center" });
+    else doc.text(lines, x, y);
     y += lines.length * gap + 2;
   };
   const kicker = (str: string) => {
@@ -278,7 +282,10 @@ export function downloadReportPdf(input: ReportPdfInput) {
     if (m.caveats) paragraph(m.caveats, 8, INK.faint);
   }
 
-  // ---- Report sections: headings lead, body smaller, italic, centered ----
+  // ---- Report sections: headings lead, body smaller, italic. Body sits
+  // in a centered column (equal left/right space) but reads left-aligned
+  // like proper paragraphs — never centered poem lines. A heading always
+  // keeps its first body lines with it (no orphan headings at page foot).
   need(14);
   kicker(`GROUNDED REPORT${input.provider ? ` · ${input.provider.toUpperCase()}` : ""}`);
   const HEADINGS = ["What", "Why", "Cause→effect chain", "What to check next", "Disclaimer"];
@@ -289,11 +296,11 @@ export function downloadReportPdf(input: ReportPdfInput) {
       return;
     }
     if (HEADINGS.includes(line.trim())) {
-      need(11);
-      text(line.trim(), MARGIN, y + 4, { size: 12.5, style: "bold" });
+      need(11 + 2 * 4.6 + 2);
+      text(line.trim(), BODY_X, y + 4, { size: 12.5, style: "bold" });
       y += 9;
     } else {
-      paragraph(line, 9, INK.secondary, 4.2, "center", "italic");
+      paragraph(line, 9.5, INK.secondary, 4.6, "left", "italic", BODY_X, BODY_W);
       y -= 2;
     }
   });
