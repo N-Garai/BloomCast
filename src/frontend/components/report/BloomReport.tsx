@@ -82,7 +82,7 @@ export function BloomReport({ latitude, longitude, waterbodyName, assessment }: 
         weekWindMs: week.wind_mean_ms ?? null,
         signals: Array.isArray(assessment.signals) ? assessment.signals : [],
         trajectory: Array.isArray(assessment.daily_outlook)
-          ? assessment.daily_outlook.map((d: any) => ({ date: String(d.date ?? ""), risk: Number(d.risk_score ?? 0) }))
+          ? assessment.daily_outlook.map((d: any) => ({ date: String(d.date ?? ""), risk: Number(d.risk_score ?? 0), level: String(d.risk_level ?? "") }))
           : [],
         past30d: assessment.past_30d
           ? `Past 30 days here: ${assessment.past_30d.temp_mean_c ?? "—"}°C mean · ${assessment.past_30d.precip_sum_mm ?? "—"} mm rain — the baseline behind this outlook.`

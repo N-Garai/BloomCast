@@ -72,6 +72,19 @@ def providers_configured():
     return any(_provider_keys().values())
 
 
+# Last 429 timestamp per provider (monotonic seconds). Free-tier quotas die
+# in bursts — usually from the user hammering Generate while testing — and
+# every further attempt during the window just extends the pain. Skipped
+# providers are named in the error so the cooldown is visible, not silent.
+_PROVIDER_COOLDOWN_S = 60.0
+_last_provider_429: dict = {}
+
+
+def _note_provider_429(name):
+    import time
+    _last_provider_429[name] = time.monotonic()
+
+
 # Successful LLM reports cached by (coords, model version, rounded score):
 # pressing Generate twice on the same assessment must not spend quota twice.
 _REPORT_CACHE: dict = {}
@@ -307,17 +320,28 @@ async def _generate_with_fallback(prompt):
 
     Every provider's error is collected, not just the last: the surfaced
     message names each failure, so a dead primary can no longer hide behind
-    the fallback's error.
+    the fallback's error. Providers that 429'd within the cooldown window
+    are skipped outright — hammering a dead quota helps nothing and burns
+    the little budget a retry might need.
     """
+    import time
+
     keys = _provider_keys()
     errors = {}
     for name in ("gemini", "groq"):
         key = keys.get(name, "")
         if not key:
             continue
+        cooled = time.monotonic() - _last_provider_429.get(name, 0.0)
+        if cooled < _PROVIDER_COOLDOWN_S:
+            errors[name] = (f"skipped: rate-limited {int(cooled)}s ago, "
+                            f"cooling down")
+            continue
         try:
             return await _call_provider(name, key, prompt), name
         except Exception as exc:  # noqa: BLE001 - try the next provider
+            if "429" in str(exc):
+                _note_provider_429(name)
             errors[name] = exc
     if errors:
         detail = "; ".join(f"{name} failed: {error}"

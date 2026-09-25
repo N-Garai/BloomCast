@@ -25,7 +25,7 @@ export interface ReportPdfInput {
   weekTempC: number | string | null;
   weekWindMs: number | string | null;
   signals: string[];
-  trajectory: Array<{ date: string; risk: number }>;
+  trajectory: Array<{ date: string; risk: number; level?: string }>;
   past30d?: string | null;
   methodLine?: string | null;
   modelEstimate?: {
@@ -220,15 +220,16 @@ export function downloadReportPdf(input: ReportPdfInput) {
   if (input.past30d) paragraph(input.past30d, 8, INK.faint);
   if (input.methodLine) paragraph(input.methodLine, 8, INK.faint);
 
-  // ---- Trajectory chart ----
+  // ---- Trajectory chart: FIXED 0–100 scale, same as the dashboard.
+  // (An earlier revision normalized to the data max while keeping 0–100
+  // labels, which stretched a flat 10% line into a mid-chart 50% one.)
   if (input.trajectory.length >= 2) {
     need(62);
-    kicker("RISK TRAJECTORY");
+    kicker("RISK TRAJECTORY (0–100%)");
     const plotX = MARGIN;
     const plotW = CONTENT_W;
     const plotH = 38;
     const plotY = y;
-    const maxV = Math.max(0.2, ...input.trajectory.map((d) => d.risk));
     doc.setFontSize(7);
     doc.setTextColor(...INK.faint);
     doc.setFont("courier", "normal");
@@ -242,22 +243,47 @@ export function downloadReportPdf(input: ReportPdfInput) {
       doc.text(`${Math.round(frac * 100)}`, plotX - 2, gy + 1, { align: "right" });
     });
     const px = (i: number) => plotX + (i / (input.trajectory.length - 1)) * plotW;
-    const py = (v: number) => plotY + plotH - Math.min(1, Math.max(0, v / maxV)) * plotH;
+    const py = (v: number) => plotY + plotH - Math.min(1, Math.max(0, v)) * plotH;
+    const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+    // Area wash under the line, like the dashboard: thin vertical strips
+    // (bulletproof vector ops — no path-state fragility).
+    const riskAt = (i: number) => clamp01(input.trajectory[Math.min(i, input.trajectory.length - 1)].risk);
+    // Pre-blended faint cyan (no graphics-state opacity needed).
+    doc.setDrawColor(2, 29, 36);
+    doc.setLineWidth(plotW / 60);
+    for (let s = 0; s <= 60; s++) {
+      const pos = (s / 60) * (input.trajectory.length - 1);
+      const i0 = Math.floor(pos);
+      const frac = pos - i0;
+      const v = riskAt(i0) * (1 - frac) + riskAt(i0 + 1) * frac;
+      const sx = px(pos);
+      doc.line(sx, py(v), sx, py(0));
+    }
     doc.setDrawColor(...INK.cyan);
     doc.setLineWidth(0.8);
     input.trajectory.forEach((d, i) => {
       if (i > 0) doc.line(px(i - 1), py(input.trajectory[i - 1].risk), px(i), py(d.risk));
     });
-    doc.setFillColor(...INK.cyan);
-    input.trajectory.forEach((d, i) => doc.circle(px(i), py(d.risk), 1.4, "F"));
-    doc.setFontSize(7.5);
+    input.trajectory.forEach((d, i) => {
+      const c = riskColor(d.level ?? "");
+      doc.setFillColor(...(d.level ? c : INK.cyan));
+      doc.circle(px(i), py(d.risk), 1.4, "F");
+    });
+    // Area wash under the line, like the dashboard.
+    doc.setFontSize(6.5);
     doc.setTextColor(...INK.faint);
     input.trajectory.forEach((d, i) => {
-      if (i % 2 === 0 || i === input.trajectory.length - 1) {
-        doc.text(d.date.slice(5), px(i), plotY + plotH + 5, { align: "center" });
-      }
+      doc.text(d.date.slice(5), px(i), plotY + plotH + 5, { align: "center" });
     });
-    y = plotY + plotH + 11;
+    // Clamp note only when data actually exceeds the axis.
+    if (input.trajectory.some((d) => d.risk > 1 || d.risk < 0)) {
+      doc.setFontSize(7);
+      doc.setTextColor(...INK.faint);
+      doc.text("Values outside 0–100% are clamped to the axis.", plotX, plotY + plotH + 10);
+      y = plotY + plotH + 16;
+    } else {
+      y = plotY + plotH + 11;
+    }
   }
 
   // ---- Model prediction ----

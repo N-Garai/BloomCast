@@ -1816,5 +1816,40 @@ def test_report_cache_reuses_validated_text(monkeypatch):
     assert first[4] == {"degraded": False, "reason": None}
 
 
+def test_provider_cooldown_skips_throttled_providers(monkeypatch):
+    """After a 429, the provider cools down for 60 s: an immediate retry
+    skips it outright instead of hammering a dead quota. The skip is named
+    in the error so the cooldown is visible, not silent."""
+    import asyncio
+    import api.report as R
+
+    R._last_provider_429.clear()
+    monkeypatch.setattr(R, "_provider_keys",
+                        lambda: {"gemini": "gk", "groq": "qk"})
+    calls = []
+
+    async def always_429(name, key, prompt):
+        calls.append(name)
+        raise RuntimeError(f"{name} failed: 429 Too Many Requests")
+
+    monkeypatch.setattr(R, "_call_provider", always_429)
+    try:
+        try:
+            asyncio.run(R._generate_with_fallback("p"))
+            raise AssertionError("expected RuntimeError")
+        except RuntimeError as exc:
+            assert "429" in str(exc)
+        assert calls == ["gemini", "groq"]
+        calls.clear()
+        try:
+            asyncio.run(R._generate_with_fallback("p"))
+            raise AssertionError("expected RuntimeError")
+        except RuntimeError as exc:
+            assert "cooling down" in str(exc)
+        assert calls == []
+    finally:
+        R._last_provider_429.clear()
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
