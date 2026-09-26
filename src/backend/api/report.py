@@ -78,7 +78,12 @@ _KEY_PATTERNS = (
 
 def sanitize_error(exc):
     """Redact secrets from an exception before it leaves the backend."""
-    text = str(exc) or "unknown provider error"
+    text = str(exc)
+    if not text:
+        if isinstance(exc, asyncio.TimeoutError):
+            text = "LLM provider timed out"
+        else:
+            text = type(exc).__name__
     for pattern in _KEY_PATTERNS:
         text = re.sub(pattern, "[redacted]", text)
     text = re.sub(r"[\r\n]+", " ", text)
@@ -933,6 +938,10 @@ async def _regenerate_section(key, context):
         try:
             raw, provider = await asyncio.wait_for(
                 _generate_with_fallback(prompt), timeout=30.0)
+        except asyncio.TimeoutError:
+            raise RuntimeError(
+                f"section {key}: LLM provider timed out after 30s"
+            ) from None
         except Exception as exc:
             raise RuntimeError(
                 f"section {key}: provider error: {sanitize_error(exc)}"
@@ -1022,11 +1031,16 @@ async def generate_report(body, assessment):
     order = ("what", "why", "cause_effect", "check_next")
     try:
         text, provider = await asyncio.wait_for(
-            _generate_with_fallback(build_prompt(context)), timeout=30.0)
+            _generate_with_fallback(build_prompt(context)), timeout=60.0)
+    except asyncio.TimeoutError:
+        return _template_report(context), "template", context, area, {
+            "degraded": True,
+            "reason": "LLM generation timed out: providers did not respond within 60s.",
+        }
     except Exception as exc:  # noqa: BLE001 - degrade to template
         return _template_report(context), "template", context, area, {
             "degraded": True,
-            "reason": f"LLM generation timed out or failed: {sanitize_error(exc)}",
+            "reason": f"LLM generation failed: {sanitize_error(exc)}",
         }
     parsed = _parse_json_report(text)
     kept = {}
@@ -1064,7 +1078,10 @@ async def generate_report(body, assessment):
     for key in failed:
         try:
             section_text, section_provider, section_cited = await asyncio.wait_for(
-                _regenerate_section(key, context), timeout=30.0)
+                _regenerate_section(key, context), timeout=45.0)
+        except asyncio.TimeoutError:
+            still_failing = [(key, "LLM provider timed out after 45s")]
+            break
         except Exception as exc:
             still_failing = [(key, sanitize_error(exc))]
             break
