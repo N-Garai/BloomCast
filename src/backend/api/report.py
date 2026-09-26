@@ -206,12 +206,15 @@ def _background(context):
 
 REPORT_KEYS = ("what", "why", "cause_effect", "check_next", "disclaimer",
                "p_bloom_cited", "ci_lo_cited", "ci_hi_cited")
+LLM_REPORT_KEYS = ("what", "why", "cause_effect",
+                   "p_bloom_cited", "ci_lo_cited", "ci_hi_cited")
 
 # Sections are generated as SEPARATE small LLM calls (in parallel): each is
 # a tiny constrained task — describe one thing, cite its numbers — so a
 # failure retries one paragraph instead of the whole report, and validation
 # is per-section data instead of whole-prose wording. The disclaimer is a
-# fixed legal line and is never generated.
+# fixed legal line and is never generated. "What to check next" is also
+# template-only: it is generic guidance, not a grounded inference.
 def build_prompt(context):
     measured = json.dumps(context, sort_keys=True, separators=(",", ":"))
     return (
@@ -224,7 +227,6 @@ def build_prompt(context):
         "Respond with a single JSON object and nothing else — no markdown "
         "fences, no prose outside the JSON — with exactly these keys:\n"
         '{"what": "...", "why": "...", "cause_effect": "...", '
-        '"check_next": "...", "disclaimer": "Advisory only — not a safety determination.", '
         '"p_bloom_cited": <exact p_bloom decimal, e.g. 0.6992>, '
         '"ci_lo_cited": <exact ci_lo decimal>, '
         '"ci_hi_cited": <exact ci_hi decimal>}\n'
@@ -639,13 +641,14 @@ def _parse_json_object(text, required_keys):
 
 
 def _parse_json_report(text):
-    """Parse a whole-report reply under the full contract (kept for the
-    contract test; generation itself is section-by-section)."""
-    parsed = _parse_json_object(text, REPORT_KEYS)
+    """Parse a whole-report reply under the LLM contract (only the three
+    generated sections plus cited decimals are required; check_next and
+    disclaimer are filled from template afterwards)."""
+    parsed = _parse_json_object(text, LLM_REPORT_KEYS)
     if parsed is None:
         return None
     if not all(str(parsed[key]).strip() for key in
-               ("what", "why", "cause_effect", "check_next")):
+               ("what", "why", "cause_effect")):
         return None
     return parsed
 
@@ -669,13 +672,11 @@ def _numbers_match(parsed, context):
 
 def _is_valid_report(text, context):
     """Validate the parsed report DATA, not its wording: correct JSON shape,
-    exact disclaimer, cited numbers equal to scored values, drivers named in
-    the cause section. Formatting can no longer fail — there is no formatting
-    for the model to get wrong."""
+    cited numbers equal to scored values, drivers named in the cause section.
+    Formatting can no longer fail — there is no formatting for the model
+    to get wrong. Disclaimer is fixed and not validated here."""
     parsed = _parse_json_report(text)
     if parsed is None:
-        return False
-    if str(parsed.get("disclaimer", "")).strip() != DISCLAIMER:
         return False
     if not _numbers_match(parsed, context):
         return False
@@ -694,11 +695,8 @@ def validation_feedback(text, context):
     parsed = _parse_json_report(text)
     if parsed is None:
         return ["respond with a single JSON object containing the keys "
-                + ", ".join(REPORT_KEYS)]
+                + ", ".join(LLM_REPORT_KEYS)]
     problems = []
-    if str(parsed.get("disclaimer", "")).strip() != DISCLAIMER:
-        problems.append("disclaimer field must be exactly "
-                        f'"{DISCLAIMER}"')
     if not _numbers_match(parsed, context):
         model = context.get("model_estimate") or {}
         problems.append(
@@ -777,27 +775,29 @@ def _template_sections(context):
     else:
         area_text = ""
     what = (
-        f"BloomCast assessed {location} using live weather data fetched at {fetched}.{area_text}\n"
+        f"We checked the water conditions at {location}.\n"
         f"{score_text}\n"
-        "The AI writer could not be reached right now, so you are reading "
-        "the built-in summary instead of an AI-written report. It is shorter "
-        "and plainer, but every number in it comes straight from your live "
-        "assessment above — nothing here is guessed or made up. You can try "
-        "the Generate report button again in a minute for the full write-up."
+        "The AI report is unavailable right now, so here is a plain summary from the live data. "
+        "It is not a safety call — it just shows what the current numbers say. "
+        "You can try Generate report again later for the full AI-written version."
     )
-    why = (f"These are the strongest signals in your data: {driver_text}. "
-           "Bigger values push the risk higher.")
+    why = (
+        f"The main factors raising the risk here are {driver_text}. "
+        "When these factors are strong, conditions become more favorable for a bloom."
+    )
     if drivers:
         cause = (
-            f"The scored feature row contains {driver_text}. {signals or 'No strong weather signal was flagged.'}"
+            f"{driver_text} are the key drivers in this assessment. "
+            f"{signals or 'There were no extra strong weather signals flagged beyond these drivers.'}"
         )
     else:
         cause = (
-            "No scored driver was available for the cause-and-effect chain. "
+            "No specific driver was scored for this assessment. "
             f"{signals or 'No strong weather signal was flagged.'}"
         )
     check = (
-        "Check the next live weather window, the spectral prior status, and citizen reports before acting on this estimate."
+        "Watch the next live weather update, check the spectral prior status, "
+        "and review any citizen reports before acting on this estimate."
     )
     return {"what": what, "why": why, "cause_effect": cause,
             "check_next": check}
@@ -882,6 +882,8 @@ async def _regenerate_section(key, context):
     (text, provider, cited_dict). Raises RuntimeError when it cannot be
     produced honestly — the caller then degrades the whole report rather
     than mixing in an unvalidated paragraph."""
+    if key in ("check_next", "disclaimer"):
+        raise RuntimeError(f"{key} is template-only and is never regenerated")
     if key == "what":
         instruction = ("Summarize what was assessed (location, data time) "
                        "and state the headline estimate with its exact "
@@ -1028,7 +1030,7 @@ async def generate_report(body, assessment):
             return (cached_text, cached_provider, context, area,
                     {"degraded": False, "reason": None})
         _REPORT_CACHE.pop(cache_key, None)
-    order = ("what", "why", "cause_effect", "check_next")
+    order = ("what", "why", "cause_effect")
     try:
         text, provider = await asyncio.wait_for(
             _generate_with_fallback(build_prompt(context)), timeout=60.0)
@@ -1051,11 +1053,12 @@ async def generate_report(body, assessment):
                 kept[key] = str(parsed[key]).strip()
     failed = [key for key in order if key not in kept]
     if not failed:
+        template_sections = _template_sections(context)
         assembled = {
             'what': kept['what'],
             'why': kept['why'],
             'cause_effect': kept['cause_effect'],
-            'check_next': kept['check_next'],
+            'check_next': template_sections['check_next'],
             'disclaimer': DISCLAIMER,
             'p_bloom_cited': parsed.get('p_bloom_cited'),
             'ci_lo_cited': parsed.get('ci_lo_cited'),

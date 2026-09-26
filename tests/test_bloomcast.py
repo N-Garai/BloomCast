@@ -1455,7 +1455,7 @@ def test_report_validation_accepts_json_contract(monkeypatch):
     assert R._is_valid_report("Just some prose, no JSON.", context) is False
     assert R.validation_feedback("", context) == [
         "respond with a single JSON object containing the keys "
-        + ", ".join(R.REPORT_KEYS)]
+        + ", ".join(R.LLM_REPORT_KEYS)]
 
 
 def test_upstream_throttle_surfaces_as_429(monkeypatch):
@@ -1680,8 +1680,8 @@ def test_report_429_backs_off_then_retries(monkeypatch):
                "spectral_prior": {}, "caveats": []}
     text = R._template_report(context)
     lowered = text.lower()
-    assert "built-in summary" in lowered
-    assert "nothing here is guessed" in lowered or "made up" in lowered
+    assert "plain summary" in lowered
+    assert "not a safety call" in lowered
     assert "0.5" in text and "0.2" in text and "0.8" in text
 
 
