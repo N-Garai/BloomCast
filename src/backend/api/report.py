@@ -640,6 +640,19 @@ def _parse_json_object(text, required_keys):
     return None
 
 
+def _parse_section_text(raw, key):
+    """Accept either `{"text": "..."}` or the full-report JSON and extract
+    the requested section. Some providers ignore the section-only schema
+    and return the full report shape instead."""
+    parsed = _parse_json_object(raw, ("text",))
+    if parsed is not None and str(parsed.get("text", "")).strip():
+        return str(parsed["text"]).strip()
+    full = _parse_json_object(raw, LLM_REPORT_KEYS)
+    if full is not None and str(full.get(key, "")).strip():
+        return str(full[key]).strip()
+    return None
+
+
 def _parse_json_report(text):
     """Parse a whole-report reply under the LLM contract (only the three
     generated sections plus cited decimals are required; check_next and
@@ -948,21 +961,21 @@ async def _regenerate_section(key, context):
             raise RuntimeError(
                 f"section {key}: provider error: {sanitize_error(exc)}"
             ) from exc
-        parsed = _parse_json_object(raw, ("text",))
-        if parsed is None or not str(parsed.get("text", "")).strip():
+        section_text = _parse_section_text(raw, key)
+        if section_text is None:
             last_problems = [
                 "respond with a single JSON object with a non-empty "
                 "text field"
             ]
             continue
         last_problems = _validate_section_text(
-            key, str(parsed["text"]).strip(), parsed, context)
+            key, section_text, {"text": section_text}, context)
         if not last_problems:
             cited = {
-                name: parsed.get(f"{name}_cited")
+                name: None
                 for name in ("p_bloom", "ci_lo", "ci_hi")
             }
-            return str(parsed["text"]).strip(), provider, cited
+            return section_text, provider, cited
     raise RuntimeError(f"section {key}: " + "; ".join(last_problems))
 
 
