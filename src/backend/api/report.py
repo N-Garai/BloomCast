@@ -16,10 +16,11 @@ DISCLAIMER = "Advisory only — not a safety determination."
 # Model IDs are env-overridable so the next vendor retirement is a config
 # change, not a code change. Defaults verified September 2026:
 # - gemini-2.0-flash was shut down June 1, 2026 (use 3.5-flash).
-# - llama-3.1-8b-instant deprecation announced June 17, 2026
-#   (use openai/gpt-oss-120b).
+# - llama-3.1-8b-instant deprecation announced June 17, 2026.
+#   openai/gpt-oss-20b carries the same free quota as the 120b
+#   (30 RPM / 1K RPD / 8K TPM) at lower latency.
+GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
-GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-120b")
 SYSTEM = (
     "You are BloomCast's grounded report writer. Use only supplied measured or "
     "computed values and verified background. Do not invent facts or numbers. "
@@ -290,6 +291,34 @@ def _rate_limit_wait(exc):
     return None
 
 
+def _provider_http_error(name, exc):
+    """Rebuild an HTTP error with the vendor's own explanation attached.
+    Status codes alone never name the cause — Groq/Gemini error bodies do
+    (retired model, TPM cap, bad parameter, quota exhausted)."""
+    response = getattr(exc, "response", None)
+    status = getattr(response, "status_code", "unknown")
+    detail = ""
+    try:
+        payload = response.json() if response is not None else None
+        if isinstance(payload, dict):
+            error = payload.get("error")
+            if isinstance(error, dict):
+                detail = str(error.get("message", ""))
+            elif error:
+                detail = str(error)
+    except Exception:  # noqa: BLE001 - fall back to raw text
+        detail = ""
+    if not detail:
+        try:
+            detail = response.text if response is not None else ""
+        except Exception:  # noqa: BLE001 - body unreadable, keep status only
+            detail = ""
+    detail = str(detail)[:300]
+    if detail:
+        return RuntimeError(f"{name} HTTP {status}: {detail}")
+    return RuntimeError(f"{name} HTTP {status}")
+
+
 async def _call_provider(name, key, prompt):
     """One provider with a single Retry-After-aware retry on 429.
 
@@ -304,6 +333,8 @@ async def _call_provider(name, key, prompt):
             if name == "gemini":
                 return await _gemini_report(key, prompt)
             return await _groq_report(key, prompt)
+        except httpx.TimeoutException as exc:
+            raise RuntimeError(f"{name} timed out") from exc
         except httpx.HTTPStatusError as exc:
             response = exc.response
             if (attempt == "initial" and response is not None
@@ -312,7 +343,7 @@ async def _call_provider(name, key, prompt):
                 if wait is not None:
                     await asyncio.sleep(wait)
                     continue
-            raise
+            raise _provider_http_error(name, exc) from exc
 
 
 async def _generate_with_fallback(prompt):

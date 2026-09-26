@@ -1661,9 +1661,6 @@ def test_report_429_backs_off_then_retries(monkeypatch):
     text, provider = asyncio.run(R._call_provider("gemini", "k", "p"))
     assert (text, provider) == ("recovered", "gemini")
     assert len(calls) == 2 and len(sleeps) == 1
-
-
-def test_template_report_explains_itself():
     """The fallback must read as a plain explanation, not a shrug: what
     happened, that nothing is invented, and what to do next."""
     import api.report as R
@@ -1912,6 +1909,51 @@ def test_section_provider_error_skips_retry(monkeypatch):
         raise AssertionError("expected RuntimeError")
     except RuntimeError as exc:
         assert "provider error" in str(exc)
+
+
+def test_provider_http_error_quotes_vendor_body(monkeypatch):
+    """A vendor 400 must surface its own explanation (retired model, TPM
+    cap, bad parameter) instead of a bare status code — the status alone
+    never names the cause."""
+    import asyncio
+    import httpx
+    import api.report as R
+
+    def bad_model(*args, **kwargs):
+        request = httpx.Request("POST", "https://example.test/x")
+        response = httpx.Response(
+            400,
+            json={"error": {"message": "model_not_available: gone", "type": "invalid_request"}},
+            request=request,
+        )
+        raise httpx.HTTPStatusError("bad", request=request, response=response)
+
+    monkeypatch.setattr(R, "_groq_report", bad_model)
+    try:
+        asyncio.run(R._call_provider("groq", "k", "p"))
+        raise AssertionError("expected RuntimeError")
+    except RuntimeError as exc:
+        assert "groq HTTP 400" in str(exc)
+        assert "model_not_available" in str(exc)
+
+
+def test_report_model_ids_defined_and_overridable(monkeypatch):
+    """Both provider model IDs must exist as module constants (a past edit
+    deleted GEMINI_MODEL while its call site survived — live NameError that
+    no mocked test caught) and honor env overrides."""
+    import importlib
+    import api.report as R
+
+    importlib.reload(R)
+    assert R.GEMINI_MODEL == "gemini-3.5-flash"
+    assert R.GROQ_MODEL == "openai/gpt-oss-20b"
+    monkeypatch.setenv("GEMINI_MODEL", "custom-gemini")
+    monkeypatch.setenv("GROQ_MODEL", "custom-groq")
+    importlib.reload(R)
+    assert R.GEMINI_MODEL == "custom-gemini"
+    assert R.GROQ_MODEL == "custom-groq"
+    monkeypatch.undo()
+    importlib.reload(R)
 
 
 if __name__ == "__main__":
