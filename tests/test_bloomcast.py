@@ -524,18 +524,22 @@ def test_report_retries_once_then_uses_template(monkeypatch):
             return "What\n0.42\nDisclaimer\nAdvisory only — not a safety determination.", "gemini"
         return "What\n0.4\nDisclaimer\nAdvisory only — not a safety determination.", "gemini"
 
+    async def instant_sleep(delay):
+        return None
+
     monkeypatch.setattr(R, "_generate_with_fallback", fake_generate)
+    monkeypatch.setattr(R.asyncio, "sleep", instant_sleep)
     client = TestClient(app, raise_server_exceptions=False)
     response = client.post("/v1/report", json={"lat": 1.0, "lon": 2.0})
     assert response.status_code == 200
     payload = response.json()
-    assert payload["provider"] == "template"
+    assert payload["provider"] == "gemini+template"
     assert payload["degraded"]["degraded"] is True
     assert "0.4" in payload["report"]
-    # Initial call plus the first section regeneration failing fast —
-    # the loop breaks on the first unfixable section instead of burning
-    # calls on the rest, then degrades to the template.
-    assert calls == 2
+    assert "Built-in text used for: what" in payload["degraded"]["reason"]
+    # Initial call plus one section regeneration (initial + spaced retry),
+    # then the template names the failing section.
+    assert calls == 3
 
 
 def test_explore_live_row_and_estimate():
@@ -1849,6 +1853,65 @@ def test_provider_cooldown_skips_throttled_providers(monkeypatch):
         assert calls == []
     finally:
         R._last_provider_429.clear()
+
+
+def test_section_spaced_retry_recovers(monkeypatch):
+    """A section that fails validation once succeeds after the spaced
+    correction retry — without discarding the already-kept sections."""
+    import asyncio
+    import json as _json
+    import api.report as R
+
+    R._REPORT_CACHE.clear()
+    attempts = []
+
+    async def fake_generate(prompt):
+        attempts.append(1)
+        if len(attempts) == 1:
+            return _json.dumps({
+                "text": "Too short.",
+                "p_bloom_cited": 0.5,
+                "ci_lo_cited": 0.2,
+                "ci_hi_cited": 0.8,
+            }), "gemini"
+        return _json.dumps({
+            "text": "Recovered why section here today. It passes checks now.",
+        }), "groq"
+
+    async def instant_sleep(delay):
+        return None
+
+    monkeypatch.setattr(R, "_generate_with_fallback", fake_generate)
+    monkeypatch.setattr(R.asyncio, "sleep", instant_sleep)
+    monkeypatch.setenv("GEMINI_API_KEY", "test-key")
+    context = {"model_estimate": {"p_bloom": 0.5, "ci_lo": 0.2,
+                                  "ci_hi": 0.8},
+               "drivers": []}
+    text, provider, cited = asyncio.run(R._regenerate_section("why", context))
+    assert "Recovered why" in text
+    assert provider == "groq"
+    assert len(attempts) == 2
+
+
+def test_section_provider_error_skips_retry(monkeypatch):
+    """Provider errors fail fast with no spaced retry: backoff already
+    happened inside the provider call, so waiting again only burns quota."""
+    import asyncio
+    import api.report as R
+
+    async def instant_sleep(delay):
+        raise AssertionError("sleep must not run on provider errors")
+
+    async def boom(prompt):
+        raise RuntimeError("gemini failed: 429 stiffed")
+
+    monkeypatch.setattr(R, "_generate_with_fallback", boom)
+    monkeypatch.setattr(R.asyncio, "sleep", instant_sleep)
+    try:
+        asyncio.run(R._regenerate_section("why", {"drivers": []}))
+        raise AssertionError("expected RuntimeError")
+    except RuntimeError as exc:
+        assert "provider error" in str(exc)
 
 
 if __name__ == "__main__":

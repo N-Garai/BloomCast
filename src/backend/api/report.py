@@ -600,7 +600,10 @@ def _render_report_text(parsed):
     )
 
 
-def _template_report(context):
+def _template_sections(context):
+    """Built-in body text per section (no headings) — the same strings the
+    full template report uses, exposed so a mixed report can template-fill
+    ONLY its failed sections while keeping validated LLM paragraphs."""
     model = context.get("model_estimate") or {}
     wash_off = context.get("wash_off") or {}
     latitude = context.get("latitude")
@@ -647,7 +650,7 @@ def _template_report(context):
     else:
         area_text = ""
     what = (
-        f"What\nBloomCast assessed {location} using live weather data fetched at {fetched}.{area_text}\n"
+        f"BloomCast assessed {location} using live weather data fetched at {fetched}.{area_text}\n"
         f"{score_text}\n"
         "The AI writer could not be reached right now, so you are reading "
         "the built-in summary instead of an AI-written report. It is shorter "
@@ -655,23 +658,30 @@ def _template_report(context):
         "assessment above — nothing here is guessed or made up. You can try "
         "the Generate report button again in a minute for the full write-up."
     )
-    why = (f"Why\nThese are the strongest signals in your data: {driver_text}. "
+    why = (f"These are the strongest signals in your data: {driver_text}. "
            "Bigger values push the risk higher.")
     if drivers:
         cause = (
-            "Cause→effect chain\n"
             f"The scored feature row contains {driver_text}. {signals or 'No strong weather signal was flagged.'}"
         )
     else:
         cause = (
-            "Cause→effect chain\n"
             "No scored driver was available for the cause-and-effect chain. "
             f"{signals or 'No strong weather signal was flagged.'}"
         )
     check = (
-        "What to check next\n"
         "Check the next live weather window, the spectral prior status, and citizen reports before acting on this estimate."
     )
+    return {"what": what, "why": why, "cause_effect": cause,
+            "check_next": check}
+
+
+def _template_report(context):
+    parts = _template_sections(context)
+    what = f"What\n{parts['what']}"
+    why = f"Why\n{parts['why']}"
+    cause = f"Cause→effect chain\n{parts['cause_effect']}"
+    check = f"What to check next\n{parts['check_next']}"
     return f"{what}\n\n{why}\n\n{cause}\n\n{check}\n\nDisclaimer\n{DISCLAIMER}\n"
 
 
@@ -782,22 +792,45 @@ async def _regenerate_section(key, context):
                        "to come back and recheck.")
         keys = ""
     prompt = build_section_prompt(context, key, instruction, keys)
-    try:
-        raw, provider = await asyncio.wait_for(
-            _generate_with_fallback(prompt), timeout=14.0)
-    except Exception as exc:  # noqa: BLE001 - caller degrades to template
-        raise RuntimeError(f"section {key}: provider error: "
-                           f"{sanitize_error(exc)}") from exc
-    parsed = _parse_json_object(raw, ("text",))
-    if parsed is None or not str(parsed.get("text", "")).strip():
-        raise RuntimeError(f"section {key}: not valid section JSON")
-    problems = _validate_section_text(key, str(parsed["text"]).strip(),
-                                      parsed, context)
-    if problems:
-        raise RuntimeError(f"section {key}: " + "; ".join(problems))
-    cited = {name: parsed.get(f"{name}_cited")
-             for name in ("p_bloom", "ci_lo", "ci_hi")}
-    return str(parsed["text"]).strip(), provider, cited
+    base_prompt = prompt
+    last_problems: list = ["no attempt yet"]
+    for attempt in ("initial", "spaced-retry"):
+        if attempt == "spaced-retry":
+            # A short pause before retrying: transient model glitches and
+            # per-minute quota windows often clear within seconds, while a
+            # same-millisecond retry fails identically. Provider errors skip
+            # the retry entirely (backoff already happened inside the call).
+            await asyncio.sleep(4.0)
+            prompt = (
+                base_prompt
+                + "\n\nSTRICT CORRECTION — your previous draft failed "
+                + "validation for these reasons; fix every one, keep "
+                + "everything else:\n- "
+                + "\n- ".join(last_problems)
+            )
+        try:
+            raw, provider = await asyncio.wait_for(
+                _generate_with_fallback(prompt), timeout=14.0)
+        except Exception as exc:
+            raise RuntimeError(
+                f"section {key}: provider error: {sanitize_error(exc)}"
+            ) from exc
+        parsed = _parse_json_object(raw, ("text",))
+        if parsed is None or not str(parsed.get("text", "")).strip():
+            last_problems = [
+                "respond with a single JSON object with a non-empty "
+                "text field"
+            ]
+            continue
+        last_problems = _validate_section_text(
+            key, str(parsed["text"]).strip(), parsed, context)
+        if not last_problems:
+            cited = {
+                name: parsed.get(f"{name}_cited")
+                for name in ("p_bloom", "ci_lo", "ci_hi")
+            }
+            return str(parsed["text"]).strip(), provider, cited
+    raise RuntimeError(f"section {key}: " + "; ".join(last_problems))
 
 
 def _section_length_ok(key, text):
@@ -897,29 +930,26 @@ async def generate_report(body, assessment):
         return (rendered, provider, context, area,
                 {'degraded': False, 'reason': None})
     # Regenerate ONLY the failed sections; kept ones are never re-rolled,
-    # and each regeneration carries provider fallback inside.
-    texts = dict(kept)
+    # and each regeneration carries provider fallback inside. Assembly is
+    # template-first: every section starts as built-in text and validated
+    # LLM paragraphs overwrite it, so no combination of outcomes can raise
+    # KeyError and no validated paragraph is ever discarded.
+    texts = _template_sections(context)
+    texts.update(kept)
     cited = {name: (parsed or {}).get(f'{name}_cited')
              for name in ('p_bloom', 'ci_lo', 'ci_hi')}
+    still_failing = []
     for key in failed:
         try:
             section_text, section_provider, section_cited = await asyncio.wait_for(
-                _regenerate_section(key, context), timeout=20.0)
-        except Exception:
-            still_failing = [key]
+                _regenerate_section(key, context), timeout=30.0)
+        except Exception as exc:
+            still_failing = [(key, sanitize_error(exc))]
             break
         texts[key] = section_text
         providers.append(section_provider)
         if key == 'what':
             cited = dict(section_cited)
-    else:
-        still_failing = []
-    if still_failing:
-        return _template_report(context), 'template', context, area, {
-            'degraded': True,
-            'reason': 'Report sections failed: ' + ', '.join(still_failing)
-                      + '; template report used',
-        }
     assembled = {
         'what': texts['what'],
         'why': texts['why'],
@@ -930,6 +960,15 @@ async def generate_report(body, assessment):
         'ci_lo_cited': cited.get('ci_lo'),
         'ci_hi_cited': cited.get('ci_hi'),
     }
+    if still_failing:
+        providers.append('template')
+        label = '+'.join(sorted(set(providers)))
+        rendered = _render_report_text(assembled)
+        return (rendered, label, context, area, {
+            'degraded': True,
+            'reason': 'Built-in text used for: ' + ', '.join(
+                f'{key} ({detail})' for key, detail in still_failing),
+        })
     label = providers[0] if len(set(providers)) == 1 else '+'.join(sorted(set(providers)))
     rendered = _render_report_text(assembled)
     _remember_report(cache_key, rendered, label)
