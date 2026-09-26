@@ -21,6 +21,22 @@ DISCLAIMER = "Advisory only — not a safety determination."
 #   (30 RPM / 1K RPD / 8K TPM) at lower latency.
 GROQ_MODEL = os.environ.get("GROQ_MODEL", "openai/gpt-oss-20b")
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
+# Second Gemini model tried before leaving Google: lighter Flash-Lite
+# variants carry the highest free-tier quotas, so a throttled primary
+# often succeeds on lite immediately. Empty string disables it.
+GEMINI_FALLBACK_MODEL = os.environ.get("GEMINI_FALLBACK_MODEL", "gemini-3.5-flash-lite")
+
+
+def _provider_chain():
+    """Ordered (provider, model) attempts: primary Gemini, lite Gemini,
+    then Groq. Quota is per model as well as per project, so a 429 on one
+    model frequently leaves the next usable."""
+    chain = [("gemini", GEMINI_MODEL)]
+    fallback = (GEMINI_FALLBACK_MODEL or "").strip()
+    if fallback and fallback != GEMINI_MODEL:
+        chain.append(("gemini", fallback))
+    chain.append(("groq", GROQ_MODEL))
+    return chain
 SYSTEM = (
     "You are BloomCast's grounded report writer. Use only supplied measured or "
     "computed values and verified background. Do not invent facts or numbers. "
@@ -215,10 +231,10 @@ def build_prompt(context):
     )
 
 
-async def _gemini_report(key, prompt):
+async def _gemini_report(key, prompt, model=None):
     async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.post(
-            f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent",
+            f"https://generativelanguage.googleapis.com/v1beta/models/{model or GEMINI_MODEL}:generateContent",
             headers={"x-goog-api-key": key, "Content-Type": "application/json"},
             json={
                 "system_instruction": {"parts": [{"text": SYSTEM}]},
@@ -251,6 +267,31 @@ async def _gemini_report(key, prompt):
         raise RuntimeError(f"unexpected Gemini response shape: {exc}") from exc
 
 
+# JSON Schema for Groq strict structured outputs (per Groq docs: strict
+# mode uses constrained decoding — it cannot emit invalid JSON, so the
+# "Failed to generate/validate JSON" 400 class disappears. All fields
+# required; the cited decimals are number-or-null for model-less heuristic
+# assessments that carry no model estimate.
+REPORT_JSON_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "what": {"type": "string"},
+        "why": {"type": "string"},
+        "cause_effect": {"type": "string"},
+        "check_next": {"type": "string"},
+        "disclaimer": {"type": "string"},
+        "p_bloom_cited": {"type": ["number", "null"]},
+        "ci_lo_cited": {"type": ["number", "null"]},
+        "ci_hi_cited": {"type": ["number", "null"]},
+    },
+    "required": [
+        "what", "why", "cause_effect", "check_next", "disclaimer",
+        "p_bloom_cited", "ci_lo_cited", "ci_hi_cited",
+    ],
+    "additionalProperties": False,
+}
+
+
 async def _groq_completion(key, prompt, json_mode):
     async with httpx.AsyncClient(timeout=10.0) as client:
         payload = {
@@ -263,7 +304,14 @@ async def _groq_completion(key, prompt, json_mode):
             "temperature": 0.25,
         }
         if json_mode:
-            payload["response_format"] = {"type": "json_object"}
+            payload["response_format"] = {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "bloom_report",
+                    "strict": True,
+                    "schema": REPORT_JSON_SCHEMA,
+                },
+            }
         response = await client.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
@@ -278,14 +326,19 @@ async def _groq_completion(key, prompt, json_mode):
 
 
 async def _groq_report(key, prompt):
-    """Groq with a plain-text second chance: small models sometimes fail
-    Groq-side JSON validation ("Failed to validate JSON") even on a valid
-    prompt. Dropping `response_format` almost always recovers, and our own
-    parser tolerates fences — so a mode failure costs one retry, not the
-    whole report."""
+    """Groq, strict structured outputs first: per Groq docs, strict mode
+    (constrained decoding, supported on gpt-oss-20b) cannot emit invalid
+    JSON, which retires the whole "Failed to generate/validate JSON" 400
+    class. Plain text without response_format is the fallback for models
+    or outages where strict mode itself is rejected."""
     try:
         return await _groq_completion(key, prompt, json_mode=True)
     except Exception as exc:
+        # ONLY JSON-validation failures fall back to plain text: a strict
+        # schema rejection means the mode (not the quota) is at fault, and
+        # plain replies parse through the fence-tolerant parser. Anything
+        # else (auth, TPM caps, rate limits) propagates untouched so quota
+        # and credential problems stay visible instead of being retried.
         lowered = str(exc).lower()
         if "failed_generation" not in lowered and "validate json" not in lowered:
             raise
@@ -336,8 +389,8 @@ def _provider_http_error(name, exc):
     return RuntimeError(f"{name} HTTP {status}")
 
 
-async def _call_provider(name, key, prompt):
-    """One provider with a single Retry-After-aware retry on 429.
+async def _call_provider(name, key, prompt, model=None):
+    """One provider/model with a single Retry-After-aware retry on 429.
 
     Rate limits are transient by design — both Gemini and Groq document
     429 + Retry-After — so a throttled first attempt waits out the hint and
@@ -348,7 +401,7 @@ async def _call_provider(name, key, prompt):
     for attempt in ("initial", "after-backoff"):
         try:
             if name == "gemini":
-                return await _gemini_report(key, prompt)
+                return await _gemini_report(key, prompt, model)
             return await _groq_report(key, prompt)
         except httpx.TimeoutException as exc:
             raise RuntimeError(f"{name} timed out") from exc
@@ -364,9 +417,10 @@ async def _call_provider(name, key, prompt):
 
 
 async def _generate_with_fallback(prompt):
-    """Gemini first (primary), Groq second (fallback) — in that order.
+    """Provider chain in order (see _provider_chain): Gemini primary, lite
+    Gemini, then Groq.
 
-    Every provider's error is collected, not just the last: the surfaced
+    Every attempt's error is collected, not just the last: the surfaced
     message names each failure, so a dead primary can no longer hide behind
     the fallback's error. Providers that 429'd within the cooldown window
     are skipped outright — hammering a dead quota helps nothing and burns
@@ -376,24 +430,25 @@ async def _generate_with_fallback(prompt):
 
     keys = _provider_keys()
     errors = {}
-    for name in ("gemini", "groq"):
+    for name, model in _provider_chain():
         key = keys.get(name, "")
         if not key:
             continue
-        cooled = time.monotonic() - _last_provider_429.get(name, 0.0)
+        slot = f"{name}/{model}"
+        cooled = time.monotonic() - _last_provider_429.get(slot, 0.0)
         if cooled < _PROVIDER_COOLDOWN_S:
-            errors[name] = (f"skipped: rate-limited {int(cooled)}s ago, "
+            errors[slot] = (f"skipped: rate-limited {int(cooled)}s ago, "
                             f"cooling down")
             continue
         try:
-            return await _call_provider(name, key, prompt), name
+            return await _call_provider(name, key, prompt, model), name
         except Exception as exc:  # noqa: BLE001 - try the next provider
             if "429" in str(exc):
-                _note_provider_429(name)
-            errors[name] = exc
+                _note_provider_429(slot)
+            errors[slot] = exc
     if errors:
-        detail = "; ".join(f"{name} failed: {error}"
-                           for name, error in errors.items())
+        detail = "; ".join(f"{slot} failed: {error}"
+                           for slot, error in errors.items())
         raise RuntimeError(f"all configured providers failed: {detail}")
     raise NoKeyError(
         "AI reports are not configured on this deployment "
@@ -538,25 +593,33 @@ def _prose_numbers_ok(text, allowed):
 
 
 def _parse_json_object(text, required_keys):
-    """Parse a provider JSON reply (tolerating markdown fences). Returns the
-    dict when every required key holds a string or number and the text fields
-    are non-empty — else None."""
+    """Parse a provider JSON reply (tolerating markdown fences AND leading /
+    trailing chatter — plain-text replies often wrap the object in a
+    sentence). Returns the dict when every required key holds a string or
+    number — else None."""
     if not text or not text.strip():
         return None
     cleaned = text.strip()
     if cleaned.startswith("```"):
         cleaned = re.sub(r"^```[a-zA-Z]*\n?", "", cleaned)
         cleaned = re.sub(r"\n?```$", "", cleaned).strip()
-    try:
-        parsed = json.loads(cleaned)
-    except (ValueError, TypeError):
-        return None
-    if not isinstance(parsed, dict):
-        return None
-    if any(not isinstance(parsed.get(key), (str, int, float))
-           for key in required_keys):
-        return None
-    return parsed
+    candidates = [cleaned]
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if 0 <= start < end:
+        candidates.append(cleaned[start:end + 1])
+    for candidate in candidates:
+        try:
+            parsed = json.loads(candidate)
+        except (ValueError, TypeError):
+            continue
+        if not isinstance(parsed, dict):
+            continue
+        if any(not isinstance(parsed.get(key), (str, int, float))
+               for key in required_keys):
+            continue
+        return parsed
+    return None
 
 
 def _parse_json_report(text):

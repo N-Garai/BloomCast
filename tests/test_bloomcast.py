@@ -1368,16 +1368,17 @@ def test_report_reason_never_leaks_keys(monkeypatch):
 
 
 def test_report_tries_gemini_first_then_groq(monkeypatch):
-    """Provider order is contractual: Gemini primary, Groq fallback. Both
-    errors must surface (the old code showed only the last one, hiding a
-    dead primary behind the fallback's error)."""
+    """Provider order is contractual: Gemini primary, lite Gemini, Groq
+    fallback. Both errors must surface (the old code showed only the last
+    one, hiding a dead primary behind the fallback's error)."""
     import asyncio
     import api.report as R
 
+    R._last_provider_429.clear()
     calls = []
 
-    async def flaky(name, key, prompt):
-        calls.append(name)
+    async def flaky(name, key, prompt, model=None):
+        calls.append((name, model))
         if name == "gemini":
             raise RuntimeError("gemini 404 shut down")
         return "groq text", "groq"
@@ -1385,22 +1386,29 @@ def test_report_tries_gemini_first_then_groq(monkeypatch):
     monkeypatch.setattr(R, "_call_provider", flaky)
     monkeypatch.setattr(R, "_provider_keys",
                         lambda: {"gemini": "gk", "groq": "qk"})
-    text, provider = asyncio.run(R._generate_with_fallback("prompt"))
-    assert calls == ["gemini", "groq"]
-    assert text == ("groq text", "groq") and provider == "groq"
-
-    async def both_dead(name, key, prompt):
-        calls.append(name)
-        raise RuntimeError(f"{name} down")
-
-    monkeypatch.setattr(R, "_call_provider", both_dead)
-    calls.clear()
     try:
-        asyncio.run(R._generate_with_fallback("prompt"))
-        raise AssertionError("expected RuntimeError")
-    except RuntimeError as exc:
-        message = R.sanitize_error(exc)
-        assert "gemini failed" in message and "groq failed" in message
+        text, provider = asyncio.run(R._generate_with_fallback("prompt"))
+        assert calls == [("gemini", R.GEMINI_MODEL),
+                         ("gemini", R.GEMINI_FALLBACK_MODEL),
+                         ("groq", R.GROQ_MODEL)]
+        assert text == ("groq text", "groq") and provider == "groq"
+
+        async def both_dead(name, key, prompt, model=None):
+            calls.append((name, model))
+            raise RuntimeError(f"{name} down")
+
+        monkeypatch.setattr(R, "_call_provider", both_dead)
+        calls.clear()
+        try:
+            asyncio.run(R._generate_with_fallback("prompt"))
+            raise AssertionError("expected RuntimeError")
+        except RuntimeError as exc:
+            message = R.sanitize_error(exc)
+            assert "gemini/gemini-3.5-flash failed" in message
+            assert "gemini/gemini-3.5-flash-lite failed" in message
+            assert "groq/openai/gpt-oss-20b failed" in message
+    finally:
+        R._last_provider_429.clear()
 
 
 def test_report_validation_accepts_json_contract(monkeypatch):
@@ -1647,7 +1655,7 @@ def test_report_429_backs_off_then_retries(monkeypatch):
         return httpx.HTTPStatusError("throttled", request=request,
                                      response=response)
 
-    async def flaky(key, prompt):
+    async def flaky(key, prompt, model=None):
         calls.append(1)
         if len(calls) == 1:
             raise rate_limited()
@@ -1829,8 +1837,8 @@ def test_provider_cooldown_skips_throttled_providers(monkeypatch):
                         lambda: {"gemini": "gk", "groq": "qk"})
     calls = []
 
-    async def always_429(name, key, prompt):
-        calls.append(name)
+    async def always_429(name, key, prompt, model=None):
+        calls.append((name, model))
         raise RuntimeError(f"{name} failed: 429 Too Many Requests")
 
     monkeypatch.setattr(R, "_call_provider", always_429)
@@ -1840,7 +1848,9 @@ def test_provider_cooldown_skips_throttled_providers(monkeypatch):
             raise AssertionError("expected RuntimeError")
         except RuntimeError as exc:
             assert "429" in str(exc)
-        assert calls == ["gemini", "groq"]
+        assert calls == [("gemini", R.GEMINI_MODEL),
+                         ("gemini", R.GEMINI_FALLBACK_MODEL),
+                         ("groq", R.GROQ_MODEL)]
         calls.clear()
         try:
             asyncio.run(R._generate_with_fallback("p"))
@@ -1946,6 +1956,7 @@ def test_report_model_ids_defined_and_overridable(monkeypatch):
 
     importlib.reload(R)
     assert R.GEMINI_MODEL == "gemini-3.5-flash"
+    assert R.GEMINI_FALLBACK_MODEL == "gemini-3.5-flash-lite"
     assert R.GROQ_MODEL == "openai/gpt-oss-20b"
     monkeypatch.setenv("GEMINI_MODEL", "custom-gemini")
     monkeypatch.setenv("GROQ_MODEL", "custom-groq")
@@ -1956,10 +1967,11 @@ def test_report_model_ids_defined_and_overridable(monkeypatch):
     importlib.reload(R)
 
 
-def test_groq_plain_text_second_chance(monkeypatch):
-    """When Groq rejects strict JSON mode (failed_generation), the same
-    prompt retries once as plain text — our parser tolerates fences, so a
-    mode failure costs one retry, not the report. Other errors re-raise."""
+def test_groq_strict_schema_with_plain_fallback(monkeypatch):
+    """Strict json_schema first (constrained decoding per Groq docs); only a
+    JSON-validation failure falls back to plain text. Other errors (auth,
+    TPM caps, rate limits) propagate untouched — retrying those burns quota
+    and hides credential problems."""
     import asyncio
     import api.report as R
 
@@ -1968,16 +1980,16 @@ def test_groq_plain_text_second_chance(monkeypatch):
     async def fake_completion(key, prompt, json_mode):
         calls.append(json_mode)
         if json_mode:
-            raise RuntimeError("groq HTTP 400: Failed to validate JSON. "
+            raise RuntimeError("groq HTTP 400: Failed to generate JSON. "
                                "See 'failed_generation' for more details.")
         return '{"text": "plain fallback"}'
 
     monkeypatch.setattr(R, "_groq_completion", fake_completion)
-    text = asyncio.run(R._groq_report("k", "p"))
-    assert text == '{"text": "plain fallback"}'
+    assert asyncio.run(R._groq_report("k", "p")) == '{"text": "plain fallback"}'
     assert calls == [True, False]
 
     async def fatal(key, prompt, json_mode):
+        calls.append("fatal")
         raise RuntimeError("groq HTTP 401: invalid key")
 
     monkeypatch.setattr(R, "_groq_completion", fatal)
@@ -1986,6 +1998,48 @@ def test_groq_plain_text_second_chance(monkeypatch):
         raise AssertionError("expected RuntimeError")
     except RuntimeError as exc:
         assert "invalid key" in str(exc)
+    assert calls[-1] == "fatal" and calls.count("fatal") == 1
+
+
+def test_groq_strict_payload_shape(monkeypatch):
+    """The strict request must match Groq's documented shape: json_schema
+    with name, strict true, full schema, all fields required."""
+    import asyncio
+    import api.report as R
+
+    seen = {}
+
+    class FakeResponse:
+        status_code = 200
+        headers = {}
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": "{}"}}]}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def post(self, url, headers=None, json=None):
+            seen["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(R.httpx, "AsyncClient", FakeClient)
+    asyncio.run(R._groq_completion("k", "p", json_mode=True))
+    fmt = seen["json"]["response_format"]
+    assert fmt["type"] == "json_schema"
+    assert fmt["json_schema"]["strict"] is True
+    assert fmt["json_schema"]["schema"] == R.REPORT_JSON_SCHEMA
+    assert seen["json"]["model"] == R.GROQ_MODEL
 
 
 if __name__ == "__main__":
