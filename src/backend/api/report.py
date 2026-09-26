@@ -78,7 +78,7 @@ _KEY_PATTERNS = (
 
 def sanitize_error(exc):
     """Redact secrets from an exception before it leaves the backend."""
-    text = str(exc)
+    text = str(exc) or "unknown provider error"
     for pattern in _KEY_PATTERNS:
         text = re.sub(pattern, "[redacted]", text)
     text = re.sub(r"[\r\n]+", " ", text)
@@ -921,7 +921,7 @@ async def _regenerate_section(key, context):
             )
         try:
             raw, provider = await asyncio.wait_for(
-                _generate_with_fallback(prompt), timeout=14.0)
+                _generate_with_fallback(prompt), timeout=30.0)
         except Exception as exc:
             raise RuntimeError(
                 f"section {key}: provider error: {sanitize_error(exc)}"
@@ -1011,7 +1011,7 @@ async def generate_report(body, assessment):
     order = ("what", "why", "cause_effect", "check_next")
     try:
         text, provider = await asyncio.wait_for(
-            _generate_with_fallback(build_prompt(context)), timeout=20.0)
+            _generate_with_fallback(build_prompt(context)), timeout=30.0)
     except Exception as exc:  # noqa: BLE001 - degrade to template
         return _template_report(context), "template", context, area, {
             "degraded": True,
