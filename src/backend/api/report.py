@@ -251,21 +251,23 @@ async def _gemini_report(key, prompt):
         raise RuntimeError(f"unexpected Gemini response shape: {exc}") from exc
 
 
-async def _groq_report(key, prompt):
+async def _groq_completion(key, prompt, json_mode):
     async with httpx.AsyncClient(timeout=10.0) as client:
+        payload = {
+            "model": GROQ_MODEL,
+            "messages": [
+                {"role": "system", "content": "Write a grounded BloomCast report using only supplied facts. Respond with a single JSON object and nothing else."},
+                {"role": "user", "content": prompt},
+            ],
+            "max_tokens": 900,
+            "temperature": 0.25,
+        }
+        if json_mode:
+            payload["response_format"] = {"type": "json_object"}
         response = await client.post(
             "https://api.groq.com/openai/v1/chat/completions",
             headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-            json={
-                "model": GROQ_MODEL,
-                "messages": [
-                    {"role": "system", "content": "Write a grounded BloomCast report using only supplied facts. Respond with a single JSON object and nothing else."},
-                    {"role": "user", "content": prompt},
-                ],
-                "response_format": {"type": "json_object"},
-                "max_tokens": 900,
-                "temperature": 0.25,
-            },
+            json=payload,
         )
         response.raise_for_status()
         data = response.json()
@@ -273,6 +275,21 @@ async def _groq_report(key, prompt):
         return data["choices"][0]["message"]["content"].strip()
     except (KeyError, IndexError, TypeError) as exc:
         raise RuntimeError(f"unexpected Groq response shape: {exc}") from exc
+
+
+async def _groq_report(key, prompt):
+    """Groq with a plain-text second chance: small models sometimes fail
+    Groq-side JSON validation ("Failed to validate JSON") even on a valid
+    prompt. Dropping `response_format` almost always recovers, and our own
+    parser tolerates fences — so a mode failure costs one retry, not the
+    whole report."""
+    try:
+        return await _groq_completion(key, prompt, json_mode=True)
+    except Exception as exc:
+        lowered = str(exc).lower()
+        if "failed_generation" not in lowered and "validate json" not in lowered:
+            raise
+        return await _groq_completion(key, prompt, json_mode=False)
 
 
 def _rate_limit_wait(exc):

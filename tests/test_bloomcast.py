@@ -1956,5 +1956,37 @@ def test_report_model_ids_defined_and_overridable(monkeypatch):
     importlib.reload(R)
 
 
+def test_groq_plain_text_second_chance(monkeypatch):
+    """When Groq rejects strict JSON mode (failed_generation), the same
+    prompt retries once as plain text — our parser tolerates fences, so a
+    mode failure costs one retry, not the report. Other errors re-raise."""
+    import asyncio
+    import api.report as R
+
+    calls = []
+
+    async def fake_completion(key, prompt, json_mode):
+        calls.append(json_mode)
+        if json_mode:
+            raise RuntimeError("groq HTTP 400: Failed to validate JSON. "
+                               "See 'failed_generation' for more details.")
+        return '{"text": "plain fallback"}'
+
+    monkeypatch.setattr(R, "_groq_completion", fake_completion)
+    text = asyncio.run(R._groq_report("k", "p"))
+    assert text == '{"text": "plain fallback"}'
+    assert calls == [True, False]
+
+    async def fatal(key, prompt, json_mode):
+        raise RuntimeError("groq HTTP 401: invalid key")
+
+    monkeypatch.setattr(R, "_groq_completion", fatal)
+    try:
+        asyncio.run(R._groq_report("k", "p"))
+        raise AssertionError("expected RuntimeError")
+    except RuntimeError as exc:
+        assert "invalid key" in str(exc)
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
