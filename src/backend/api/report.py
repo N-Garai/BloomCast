@@ -232,7 +232,7 @@ def build_prompt(context):
 
 
 async def _gemini_report(key, prompt, model=None):
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(
             f"https://generativelanguage.googleapis.com/v1beta/models/{model or GEMINI_MODEL}:generateContent",
             headers={"x-goog-api-key": key, "Content-Type": "application/json"},
@@ -334,12 +334,23 @@ async def _groq_report(key, prompt):
     try:
         return await _groq_completion(key, prompt, json_mode=True)
     except Exception as exc:
-        # ONLY JSON-validation failures fall back to plain text: a strict
-        # schema rejection means the mode (not the quota) is at fault, and
-        # plain replies parse through the fence-tolerant parser. Anything
-        # else (auth, TPM caps, rate limits) propagates untouched so quota
-        # and credential problems stay visible instead of being retried.
-        lowered = str(exc).lower()
+        detail = ""
+        response = getattr(exc, "response", None)
+        if response is not None:
+            try:
+                payload = response.json()
+                if isinstance(payload, dict):
+                    error = payload.get("error")
+                    if isinstance(error, dict):
+                        detail = str(error.get("message", ""))
+                    elif error:
+                        detail = str(error)
+            except Exception:  # noqa: BLE001 - non-JSON error body
+                try:
+                    detail = response.text
+                except Exception:  # noqa: BLE001 - body unreadable
+                    detail = ""
+        lowered = (str(exc) + " " + detail).lower()
         if "failed_generation" not in lowered and "validate json" not in lowered:
             raise
         return await _groq_completion(key, prompt, json_mode=False)
