@@ -49,9 +49,9 @@ export function LandingStats() {
   return (
     <section className="section-fade relative overflow-hidden py-20 px-6">
       <VideoBackdrop
-        src="/bg/bg-hero.mp4"
-        brightness={1.05}
-        overlay="linear-gradient(180deg, rgba(2,6,15,0.78) 0%, rgba(2,6,15,0.66) 50%, rgba(2,6,15,0.9) 100%)"
+        src="/bg/bg-why.mp4"
+        brightness={1.08}
+        overlay="linear-gradient(180deg, rgba(2,6,15,0.72) 0%, rgba(2,6,15,0.6) 50%, rgba(2,6,15,0.88) 100%)"
       />
       <div className="relative max-w-5xl mx-auto">
         <ScrollReveal>

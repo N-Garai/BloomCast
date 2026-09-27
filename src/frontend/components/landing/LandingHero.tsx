@@ -40,7 +40,8 @@ export function LandingHero() {
     <section className="relative min-h-screen overflow-hidden bg-bg-abyss">
       <VideoBackdrop
         src="/bg/bg-hero.mp4"
-        brightness={1.12}
+        preload="auto"
+        brightness={1.15}
         overlay="linear-gradient(180deg, rgba(2,6,15,0.5) 0%, rgba(2,6,15,0.62) 55%, rgba(2,6,15,0.94) 100%)"
       />
       <Navbar />
@@ -60,9 +61,12 @@ export function LandingHero() {
             {[["3–7", "day lead time"], ["19", "pilot waterbodies"], ["$0", "monthly cost"], ["100%", "free & open"]].map(([value, label]) => <div key={label}><div className="font-display text-3xl font-bold text-glow-cyan tabular">{value}</div><div className="mt-1 text-xs text-fg-muted">{label}</div></div>)}
           </motion.div>
         </motion.div>
-        <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.35, duration: 0.9 }} className="relative h-[420px] w-full rounded-2xl border border-border-subtle bg-gradient-to-br from-bg-deep/80 via-bg-abyss to-bg-deep/80 p-3 shadow-glow-md md:h-[520px]">
+        <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.35, duration: 0.9 }} className="relative h-[420px] w-full overflow-hidden rounded-2xl border border-border-subtle bg-[#02060f] shadow-glow-md md:h-[520px]">
+          <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-bg-deep/80 via-bg-abyss to-bg-deep/80" />
           <div className="absolute inset-x-3 top-3 z-10 flex items-center justify-between rounded-full border border-glow-cyan/20 bg-bg-abyss/75 px-3 py-1.5 backdrop-blur-xl"><span className="font-mono text-[10px] uppercase tracking-[0.25em] text-glow-cyan">Live outlook</span><span className="h-1.5 w-1.5 rounded-full bg-glow-green animate-pulse" /></div>
-          <DotMatrixGlobe waterbodies={SAMPLE_WATERBODIES} selected="US-ERI-01" autoRotate />
+          <div className="absolute inset-0 p-3">
+            <DotMatrixGlobe waterbodies={SAMPLE_WATERBODIES} selected="US-ERI-01" autoRotate />
+          </div>
           <div className="absolute bottom-4 left-4 right-4 z-10 rounded-xl border border-border-subtle bg-bg-abyss/80 p-3 backdrop-blur-xl"><div className="flex items-center justify-between gap-3"><div><div className="font-mono text-[10px] uppercase tracking-widest text-fg-muted">Selected pilot</div><div className="mt-0.5 text-sm font-medium text-fg-primary">Lake Erie · live 5-day</div></div><span className="text-xs font-mono text-glow-orange">{erieRisk ? `${erieRisk.level} · ${erieRisk.pct}%` : "loading…"}</span></div></div>
         </motion.div>
       </div>

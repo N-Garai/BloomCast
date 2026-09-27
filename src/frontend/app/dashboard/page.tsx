@@ -295,7 +295,7 @@ export default function DashboardPage() {
             {showGlobe && (
               <VideoBackdrop
                 src="/bg/bg-globe.mp4"
-                brightness={1.05}
+                brightness={1.1}
                 overlay="linear-gradient(180deg, rgba(2,6,15,0.6) 0%, rgba(2,6,15,0.45) 50%, rgba(2,6,15,0.85) 100%)"
               />
             )}
@@ -311,7 +311,7 @@ export default function DashboardPage() {
           </div>
         </main>
       </div>
-      <div className="relative overflow-hidden border-t border-border-subtle"><VideoBackdrop src="/bg/bg-explorer.mp4" brightness={1.05} overlay="linear-gradient(180deg, rgba(2,6,15,0.8) 0%, rgba(2,6,15,0.62) 50%, rgba(2,6,15,0.88) 100%)" /><div className="relative max-w-6xl mx-auto w-full px-4 md:px-6 py-8"><ScrollReveal><LocationExplorer onSelectWaterbody={setSelected} /></ScrollReveal></div></div>
+      <div className="relative overflow-hidden border-t border-border-subtle"><VideoBackdrop src="/bg/bg-explorer.mp4" brightness={1.1} overlay="linear-gradient(180deg, rgba(2,6,15,0.8) 0%, rgba(2,6,15,0.62) 50%, rgba(2,6,15,0.88) 100%)" /><div className="relative max-w-6xl mx-auto w-full px-4 md:px-6 py-8"><ScrollReveal><LocationExplorer onSelectWaterbody={setSelected} /></ScrollReveal></div></div>
       <Footer />
     </div>
   );

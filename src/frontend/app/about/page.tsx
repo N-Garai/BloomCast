@@ -63,7 +63,7 @@ export default function AboutPage() {
         fixed
         src="/bg/bg-about.mp4"
         muted={false}
-        brightness={1.02}
+        brightness={1.08}
         overlay="linear-gradient(180deg, rgba(2,6,15,0.62) 0%, rgba(2,6,15,0.55) 50%, rgba(2,6,15,0.88) 100%)"
       />
       <Navbar />

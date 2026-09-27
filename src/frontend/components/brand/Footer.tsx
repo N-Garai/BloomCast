@@ -1,11 +1,11 @@
-import { VideoBackdrop } from "@/components/brand/BackgroundMedia";
+import { ImageBackdrop } from "@/components/brand/BackgroundMedia";
 
 export function Footer() {
   return (
     <footer className="relative overflow-hidden border-t border-border-subtle">
-      <VideoBackdrop
-        src="/bg/bg-footer.mp4"
-        brightness={1.05}
+      <ImageBackdrop
+        src="/bg/bg-footer.jpg"
+        brightness={1.08}
         overlay="linear-gradient(180deg, rgba(2,6,15,0.82) 0%, rgba(2,6,15,0.7) 50%, rgba(2,6,15,0.9) 100%)"
       />
       <div className="relative max-w-7xl mx-auto px-6 py-12">

@@ -25,12 +25,14 @@ export function VideoBackdrop({
   brightness = 1,
   overlay = "linear-gradient(180deg, rgba(2,6,15,0.55) 0%, rgba(2,6,15,0.7) 50%, rgba(2,6,15,0.92) 100%)",
   fixed = false,
+  preload = "metadata",
 }: {
   src: string;
   muted?: boolean;
   brightness?: number;
   overlay?: string;
   fixed?: boolean;
+  preload?: "auto" | "metadata" | "none";
 }) {
   const reduced = useReducedMotion();
   return (
@@ -42,7 +44,7 @@ export function VideoBackdrop({
         muted={muted}
         loop
         playsInline
-        preload="metadata"
+        preload={preload}
       >
         <source src={src} type="video/mp4" />
       </video>
