@@ -63,8 +63,8 @@ export default function AboutPage() {
         fixed
         src="/bg/bg-about.mp4"
         muted={false}
-        brightness={1.08}
-        overlay="linear-gradient(180deg, rgba(2,6,15,0.62) 0%, rgba(2,6,15,0.55) 50%, rgba(2,6,15,0.88) 100%)"
+        brightness={0.6}
+        overlay="linear-gradient(180deg, rgba(2,6,15,0.72) 0%, rgba(2,6,15,0.66) 50%, rgba(2,6,15,0.9) 100%)"
       />
       <Navbar />
       <main className="flex-1 relative">

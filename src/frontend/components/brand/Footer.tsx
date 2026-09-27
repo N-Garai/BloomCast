@@ -2,7 +2,7 @@ import { ImageBackdrop } from "@/components/brand/BackgroundMedia";
 
 export function Footer() {
   return (
-    <footer className="relative overflow-hidden border-t border-border-subtle">
+    <footer className="relative overflow-hidden">
       <ImageBackdrop
         src="/bg/bg-footer.jpg"
         brightness={1.08}

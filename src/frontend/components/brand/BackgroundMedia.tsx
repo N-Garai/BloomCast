@@ -14,6 +14,20 @@ function useReducedMotion() {
   return reduced;
 }
 
+// Edge melt (A.R.I.E.S technique): the media itself fades to transparent
+// across the top/bottom 12%, so adjacent sections crossfade instead of
+// cutting with a hard strip — no matter what sits on either side.
+const EDGE_MASK =
+  "linear-gradient(180deg, transparent 0%, black 12%, black 88%, transparent 100%)";
+
+function useVideoOk() {
+  const [ok, setOk] = useState(true);
+  return {
+    ok,
+    hide: () => setOk(false),
+  };
+}
+
 /**
  * Full-bleed background video (local file, muted loop). Blends into the
  * page through a caller-supplied overlay gradient — every usage passes one
@@ -35,19 +49,37 @@ export function VideoBackdrop({
   preload?: "auto" | "metadata" | "none";
 }) {
   const reduced = useReducedMotion();
+  const video = useVideoOk();
   return (
     <div aria-hidden className={`pointer-events-none ${fixed ? "fixed" : "absolute"} inset-0 overflow-hidden`}>
-      <video
-        className="h-full w-full object-cover"
-        style={{ filter: `brightness(${brightness})` }}
-        autoPlay={!reduced}
-        muted={muted}
-        loop
-        playsInline
-        preload={preload}
-      >
-        <source src={src} type="video/mp4" />
-      </video>
+      {video.ok && (
+        <video
+          ref={(el) => {
+            // React does not always apply the muted *property* (attribute
+            // alone leaves Chrome blocking autoplay) — set it imperatively
+            // and kick playback so backgrounds never sit black.
+            if (el) {
+              el.muted = muted;
+              el.defaultMuted = muted;
+              if (!reduced && el.paused) el.play().catch(() => {});
+            }
+          }}
+          className="h-full w-full object-cover"
+          style={{
+            filter: `brightness(${brightness})`,
+            maskImage: EDGE_MASK,
+            WebkitMaskImage: EDGE_MASK,
+          }}
+          autoPlay={!reduced}
+          muted={muted}
+          loop
+          playsInline
+          preload={preload}
+          onError={video.hide}
+        >
+          <source src={src} type="video/mp4" />
+        </video>
+      )}
       <div className="absolute inset-0" style={{ background: overlay }} />
     </div>
   );
@@ -72,7 +104,11 @@ export function ImageBackdrop({
         src={src}
         alt=""
         className="h-full w-full object-cover"
-        style={{ filter: `brightness(${brightness})` }}
+        style={{
+          filter: `brightness(${brightness})`,
+          maskImage: EDGE_MASK,
+          WebkitMaskImage: EDGE_MASK,
+        }}
         loading="lazy"
       />
       <div className="absolute inset-0" style={{ background: overlay }} />

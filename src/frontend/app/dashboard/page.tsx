@@ -299,7 +299,7 @@ export default function DashboardPage() {
                 overlay="linear-gradient(180deg, rgba(2,6,15,0.6) 0%, rgba(2,6,15,0.45) 50%, rgba(2,6,15,0.85) 100%)"
               />
             )}
-            {showGlobe ? <DotMatrixGlobe waterbodies={mappable} selected={selected ?? undefined} onSelect={setSelected} onPick={runExplore} picked={picked} /> : <div className="h-full w-full bg-bg-abyss"><VectorMap fill points={mapPoints} selectedId={picked ? "__picked__" : (selected ?? undefined)} onPick={(latitude, longitude) => runExplore(latitude, longitude)} /></div>}
+            {showGlobe ? <div className="absolute inset-0 z-10"><DotMatrixGlobe waterbodies={mappable} selected={selected ?? undefined} onSelect={setSelected} onPick={runExplore} picked={picked} /></div> : <div className="h-full w-full bg-bg-abyss"><VectorMap fill points={mapPoints} selectedId={picked ? "__picked__" : (selected ?? undefined)} onPick={(latitude, longitude) => runExplore(latitude, longitude)} /></div>}
           </div>
           <div className="absolute top-4 left-4 z-10 flex gap-2"><button onClick={() => setShowGlobe((current) => !current)} className="px-3 py-2 rounded-lg glass border border-border-subtle text-xs text-fg-secondary hover:text-fg-primary">{' '}{showGlobe ? "Flat Map" : "3D Globe"}</button></div>
           <div className="absolute right-4 top-4 bottom-4 z-10 w-[330px] max-w-[calc(100%-2rem)] flex flex-col gap-3 overflow-y-auto pr-1">

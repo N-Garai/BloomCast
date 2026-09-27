@@ -23,6 +23,21 @@ function latLonToVec3(lat: number, lon: number, radius = 1): [number, number, nu
 const LAND_DOTS = landData.dots as Array<[number, number]>;
 const COASTS = landData.coasts as Array<Array<[number, number]>>;
 
+// Last-resort sphere: if the committed coastline data ever fails to load,
+// render a uniform dot field instead of a bare canvas — the globe can never
+// go blank (a failure mode seen on one production deploy).
+const FALLBACK_DOTS: Array<[number, number]> = (() => {
+  const dots: Array<[number, number]> = [];
+  for (let lat = -80; lat <= 80; lat += 4) {
+    for (let lon = -180; lon < 180; lon += 4) {
+      dots.push([lat, lon]);
+    }
+  }
+  return dots;
+})();
+const DOTS = LAND_DOTS.length > 100 ? LAND_DOTS : FALLBACK_DOTS;
+const RINGS = LAND_DOTS.length > 100 ? COASTS : [];
+
 function riskFor(wb: any) {
   const p = wb._risk ?? "low";
   return RISK_COLORS[p] ?? RISK_COLORS.low;
@@ -166,7 +181,7 @@ export function DotMatrixGlobe({
         // two-pass core (bloom feel without postprocessing), with
         // time-varying warm sparks and perspective dot sizing.
         const fract = (x: number) => x - Math.floor(x);
-        for (const [lat, lon] of LAND_DOTS) {
+        for (const [lat, lon] of DOTS) {
           const vec = latLonToVec3(lat, lon, 1.004);
           const p = project(vec);
           if (p.z < 0.06) continue;
@@ -198,7 +213,7 @@ export function DotMatrixGlobe({
         context.lineWidth = Math.max(0.75, ratio * 0.6);
         context.strokeStyle = "rgba(255, 233, 196, 0.3)";
         context.beginPath();
-        for (const ring of COASTS) {
+        for (const ring of RINGS) {
           let pen = false;
           for (const [lat, lon] of ring) {
             const p = project(latLonToVec3(lat, lon, 1.004));
