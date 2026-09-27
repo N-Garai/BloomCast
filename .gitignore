@@ -13,6 +13,8 @@ dist
 .wrangler
 .turbo
 src/frontend/out
+tsconfig.tsbuildinfo
+*.tsbuildinfo
 
 # Data artifacts
 *.parquet

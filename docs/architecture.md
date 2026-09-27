@@ -111,6 +111,60 @@ the request-time weather window or claim live satellite input.
 - `/v1/health` reports model status as `loaded` or `fallback` with the reason,
   so a green liveness check cannot hide a missing model.
 
+## Intro curtain
+
+Before the hero, a full-bleed boot film plays once per browser session. It is a
+client-side sequence only — no API call, no artwork fetch beyond the favicon
+chip, and no layout shift — implemented in
+`src/frontend/components/brand/Loader.tsx` with styling in
+`src/frontend/app/globals.css` (`.bcl-*` rules) and driven by a single GSAP
+timeline.
+
+| Act | Time | Content |
+|---|---|---|
+| 1 · Deep | 0.0–0.55s | Abyss, film grain, two drifting chlorophyll caustics, a single cyan seed, HUD frame with the real `/favicon.svg` chip |
+| 2 · Ignition | 0.55–0.95s | The mark blooms in (same geometry as `favicon.svg`), three echo rings expand, horizon hairlines grow out of the mark |
+| 3 · Analysis | 0.95–3.15s | `BLOOMCAST` cascades glyph-by-glyph from masked line boxes while tracking settles; NDCI red-edge trace draws, scan sweep crosses the frame, four pipeline log lines stagger in, `000 → 100` counter and progress bar scrub |
+| 4 · Type | 3.15–4.55s | The analysis column collapses; `SEE IT` / `COMING.` fills the frame in Bebas Neue with per-glyph rise, a travelling gradient, a chlorophyll bloom behind the type, and a warm flare for colour grading |
+| 5 · Settle | 4.55–5.6s | Type collapses, white-cyan flash launders the cut, the mark + wordmark + serif slogan lockup resolves, the gate opens |
+
+**The gate.** The film ends on `SCROLL TO ENTER` (with a looping chevron and,
+after 8.4s, an `or press enter` hint) and does *not* dismiss itself. A wheel
+gesture, upward swipe, `ArrowDown` / `PageDown` / `Space` / `Enter`, or a click
+opens it. Then:
+
+- the page underlay is revealed by a CSS transition (opacity, 1.045 → 1 scale,
+  and a vertical aperture `inset(34% 0)` → `inset(0)`), so the reveal finishes
+  even if the curtain unmounts mid-animation;
+- the curtain itself plays an exit — stage scale + blur out, echo rings to 3.8×,
+  a flash, then `clip-path: circle(150%) → circle(0%)`, a bloom closing to a
+  point — and unmounts on completion.
+
+**Skip behaviour.** A gesture before the gate does not cut the film. It sets
+`timeScale(2.6)` so the remaining acts resolve in about a third of the time and
+the exit fires automatically at the gate, so an impatient visitor scrolls once
+and still lands on designed frames rather than a cut.
+
+**Access and failure modes.**
+
+- `prefers-reduced-motion: reduce` skips the curtain entirely; the page fades in.
+- Server HTML ships the page with `data-revealed="false"`, so the first paint
+  before hydration is the abyss rather than a flash of the hero. A `<noscript>`
+  rule forces the page visible when scripting is off.
+- The boot decision happens in a layout effect, so SSR and the first client
+  render always agree and hydration never mismatches.
+- Scroll is locked (`html.bc-scroll-lock`) while the curtain covers the page, so
+  the opening gesture cannot also drag the hero out of position; Lenis starts
+  only after the gate opens.
+- A 22-second watchdog reveals the page even if the visitor never interacts.
+- `sessionStorage["bc-booted"]` means the film plays once per session.
+
+Copy in the film is restricted to real pipeline stages ("aligning orbital
+sensors", "fusing 14-day weather ensemble", "scoring stream wash-off risk",
+"calibrating bloom probability") and to the real open-data stack (Sentinel-2,
+Open-Meteo, no API key, free tier) — no claim appears that the boot film makes
+about accuracy.
+
 ## Feature-track coverage
 
 BloomCast targets Track 6 — Resilience Informatics — while retaining the other
