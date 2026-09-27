@@ -3,15 +3,15 @@ import { Navbar } from "@/components/brand/Navbar";
 import { Footer } from "@/components/brand/Footer";
 import { ScrollReveal, StaggerContainer, StaggerItem } from "@/components/motion/ScrollReveal";
 import { SplitHeadline } from "@/components/brand/SplitHeadline";
-import { SectionFilm } from "@/components/brand/SectionFilm";
 import { OneHealthSummary } from "@/components/onehealth/OneHealthSummary";
+import { VideoBackdrop } from "@/components/brand/BackgroundMedia";
 
 export const metadata: Metadata = { title: "BloomCast — About & Architecture" };
 
 const PILLARS = [
   {
     title: "Forecast",
-    body: "A hybrid model fuses Sentinel-2 red-edge chlorophyll, 14-day weather ensembles, and validated citizen observations into calibrated 3/5/7-day bloom probabilities with confidence intervals.",
+    body: "A hybrid model fuses seasonal spectral priors, live Open-Meteo weather, and a weather-only LightGBM variant into 3/5/7-day bloom outlooks with confidence intervals. Pilot waterbodies carry calibrated forecasts; arbitrary points get clearly labeled experimental estimates — never a number without its provenance.",
   },
   {
     title: "Rehearse",
@@ -24,21 +24,21 @@ const PILLARS = [
 ];
 
 const ARCHITECTURE = [
-  ["Ingestion", "Sentinel-2 NDCI scenes, Open-Meteo forecast ensembles, and steward-validated citizen observations — refreshed on a nightly schedule."],
-  ["Features", "Two dozen tabular indicators plus a 30-step chlorophyll and weather time series per waterbody."],
-  ["Model", "Gradient-boosted trees plus a temporal network combined by a meta-learner, then isotonic calibration for honest probabilities."],
-  ["Precompute", "Nightly jobs generate static forecast JSON so the service stays fast and free to operate."],
-  ["API", "One service exposes waterbodies, forecasts, replay events, sandbox scenarios, scorecard metrics, and alert bundles."],
-  ["Frontend", "A static map-first interface with a 3D globe, replay scrubber, sandbox sliders, and transparency scorecard."],
+  ["Ingestion", "Planetary Computer Sentinel-2 reads, Open-Meteo forecast ensembles, and steward-validated citizen observations — priors refreshed monthly, serving reads live."],
+  ["Features", "Thirty-two tabular indicators per point: live weather block, seasonal spectral priors, static site data. Citizen features are schema-ready and unwired."],
+  ["Model", "Gradient-boosted trees plus a temporal network combined by a meta-learner, then isotonic calibration for honest probabilities — plus a weather-only variant calibrated for anywhere on Earth."],
+  ["Serving", "No cron in the request path: every assessment is computed live per request (15-minute cache), so numbers are fresh, not precomputed. Nightly jobs only refresh static seeds and the scorecard."],
+  ["API", "One service exposes waterbodies, forecasts, live inference, replay events, sandbox scenarios, scorecard metrics, and alert bundles."],
+  ["Frontend", "A static map-first interface with a 3D globe, keyless vector map, replay scrubber, sandbox sliders, and transparency scorecard."],
 ];
 
 const STACK = [
   ["Satellite", "Copernicus Sentinel-2 optical imagery — free with attribution"],
   ["Weather", "Open-Meteo forecast API — keyless, CC-BY 4.0"],
-  ["Maps", "Open map tiles for the globe and base layers"],
-  ["Backend", "Python API service with nightly precompute jobs"],
+  ["Maps", "Keyless vector world map (Natural Earth boundaries, committed) — zero tile servers"],
+  ["Backend", "Python API service — realtime per-request inference, no serving cron"],
   ["Frontend", "Static map-first interface — globe, replay, sandbox, scorecard"],
-  ["Scheduler", "Nightly cron refresh of forecasts and metrics"],
+  ["Scheduler", "No serving cron; nightly jobs only refresh static seeds and metrics"],
 ];
 
 const WRITEUP = [
@@ -59,9 +59,16 @@ const WRITEUP = [
 export default function AboutPage() {
   return (
     <div className="min-h-screen flex flex-col">
+      <VideoBackdrop
+        fixed
+        src="/bg/bg-about.mp4"
+        muted={false}
+        brightness={1.02}
+        overlay="linear-gradient(180deg, rgba(2,6,15,0.62) 0%, rgba(2,6,15,0.55) 50%, rgba(2,6,15,0.88) 100%)"
+      />
       <Navbar />
-      <main className="flex-1">
-        <SectionFilm film="night">
+      <main className="flex-1 relative">
+        <div className="relative overflow-hidden">
           <div className="max-w-4xl mx-auto w-full px-6 pt-32 pb-16">
             <ScrollReveal>
               <p className="font-mono text-[11px] uppercase tracking-[0.35em] text-glow-cyan mb-4">
@@ -73,13 +80,13 @@ export default function AboutPage() {
               />
               <p className="mt-6 text-fg-secondary max-w-2xl text-lg leading-relaxed">
                 BloomCast is an open-source early warning system for cyanobacteria blooms in
-                urban freshwater. It combines satellite remote sensing, weather forecasts,
-                and citizen science to give planners a 3–7 day head start before a bloom
+                urban freshwater. It combines satellite-informed priors, live weather, and
+                a calibrated model core to give planners a 3–7 day head start before a bloom
                 becomes visible — turning emergency closures into timely advisories.
               </p>
             </ScrollReveal>
           </div>
-        </SectionFilm>
+        </div>
 
         <div className="max-w-4xl mx-auto w-full px-6 py-16">
           <section className="mb-16">

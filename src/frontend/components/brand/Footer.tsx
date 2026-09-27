@@ -1,7 +1,14 @@
+import { VideoBackdrop } from "@/components/brand/BackgroundMedia";
+
 export function Footer() {
   return (
-    <footer className="border-t border-border-subtle bg-bg-abyss">
-      <div className="max-w-7xl mx-auto px-6 py-12">
+    <footer className="relative overflow-hidden border-t border-border-subtle">
+      <VideoBackdrop
+        src="/bg/bg-footer.mp4"
+        brightness={1.05}
+        overlay="linear-gradient(180deg, rgba(2,6,15,0.82) 0%, rgba(2,6,15,0.7) 50%, rgba(2,6,15,0.9) 100%)"
+      />
+      <div className="relative max-w-7xl mx-auto px-6 py-12">
         <div className="grid md:grid-cols-4 gap-8">
           <div>
             <div className="flex items-center gap-2 mb-3">

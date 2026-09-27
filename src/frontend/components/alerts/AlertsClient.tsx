@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 
 import { API } from "@/lib/api";
 import { Spinner } from "@/components/ui/Spinner";
+import { NotifyCenter } from "@/components/alerts/NotifyCenter";
+import { getWaterbodies, waterbodyName, type WaterbodyOption } from "@/lib/waterbodies";
 
 interface CheckedAlert {
   waterbody_id: string;
@@ -18,6 +20,11 @@ function ThresholdStatus({ subscriberKey }: { subscriberKey: string }) {
   const [alerts, setAlerts] = useState<CheckedAlert[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [names, setNames] = useState<WaterbodyOption[]>([]);
+
+  useEffect(() => {
+    getWaterbodies().then(setNames);
+  }, []);
 
   const check = async () => {
     setLoading(true);
@@ -64,7 +71,7 @@ function ThresholdStatus({ subscriberKey }: { subscriberKey: string }) {
               }`}
             >
               <div>
-                <span className="font-mono text-fg-primary">{a.waterbody_id}</span>
+                <span className="font-mono text-fg-primary">{waterbodyName(names, a.waterbody_id)}</span>
                 <span className="text-fg-muted"> · {a.horizon_days}d ≥ {Math.round(a.threshold * 100)}%</span>
               </div>
               <span
@@ -86,6 +93,7 @@ function ThresholdStatus({ subscriberKey }: { subscriberKey: string }) {
 
 export function AlertsClient() {
   const [subscriberKey, setSubscriberKey] = useState("");
+  const [waterbodies, setWaterbodies] = useState<WaterbodyOption[]>([]);
   const [form, setForm] = useState({
     waterbody_id: "CH-ZUR-01",
     threshold: 0.6,
@@ -107,6 +115,7 @@ export function AlertsClient() {
       key = `sub-${Date.now()}`;
     }
     setSubscriberKey(key);
+    getWaterbodies().then(setWaterbodies);
   }, []);
 
   async function submit(e: React.FormEvent) {
@@ -152,6 +161,7 @@ export function AlertsClient() {
         </button>
       </motion.div>
       <ThresholdStatus subscriberKey={subscriberKey} />
+      <NotifyCenter subscriberKey={subscriberKey} waterbodies={waterbodies} />
       </div>
     );
   }
@@ -169,9 +179,15 @@ export function AlertsClient() {
             onChange={(e) => setForm({ ...form, waterbody_id: e.target.value })}
             className="w-full bg-bg-deep border border-border-subtle rounded-lg px-3 py-2.5 text-fg-primary focus:border-glow-cyan outline-none"
           >
-            {["CH-ZUR-01", "CH-GVA-01", "IT-MAG-01", "DE-CON-01", "IT-GAR-01", "US-ERI-01", "IN-VEM-01"].map((id) => (
-              <option key={id} value={id}>{id}</option>
-            ))}
+            {waterbodies.length ? (
+              waterbodies.map((wb) => (
+                <option key={wb.id} value={wb.id}>{wb.name}</option>
+              ))
+            ) : (
+              ["CH-ZUR-01", "CH-GVA-01", "IT-MAG-01", "DE-CON-01", "IT-GAR-01", "US-ERI-01", "IN-VEM-01"].map((id) => (
+                <option key={id} value={id}>{id}</option>
+              ))
+            )}
           </select>
         </div>
         <div>
@@ -216,7 +232,8 @@ export function AlertsClient() {
         {status === "submitting" ? "Subscribing…" : "Subscribe to alerts"}
       </button>
     </form>
-    {subscriberKey && <ThresholdStatus subscriberKey={subscriberKey} />}
+      {subscriberKey && <ThresholdStatus subscriberKey={subscriberKey} />}
+      <NotifyCenter subscriberKey={subscriberKey} waterbodies={waterbodies} />
     </div>
   );
 }

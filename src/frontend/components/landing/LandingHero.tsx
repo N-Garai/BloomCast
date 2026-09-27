@@ -6,6 +6,7 @@ import { Navbar } from "@/components/brand/Navbar";
 import { SplitHeadline } from "@/components/brand/SplitHeadline";
 import { DuplicatedLabelButton } from "@/components/brand/DuplicatedLabelButton";
 import { DotMatrixGlobe } from "@/components/three/DotMatrixGlobe";
+import { VideoBackdrop } from "@/components/brand/BackgroundMedia";
 import { API } from "@/lib/api";
 
 const SAMPLE_WATERBODIES = [
@@ -37,6 +38,11 @@ export function LandingHero() {
 
   return (
     <section className="relative min-h-screen overflow-hidden bg-bg-abyss">
+      <VideoBackdrop
+        src="/bg/bg-hero.mp4"
+        brightness={1.12}
+        overlay="linear-gradient(180deg, rgba(2,6,15,0.5) 0%, rgba(2,6,15,0.62) 55%, rgba(2,6,15,0.94) 100%)"
+      />
       <Navbar />
       <div className="relative z-10 mx-auto grid min-h-[calc(100vh-4rem)] max-w-7xl grid-cols-1 items-center gap-10 px-6 pb-16 pt-28 md:grid-cols-[1.05fr_0.95fr] md:gap-14">
         <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.15 }} className="max-w-2xl">

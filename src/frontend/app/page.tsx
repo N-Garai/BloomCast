@@ -9,17 +9,15 @@ import { SectionDivider } from "@/components/brand/SectionDivider";
 export default function Page() {
   return (
     <main className="bg-bg-abyss">
-      <SectionFilm film="abyss" className="relative">
-        <LandingHero />
-      </SectionFilm>
+      <LandingHero />
       <SectionDivider tone="cyan" />
       <LandingStats />
       <SectionDivider tone="orange" />
-      <SectionFilm film="caustic">
+      <SectionFilm film="caustic" videoOpacity={0.62}>
         <LandingFeatures />
       </SectionFilm>
       <SectionDivider tone="violet" />
-      <SectionFilm film="night">
+      <SectionFilm film="night" videoOpacity={0.6}>
         <LandingCTA />
       </SectionFilm>
       <Footer />

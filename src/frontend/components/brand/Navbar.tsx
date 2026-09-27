@@ -69,12 +69,12 @@ export function Navbar() {
               BLOOM<span className="text-glow-cyan">CAST</span>
             </span>
           </Link>
-          <div className="hidden lg:flex items-center gap-6">
+          <div className="hidden lg:flex items-center gap-4 xl:gap-6">
             {navItems.map((item) => (
               <Link
                 key={item.href}
                 href={item.href}
-                className="text-sm text-fg-secondary hover:text-glow-cyan transition-colors"
+                className="text-[13px] xl:text-sm text-fg-secondary hover:text-glow-cyan transition-colors whitespace-nowrap"
               >
                 {item.label}
               </Link>

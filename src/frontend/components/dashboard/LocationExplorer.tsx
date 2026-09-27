@@ -181,12 +181,20 @@ export function LocationExplorer({ onSelectWaterbody }: { onSelectWaterbody?: (i
         setGpsBusy(false);
         run(nextLat, nextLon);
       },
-      () => {
+      (err) => {
         setGpsBusy(false);
-        setError("Location permission denied — enter coordinates manually.");
+        if (err.code === err.PERMISSION_DENIED) {
+          setError("Location permission denied — allow it in the browser prompt, or enter coordinates manually.");
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          setError("Could not fix your position (indoors/GPS off?) — enter coordinates manually.");
+        } else if (err.code === err.TIMEOUT) {
+          setError("Location lookup timed out — try again or enter coordinates manually.");
+        } else {
+          setError("Location permission denied — enter coordinates manually.");
+        }
         setPhase("error");
       },
-      { timeout: 10000 }
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
     );
   };
 

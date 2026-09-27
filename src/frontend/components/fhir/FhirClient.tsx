@@ -11,13 +11,14 @@ export function FhirClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [bundleId, setBundleId] = useState("sample");
 
-  const load = () => {
+  const load = (id: string = bundleId) => {
     setLoading(true);
     setError(null);
-    fetch(`${API}/v1/fhir/Communication/sample`)
+    fetch(`${API}/v1/fhir/Communication/${encodeURIComponent(id)}`)
       .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status} on /v1/fhir/Communication/sample`);
+        if (!r.ok) throw new Error(`HTTP ${r.status} — no bundle with that id on this deployment.`);
         return r.json();
       })
       .then(d => { setBundle(d); setLoading(false); })
@@ -25,7 +26,7 @@ export function FhirClient() {
   };
 
   useEffect(() => {
-    load();
+    load("sample");
   }, []);
 
   if (loading && !bundle) return <Spinner label="Loading FHIR bundle" />;
@@ -36,6 +37,26 @@ export function FhirClient() {
 
   return (
     <div className="space-y-6">
+      <form
+        onSubmit={(e) => { e.preventDefault(); load(bundleId.trim() || "sample"); }}
+        className="flex flex-wrap gap-3 items-end"
+      >
+        <label className="flex-1 min-w-52">
+          <span className="text-xs font-mono uppercase tracking-widest text-fg-muted">Bundle id</span>
+          <input
+            value={bundleId}
+            onChange={(e) => setBundleId(e.target.value)}
+            placeholder="sample"
+            className="mt-1 w-full bg-bg-deep border border-border-subtle rounded-lg px-3 py-2.5 text-fg-primary font-mono text-sm focus:border-glow-magenta outline-none"
+          />
+        </label>
+        <button
+          type="submit"
+          className="px-4 py-2.5 rounded-lg bg-glow-magenta/10 border border-glow-magenta/30 text-glow-magenta text-sm font-medium hover:bg-glow-magenta/20 transition-colors"
+        >
+          Load bundle
+        </button>
+      </form>
       <div className="grid md:grid-cols-3 gap-4">
         {(bundle.entry ?? []).map((e: any, i: number) => {
           const r = e.resource;

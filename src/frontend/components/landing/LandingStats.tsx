@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useInView } from "framer-motion";
 import { ScrollReveal } from "@/components/motion/ScrollReveal";
 import { SplitHeadline } from "@/components/brand/SplitHeadline";
-import { SectionBackdrop } from "@/components/brand/SectionBackdrop";
+import { VideoBackdrop } from "@/components/brand/BackgroundMedia";
 import { useGsapReveal } from "@/lib/useGsapReveal";
 
 function CountUp({ to, duration = 1600 }: { to: number; duration?: number }) {
@@ -48,7 +48,11 @@ export function LandingStats() {
 
   return (
     <section className="section-fade relative overflow-hidden py-20 px-6">
-      <SectionBackdrop tone="orange" />
+      <VideoBackdrop
+        src="/bg/bg-hero.mp4"
+        brightness={1.05}
+        overlay="linear-gradient(180deg, rgba(2,6,15,0.78) 0%, rgba(2,6,15,0.66) 50%, rgba(2,6,15,0.9) 100%)"
+      />
       <div className="relative max-w-5xl mx-auto">
         <ScrollReveal>
           <p className="font-mono text-[11px] uppercase tracking-[0.35em] text-glow-orange text-center mb-4">

@@ -15,7 +15,7 @@ const FILMS: Record<string, { src: string; overlay: string }> = {
   caustic: {
     src: "https://videos.pexels.com/video-files/1409899/1409899-uhd_2560_1440_25fps.mp4",
     overlay:
-      "linear-gradient(180deg, rgba(2,6,15,0.6) 0%, rgba(2,6,15,0.82) 100%)",
+      "linear-gradient(180deg, rgba(2,6,15,0.45) 0%, rgba(2,6,15,0.68) 100%)",
   },
   aerial: {
     src: "https://videos.pexels.com/video-files/3571264/3571264-uhd_2560_1440_30fps.mp4",
@@ -25,7 +25,7 @@ const FILMS: Record<string, { src: string; overlay: string }> = {
   night: {
     src: "https://videos.pexels.com/video-files/1093662/1093662-hd_1920_1080_30fps.mp4",
     overlay:
-      "linear-gradient(180deg, rgba(2,6,15,0.72) 0%, rgba(2,6,15,0.9) 100%)",
+      "linear-gradient(180deg, rgba(2,6,15,0.55) 0%, rgba(2,6,15,0.75) 100%)",
   },
   storm: {
     src: "https://videos.pexels.com/video-files/2169880/2169880-uhd_2560_1440_30fps.mp4",
@@ -46,10 +46,12 @@ export function SectionFilm({
   film = "abyss",
   children,
   className = "",
+  videoOpacity = 0.45,
 }: {
   film?: keyof typeof FILMS;
   children: ReactNode;
   className?: string;
+  videoOpacity?: number;
 }) {
   const f = FILMS[film];
   const [videoOk, setVideoOk] = useState(true);
@@ -61,7 +63,8 @@ export function SectionFilm({
         <SectionBackdrop tone={FILM_TONES[film] ?? "cyan"} />
         {videoOk && (
           <video
-            className="absolute inset-0 h-full w-full scale-105 object-cover opacity-45 mix-blend-screen"
+            className="absolute inset-0 h-full w-full scale-105 object-cover mix-blend-screen"
+            style={{ opacity: videoOpacity }}
             autoPlay
             muted
             loop

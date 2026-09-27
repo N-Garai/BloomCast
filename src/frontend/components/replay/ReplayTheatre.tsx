@@ -5,6 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { API } from "@/lib/api";
 import { Spinner } from "@/components/ui/Spinner";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { LiveReplay } from "@/components/replay/LiveReplay";
 
 interface ReplayDay {
   date: string;
@@ -30,6 +31,7 @@ interface ReplayEvent {
 }
 
 export function ReplayTheatre() {
+  const [mode, setMode] = useState<"events" | "live">("events");
   const [events, setEvents] = useState<Array<{ event_id: string; name: string; waterbody_id: string }>>([]);
   const [active, setActive] = useState<ReplayEvent | null>(null);
   const [idx, setIdx] = useState(0);
@@ -94,12 +96,35 @@ export function ReplayTheatre() {
     return () => clearInterval(t);
   }, [playing, active]);
 
-  if (loading && !active) {
+  if (loading && !active && mode !== "live") {
     return <Spinner label="Loading replay events" />;
   }
 
-  if ((error && !active) || (!loading && !events.length)) {
+  if (((error && !active) || (!loading && !events.length)) && mode !== "live") {
     return <ErrorBanner message={error ?? "No replay events available."} onRetry={loadEvents} />;
+  }
+
+  if (mode === "live") {
+    return (
+      <div className="space-y-6">
+        <div className="flex flex-wrap gap-2">
+          {(["events", "live"] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => setMode(m)}
+              className={`px-4 py-2 rounded-lg text-sm border transition-all ${
+                mode === m
+                  ? "bg-glow-violet/15 border-glow-violet/50 text-glow-violet"
+                  : "glass border-border-subtle text-fg-secondary hover:text-fg-primary"
+              }`}
+            >
+              {m === "events" ? "Documented events" : "Live point"}
+            </button>
+          ))}
+        </div>
+        <LiveReplay />
+      </div>
+    );
   }
 
   if (!active) return null;
@@ -118,6 +143,21 @@ export function ReplayTheatre() {
 
   return (
     <div className="space-y-6">
+      <div className="flex flex-wrap gap-2">
+        {(["events", "live"] as const).map((m) => (
+          <button
+            key={m}
+            onClick={() => setMode(m)}
+            className={`px-4 py-2 rounded-lg text-sm border transition-all ${
+              mode === m
+                ? "bg-glow-violet/15 border-glow-violet/50 text-glow-violet"
+                : "glass border-border-subtle text-fg-secondary hover:text-fg-primary"
+            }`}
+          >
+            {m === "events" ? "Documented events" : "Live point"}
+          </button>
+        ))}
+      </div>
       <div className="flex flex-wrap gap-3">
         {events.map((ev) => (
           <button

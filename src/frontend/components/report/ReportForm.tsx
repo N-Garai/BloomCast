@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 
 import { API } from "@/lib/api";
+import { getWaterbodies, type WaterbodyOption } from "@/lib/waterbodies";
 
 const COLORS = ["clear", "green", "brown", "blue-green", "red", "other"];
 const ODORS = ["none", "earthy", "musty", "rotten-egg", "other"];
@@ -22,6 +23,12 @@ export function ReportForm() {
   const [status, setStatus] = useState<"idle" | "submitting" | "ok" | "error">("idle");
   const [error, setError] = useState("");
   const [photo, setPhoto] = useState<string | null>(null);
+  const [waterbodies, setWaterbodies] = useState<WaterbodyOption[]>([]);
+  const [gpsBusy, setGpsBusy] = useState(false);
+
+  useEffect(() => {
+    getWaterbodies().then(setWaterbodies);
+  }, []);
 
   function onPhoto(file: File | undefined) {
     if (!file) {
@@ -40,15 +47,33 @@ export function ReportForm() {
 
   function setLocation() {
     if (!navigator.geolocation) {
-      setError("Geolocation is unavailable — enter coordinates manually.");
+      setError("Geolocation is unavailable in this browser — enter coordinates manually.");
       return;
     }
+    setGpsBusy(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setForm((current) => ({ ...current, latitude: String(pos.coords.latitude), longitude: String(pos.coords.longitude) }));
+        setForm((current) => ({
+          ...current,
+          latitude: pos.coords.latitude.toFixed(5),
+          longitude: pos.coords.longitude.toFixed(5),
+        }));
         setError("");
+        setGpsBusy(false);
       },
-      () => setError("Geolocation unavailable — enter coordinates manually."),
+      (err) => {
+        setGpsBusy(false);
+        if (err.code === err.PERMISSION_DENIED) {
+          setError("Location permission denied — allow it in the browser prompt, or enter coordinates manually.");
+        } else if (err.code === err.POSITION_UNAVAILABLE) {
+          setError("Could not fix your position (indoors/GPS off?) — enter coordinates manually.");
+        } else if (err.code === err.TIMEOUT) {
+          setError("Location lookup timed out — try again or enter coordinates manually.");
+        } else {
+          setError("Geolocation unavailable — enter coordinates manually.");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 },
     );
   }
 
@@ -127,9 +152,13 @@ export function ReportForm() {
           onChange={(e) => setForm({ ...form, waterbody_id: e.target.value })}
           className="w-full bg-bg-deep border border-border-subtle rounded-lg px-3 py-2.5 text-fg-primary focus:border-glow-cyan outline-none"
         >
-          {["CH-ZUR-01", "CH-GVA-01", "IT-MAG-01", "DE-CON-01", "IT-GAR-01", "IT-COM-01", "US-ERI-01", "IN-VEM-01"].map((id) => (
-            <option key={id} value={id}>{id}</option>
-          ))}
+          {waterbodies.length ? (
+            waterbodies.map((wb) => (
+              <option key={wb.id} value={wb.id}>{wb.name}</option>
+            ))
+          ) : (
+            <option value={form.waterbody_id}>{form.waterbody_id}</option>
+          )}
         </select>
         <p className="mt-1.5 text-xs text-fg-faint">Reports are anonymous — no account or email needed.</p>
       </div>
@@ -152,9 +181,10 @@ export function ReportForm() {
           <button
             type="button"
             onClick={setLocation}
-            className="px-4 py-2.5 rounded-lg bg-glow-cyan/10 border border-glow-cyan/30 text-glow-cyan text-sm whitespace-nowrap hover:bg-glow-cyan/20 transition-colors"
+            disabled={gpsBusy}
+            className="px-4 py-2.5 rounded-lg bg-glow-cyan/10 border border-glow-cyan/30 text-glow-cyan text-sm whitespace-nowrap hover:bg-glow-cyan/20 transition-colors disabled:opacity-50"
           >
-            Use GPS
+            {gpsBusy ? "Locating…" : "Use GPS"}
           </button>
         </div>
       </div>

@@ -5,6 +5,18 @@ import { motion } from "framer-motion";
 import { API } from "@/lib/api";
 import { Spinner } from "@/components/ui/Spinner";
 import { ErrorBanner } from "@/components/ui/ErrorBanner";
+import { VectorMap } from "@/components/maps/VectorMap";
+import { getWaterbodies, waterbodyName, type WaterbodyOption } from "@/lib/waterbodies";
+
+const PILOT_IDS = ["CH-ZUR-01", "CH-GVA-01", "IT-MAG-01", "DE-CON-01", "IT-GAR-01"];
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const rad = (d: number) => (d * Math.PI) / 180;
+  const a =
+    Math.sin(rad(lat2 - lat1) / 2) ** 2 +
+    Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(rad(lon2 - lon1) / 2) ** 2;
+  return 2 * 6371 * Math.asin(Math.sqrt(a));
+}
 
 interface Scenario {
   temp_delta_c: number;
@@ -21,6 +33,49 @@ export function SandboxClient() {
   const [error, setError] = useState<string | null>(null);
   const [tempDelta, setTempDelta] = useState(0);
   const [nutrient, setNutrient] = useState(0);
+  const [waterbodies, setWaterbodies] = useState<WaterbodyOption[]>([]);
+  const [picked, setPicked] = useState<{ lat: number; lon: number } | null>(null);
+  const [snapNote, setSnapNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    getWaterbodies().then(setWaterbodies);
+  }, []);
+
+  const pilots = waterbodies.filter((w) => PILOT_IDS.includes(w.id) && w.centroid);
+  const mapPoints = [
+    ...pilots.map((w) => ({
+      id: w.id,
+      name: w.name,
+      lat: w.centroid![1],
+      lon: w.centroid![0],
+      risk: undefined,
+      selected: !picked && wbId === w.id,
+    })),
+    ...(picked
+      ? [{ id: "__picked__", name: "Picked point", lat: picked.lat, lon: picked.lon, risk: undefined, selected: true }]
+      : []),
+  ];
+
+  const pickNearestPilot = (latitude: number, longitude: number) => {
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+    setPicked({ lat: latitude, lon: longitude });
+    let best: WaterbodyOption | null = null;
+    let bestKm = Infinity;
+    for (const w of pilots) {
+      if (!w.centroid) continue;
+      const km = haversineKm(latitude, longitude, w.centroid[1], w.centroid[0]);
+      if (km < bestKm) {
+        bestKm = km;
+        best = w;
+      }
+    }
+    if (best) {
+      setWbId(best.id);
+      setSnapNote(`Showing scenarios for ${best.name} — nearest site to your pick (${Math.round(bestKm).toLocaleString()} km away).`);
+    } else {
+      setSnapNote(null);
+    }
+  };
 
   const load = (id: string) => {
     setLoading(true);
@@ -50,18 +105,30 @@ export function SandboxClient() {
 
   return (
     <div className="space-y-8">
+      <div className="glass rounded-2xl p-6 border border-border-subtle">
+        <h3 className="font-display text-lg font-semibold mb-1 tracking-wide">Pick a site on the map</h3>
+        <p className="text-xs text-fg-muted mb-4">
+          Scenarios are precomputed per pilot site — your pick snaps to the nearest one, whose name stays shown below.
+        </p>
+        <VectorMap
+          points={mapPoints}
+          selectedId={picked ? "__picked__" : wbId}
+          onPick={pickNearestPilot}
+        />
+        {snapNote && <p className="mt-3 text-xs font-mono text-glow-cyan">{snapNote}</p>}
+      </div>
       <div className="flex flex-wrap gap-3">
-        {["CH-ZUR-01", "CH-GVA-01", "IT-MAG-01", "DE-CON-01", "IT-GAR-01"].map((id) => (
+        {PILOT_IDS.map((id) => (
           <button
             key={id}
-            onClick={() => setWbId(id)}
+            onClick={() => { setWbId(id); setPicked(null); setSnapNote(null); }}
             className={`px-4 py-2 rounded-lg text-sm border transition-all font-mono ${
               wbId === id
                 ? "bg-glow-cyan/15 border-glow-cyan/50 text-glow-cyan shadow-glow-sm"
                 : "glass border-border-subtle text-fg-secondary hover:text-fg-primary"
             }`}
           >
-            {id}
+            {waterbodyName(waterbodies, id)}
           </button>
         ))}
       </div>

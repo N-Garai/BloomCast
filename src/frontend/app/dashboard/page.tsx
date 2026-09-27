@@ -15,6 +15,7 @@ import { StreamFlushOverlay } from "@/components/streamflush/StreamFlushOverlay"
 import { ScrollReveal } from "@/components/motion/ScrollReveal";
 import { ErrorState, friendlyError } from "@/components/dashboard/Resilience";
 import { API, readBody } from "@/lib/api";
+import { VideoBackdrop } from "@/components/brand/BackgroundMedia";
 import { fetchClientWindows, scoreClientWindows } from "@/lib/openmeteo";
 
 interface Waterbody {
@@ -291,6 +292,13 @@ export default function DashboardPage() {
 
         <main className="relative min-h-[70vh] flex-1 overflow-hidden">
           <div className="absolute inset-0">
+            {showGlobe && (
+              <VideoBackdrop
+                src="/bg/bg-globe.mp4"
+                brightness={1.05}
+                overlay="linear-gradient(180deg, rgba(2,6,15,0.6) 0%, rgba(2,6,15,0.45) 50%, rgba(2,6,15,0.85) 100%)"
+              />
+            )}
             {showGlobe ? <DotMatrixGlobe waterbodies={mappable} selected={selected ?? undefined} onSelect={setSelected} onPick={runExplore} picked={picked} /> : <div className="h-full w-full bg-bg-abyss"><VectorMap fill points={mapPoints} selectedId={picked ? "__picked__" : (selected ?? undefined)} onPick={(latitude, longitude) => runExplore(latitude, longitude)} /></div>}
           </div>
           <div className="absolute top-4 left-4 z-10 flex gap-2"><button onClick={() => setShowGlobe((current) => !current)} className="px-3 py-2 rounded-lg glass border border-border-subtle text-xs text-fg-secondary hover:text-fg-primary">{' '}{showGlobe ? "Flat Map" : "3D Globe"}</button></div>
@@ -303,7 +311,7 @@ export default function DashboardPage() {
           </div>
         </main>
       </div>
-      <div className="border-t border-border-subtle bg-bg-abyss"><div className="max-w-6xl mx-auto w-full px-4 md:px-6 py-8"><ScrollReveal><LocationExplorer onSelectWaterbody={setSelected} /></ScrollReveal></div></div>
+      <div className="relative overflow-hidden border-t border-border-subtle"><VideoBackdrop src="/bg/bg-explorer.mp4" brightness={1.05} overlay="linear-gradient(180deg, rgba(2,6,15,0.8) 0%, rgba(2,6,15,0.62) 50%, rgba(2,6,15,0.88) 100%)" /><div className="relative max-w-6xl mx-auto w-full px-4 md:px-6 py-8"><ScrollReveal><LocationExplorer onSelectWaterbody={setSelected} /></ScrollReveal></div></div>
       <Footer />
     </div>
   );
