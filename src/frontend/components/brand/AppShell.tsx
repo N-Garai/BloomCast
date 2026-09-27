@@ -9,10 +9,37 @@ import { MagneticCursor } from "@/components/brand/MagneticCursor";
 import { useKeepAlive } from "@/hooks/useKeepAlive";
 import { useLenis } from "@/lib/useLenis";
 
-/** Read once, on the client only — SSR and the first client render must agree. */
+/**
+ * Should the intro curtain run? Read once, on the client only — SSR and the
+ * first client render must agree, so nothing here may run during render.
+ *
+ * `prefers-reduced-motion` deliberately does NOT suppress the curtain. An
+ * earlier version returned false on reduce-motion, which left those visitors
+ * with a bare hero, no loading state and no "enter" affordance at all — the
+ * one thing the curtain is for. The Loader now plays a calm, opacity-only
+ * version of the same beats instead, so the preference is honoured by
+ * removing motion, not information.
+ *
+ * `?intro=off` is a sticky opt-out and `?intro=on` forces the film back on
+ * (clearing the opt-out). Both exist for QA and for visitors who want to
+ * settle this once for the machine.
+ */
 function shouldBootLoader() {
   if (typeof window === "undefined") return false;
-  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return false;
+  try {
+    const override = new URLSearchParams(window.location.search).get("intro");
+    if (override === "off") {
+      localStorage.setItem("bc-intro-off", "1");
+      return false;
+    }
+    if (override === "on") {
+      localStorage.removeItem("bc-intro-off");
+      return true;
+    }
+    if (localStorage.getItem("bc-intro-off") === "1") return false;
+  } catch {
+    // Private mode or blocked storage: fall through to the session check.
+  }
   try {
     return sessionStorage.getItem("bc-booted") !== "1";
   } catch {

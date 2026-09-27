@@ -32,9 +32,11 @@ import { gsap } from "gsap";
  * • React never re-renders per frame: the counter is written by `onUpdate`
  *   straight to the DOM.
  * • Every layer is laid out up front and only animated, so nothing reflows.
- * • Fail-safes: reduced motion skips to the gate, a 22s watchdog reveals
- *   anyway, and the page-side reveal is a CSS transition so it finishes even
- *   if this component unmounts mid-iris.
+ * • Fail-safes: a wall-clock arm deadline independent of the timeline, a 22s
+ *   watchdog that reveals anyway, and — for prefers-reduced-motion — a calm
+ *   cross-fade variant of the same beats rather than no curtain at all. The
+ *   page-side reveal is a CSS transition so it finishes even if this component
+ *   unmounts mid-iris.
  */
 
 /** Absolute timeline positions (seconds). The gate arms at `arm`. */
@@ -79,6 +81,23 @@ const LOG_LINES = [
 ];
 
 const WATCHDOG_MS = 22000;
+
+/**
+ * Calm variant timings (seconds), used when the visitor prefers reduced motion.
+ * Same beats and the same copy, but cross-fades only — no parallax, no 3D
+ * glyph rotation, no blur, no scale, no idle drift. It lands on the same scroll
+ * gate, so the page still has to be entered deliberately.
+ */
+const CALM = {
+  hud: 0.05,
+  seed: 0.1,
+  mark: 0.3,
+  word: 0.85,
+  sub: 1.35,
+  lockup: 1.6,
+  gate: 1.95,
+  arm: 2.35,
+} as const;
 
 /** Split a string into per-glyph masks so letters can rise from below. */
 function SplitChars({
@@ -170,6 +189,15 @@ export function Loader({
 
   const [armed, setArmed] = useState(false);
 
+  // Safe to read during render: the Loader is only mounted once `booting` flips
+  // in a post-hydration layout effect, so it never renders on the server or
+  // during hydration and cannot mismatch.
+  const reduced =
+    typeof window !== "undefined" &&
+    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const reducedRef = useRef(reduced);
+  reducedRef.current = reduced;
+
   /** The exit: stage bursts, the shutter bloom closes to a point, then unmount. */
   const reveal = useCallback(() => {
     const root = rootRef.current;
@@ -179,6 +207,20 @@ export function Loader({
     // The film stops the instant the gate opens — the exit owns the frame.
     tlRef.current?.pause();
     enterRef.current();
+
+    // Calm variant: a plain cross-fade. The iris, the stage scale and the
+    // shockwave are all motion, and this visitor asked for none of it.
+    if (reducedRef.current) {
+      exitTlRef.current = gsap
+        .timeline({
+          onComplete: () => {
+            finishedRef.current = true;
+            doneRef.current();
+          },
+        })
+        .to(root, { opacity: 0, duration: 0.45, ease: "none" });
+      return;
+    }
 
     const q = gsap.utils.selector(root);
     exitTlRef.current = gsap
@@ -225,22 +267,25 @@ export function Loader({
     }
   }, [reveal]);
 
-  const reduced =
-    typeof window !== "undefined" &&
-    window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-
   // ── The film ────────────────────────────────────────────────────────────
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) return;
 
-    if (reduced) {
-      armedRef.current = true;
-      reveal();
-      return;
-    }
-
     const q = gsap.utils.selector(root);
+
+    // The intro promises a duration. GSAP's default lag smoothing freezes the
+    // timeline clock whenever a frame exceeds 500ms, which stretched the 5.6s
+    // film past 10s on a slow machine. Follow real time instead and let the
+    // arm-deadline watchdog cover the pathological case.
+    gsap.ticker.lagSmoothing(0);
+
+    // ── Calm variant · prefers-reduced-motion ─────────────────────────────
+    // Honouring the preference means dropping the motion, not the curtain.
+    // Same story, cross-fades only, and the same scroll gate so the page is
+    // still entered deliberately. The stage layers (analysis → type → lockup)
+    // are stacked in one place, so each layer must fade out before the next
+    // fades in — showing two at once reads as a broken pile, not a calm film.
     const counter = { v: 0 };
     const countEl = q(".bcl-count")[0] as HTMLElement | undefined;
     const barEl = q(".bcl-bar-fill")[0] as HTMLElement | undefined;
@@ -248,6 +293,64 @@ export function Loader({
       if (countEl) countEl.textContent = String(Math.round(counter.v)).padStart(3, "0");
       if (barEl) barEl.style.transform = `scaleX(${Math.min(1, counter.v / 100)})`;
     };
+
+    if (reduced) {
+      // Everything the calm film reveals starts hidden, including the type
+      // layer (the full-frame slogan is the most aggressive beat, and the
+      // lockup already carries "See it coming.").
+      gsap.set(
+        q(
+          [
+            ".bcl-hud", ".bcl-seed", ".bcl-mark", ".bcl-echo", ".bcl-type", ".bcl-bloom",
+            ".bcl-analysis .bcl-wordmark .bcl-char", ".bcl-sub", ".bcl-ndci",
+            ".bcl-counter", ".bcl-flash", ".bcl-lockup", ".bcl-lockup-mark",
+            ".bcl-slogan-serif .bcl-char", ".bcl-gate", ".bcl-hint",
+            ...LOG_LINES.map((_, i) => `.bcl-log-${i}`),
+          ].join(",")
+        ),
+        { opacity: 0 }
+      );
+
+      const calm = gsap.timeline({ paused: true, defaults: { ease: "power1.out" } });
+      tlRef.current = calm;
+      calm
+        // Act 1-2 · DEEP → IGNITION
+        .to(q(".bcl-hud"), { opacity: 1, duration: 0.4 }, CALM.hud)
+        .to(q(".bcl-seed"), { opacity: 1, duration: 0.5 }, CALM.seed)
+        .to(q(".bcl-mark"), { opacity: 1, duration: 0.6 }, CALM.mark)
+        .to(q(".bcl-echo"), { opacity: 0.4, duration: 0.6, stagger: 0.12 }, CALM.mark + 0.1)
+        // Act 3 · ANALYSIS
+        .to(q(".bcl-analysis .bcl-wordmark .bcl-char"),
+          { opacity: 1, duration: 0.4, stagger: 0.05 }, CALM.word)
+        .to(q(".bcl-sub, .bcl-ndci"), { opacity: 1, duration: 0.4, stagger: 0.1 }, CALM.sub)
+        .to(q(LOG_LINES.map((_, i) => `.bcl-log-${i}`).join(",")),
+          { opacity: 1, duration: 0.35, stagger: 0.07 }, CALM.sub + 0.2)
+        .to(q(".bcl-counter"), { opacity: 1, duration: 0.4 }, CALM.sub)
+        .to(counter, { v: 100, duration: 1.1, ease: "none", onUpdate: writeCounter }, CALM.sub)
+        // Act 5 · SETTLE + GATE — the analysis layer clears out first
+        .to(q(".bcl-analysis"), { opacity: 0, duration: 0.5 }, CALM.lockup)
+        .to(q(".bcl-lockup"), { opacity: 1, duration: 0.5 }, CALM.lockup + 0.35)
+        .to(q(".bcl-lockup-mark"), { opacity: 1, duration: 0.5 }, CALM.lockup + 0.4)
+        .to(q(".bcl-slogan-serif .bcl-char"),
+          { opacity: 1, duration: 0.4, stagger: 0.05 }, CALM.lockup + 0.55)
+        .to(q(".bcl-gate, .bcl-hint"),
+          { opacity: 1, duration: 0.45, stagger: 0.08 }, CALM.gate)
+        .call(() => {
+          armedRef.current = true;
+          setArmed(true);
+          if (pendingRef.current) reveal();
+        }, undefined, CALM.arm);
+
+      writeCounter();
+      calm.play();
+      return () => {
+        gsap.ticker.lagSmoothing(500, 33);
+        calm.kill();
+        tlRef.current = null;
+        exitTlRef.current?.kill();
+      };
+    }
+
     writeCounter();
 
     // Explicit initial states — nothing here waits on immediateRender
@@ -387,6 +490,7 @@ export function Loader({
 
     tl.play();
     return () => {
+      gsap.ticker.lagSmoothing(500, 33);
       tl.kill();
       tlRef.current = null;
       exitTlRef.current?.kill();
@@ -396,7 +500,6 @@ export function Loader({
 
   // ── The gate: one gesture opens it ──────────────────────────────────────
   useEffect(() => {
-    if (reduced) return;
     let touchY: number | null = null;
 
     const onWheel = (e: WheelEvent) => {
@@ -432,14 +535,26 @@ export function Loader({
       window.removeEventListener("keydown", onKey);
       window.removeEventListener("pointerdown", onPointer);
     };
-  }, [reduced, requestEnter]);
+  }, [requestEnter]);
 
-  // Watchdog: if the visitor never interacts, the site must still open.
+  // Two guarantees that do not depend on the timeline having run:
+  //   1. the gate arms on wall-clock time, so a janky first paint or a stalled
+  //      ticker can never leave the visitor staring at a locked curtain;
+  //   2. a visitor who never interacts still gets the page.
   useEffect(() => {
-    if (reduced) return;
-    const id = window.setTimeout(() => requestEnter(), WATCHDOG_MS);
-    return () => window.clearTimeout(id);
-  }, [reduced, requestEnter]);
+    const armDeadline = (reduced ? CALM.arm : ACT.arm) * 1000 + 1200;
+    const armId = window.setTimeout(() => {
+      if (armedRef.current || exitedRef.current) return;
+      armedRef.current = true;
+      setArmed(true);
+      if (pendingRef.current) reveal();
+    }, armDeadline);
+    const openId = window.setTimeout(() => requestEnter(), WATCHDOG_MS);
+    return () => {
+      window.clearTimeout(armId);
+      window.clearTimeout(openId);
+    };
+  }, [reduced, reveal, requestEnter]);
 
   return (
     <div

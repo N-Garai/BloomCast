@@ -147,17 +147,38 @@ and still lands on designed frames rather than a cut.
 
 **Access and failure modes.**
 
-- `prefers-reduced-motion: reduce` skips the curtain entirely; the page fades in.
-- Server HTML ships the page with `data-revealed="false"`, so the first paint
-  before hydration is the abyss rather than a flash of the hero. A `<noscript>`
-  rule forces the page visible when scripting is off.
+- `prefers-reduced-motion: reduce` plays a **calm variant** of the same film
+  rather than skipping it: identical beats and copy, cross-fades only, no
+  parallax, no 3D glyph rotation, no blur, no scale, and a plain opacity
+  cross-fade on exit instead of the iris. It still lands on the scroll gate, so
+  the page is still entered deliberately. The curtain carries the loading state
+  and the only "enter" affordance, so suppressing it removed information the
+  visitor needs; an earlier version did exactly that and left reduce-motion
+  visitors with a bare hero.
+- Server HTML ships the page hidden, so the first paint before hydration is the
+  abyss rather than a flash of the hero. A `<noscript>` rule forces the page
+  visible when scripting is off.
 - The boot decision happens in a layout effect, so SSR and the first client
   render always agree and hydration never mismatches.
 - Scroll is locked (`html.bc-scroll-lock`) while the curtain covers the page, so
   the opening gesture cannot also drag the hero out of position; Lenis starts
   only after the gate opens.
-- A 22-second watchdog reveals the page even if the visitor never interacts.
+- `gsap.ticker.lagSmoothing(0)` is set for the duration of the film. GSAP's
+  default lag smoothing freezes the timeline clock whenever a frame exceeds
+  500ms, which stretched the 5.6s film past 10s on a slow machine. Two
+  wall-clock guarantees do not depend on the timeline: an arm deadline forces
+  the gate open at 6.8s (3.55s calm), and a 22-second watchdog reveals the page
+  even if the visitor never interacts.
 - `sessionStorage["bc-booted"]` means the film plays once per session.
+- `?intro=off` sets a sticky `localStorage` opt-out; `?intro=on` clears it and
+  forces the film on. Useful for QA and for visitors who want to settle the
+  question once for the machine.
+
+The film is verified in real headless Chrome over CDP (`.agent/v2/probe.mjs`),
+not just by inspecting build output: it screenshots each act, measures the
+real time from curtain mount to gate arm, dispatches a genuine wheel or touch
+gesture to open the gate, and asserts the settled page state. Measured film
+length is ~5.2s at 1440×900 and ~4.5s at 390×844.
 
 Copy in the film is restricted to real pipeline stages ("aligning orbital
 sensors", "fusing 14-day weather ensemble", "scoring stream wash-off risk",
