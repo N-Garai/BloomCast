@@ -19,7 +19,7 @@ function project(lat: number, lon: number, width: number, height: number) {
   };
 }
 
-export function VectorMap({ points = [], onPick, selectedId, fill = false, panel = null }: { points?: VectorMapPoint[]; onPick: (lat: number, lon: number) => void; selectedId?: string; fill?: boolean; panel?: React.ReactNode }) {
+export function VectorMap({ points = [], onPick, selectedId, fill = false, panel = null, showPanel = true }: { points?: VectorMapPoint[]; onPick: (lat: number, lon: number) => void; selectedId?: string; fill?: boolean; panel?: React.ReactNode; showPanel?: boolean }) {
   const ref = useRef<SVGSVGElement>(null);
   const width = 900;
   const height = 450;
@@ -107,6 +107,7 @@ export function VectorMap({ points = [], onPick, selectedId, fill = false, panel
           );
         })}
       </svg>
+      {showPanel && (
       <aside className="shrink-0 rounded-xl border border-border-subtle bg-bg-deep/60 p-3 sm:w-44" aria-live="polite">
         {panel ?? (<>
         <div className="font-mono text-[10px] uppercase tracking-[0.25em] text-glow-cyan">Coordinates</div>
@@ -122,6 +123,7 @@ export function VectorMap({ points = [], onPick, selectedId, fill = false, panel
         )}
         </>)}
       </aside>
+      )}
     </div>
   );
 }
