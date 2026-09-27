@@ -45,6 +45,7 @@ ENV SEED_DIR=../data/seed \
     STREAM_FILE=../data/stream_segments.geojson \
     REPLAY_FILE=../data/replay_events.json \
     CORS_ORIGINS=* \
+    BLOOMCAST_WARMUP=1 \
     PYTHONPATH=/app/src/backend
 
 EXPOSE 10000

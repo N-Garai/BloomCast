@@ -2042,5 +2042,23 @@ def test_groq_strict_payload_shape(monkeypatch):
     assert seen["json"]["model"] == R.GROQ_MODEL
 
 
+def test_head_probes_answer_200(monkeypatch):
+    """Deploy probes (port detection, uptime monitors) use HEAD: a 405 there
+    stalls the deploy before health checks ever run. HEAD must answer 200
+    with headers and no body, on / and /v1/health, without changing GET."""
+    from fastapi.testclient import TestClient
+    from api.main import app
+
+    client = TestClient(app, raise_server_exceptions=False)
+    root = client.head("/")
+    assert root.status_code == 200, root.text
+    assert root.content == b""
+    health = client.head("/v1/health")
+    assert health.status_code == 200
+    assert health.content == b""
+    assert client.get("/v1/health").status_code == 200
+    assert client.get("/").status_code == 200
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))

@@ -1,6 +1,8 @@
 """BloomCast FastAPI application — deployed on Render free tier."""
 import inspect
 import json
+import os
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
@@ -58,6 +60,40 @@ if _FRONTEND_DIR is None:
         "(npm run build in src/frontend) or check the deployment layout."
     )
 
+@asynccontextmanager
+async def _lifespan(application: FastAPI):
+    """Warm the model singleton in the background at boot (opt-in via
+    ``BLOOMCAST_WARMUP=1``, set in Docker/Render, unset in tests).
+
+    Why: the first request that touches the model pays a 15–60 s import +
+    load bill on free-tier CPU while holding the single worker's event loop,
+    so early health checks time out and the deploy looks stuck. Warming at
+    boot moves that bill before traffic, in the background so startup itself
+    never blocks. Best-effort and guarded: a failed warmup only logs, and
+    serving falls back to the honest heuristic exactly as before.
+    """
+    task = None
+    if os.environ.get("BLOOMCAST_WARMUP", "") == "1":
+        import asyncio
+
+        async def _warm():
+            try:
+                from features.feature_store import FEATURE_NAMES
+                from ml.training.artifacts import get_serving_artifacts
+
+                get_serving_artifacts(FEATURE_NAMES)
+                print("[bloomcast] model warmup complete")
+            except Exception as exc:  # noqa: BLE001 - serving falls back anyway
+                print(f"[bloomcast] model warmup skipped ({exc})")
+
+        task = asyncio.create_task(_warm())
+    try:
+        yield
+    finally:
+        if task is not None:
+            task.cancel()
+
+
 app = FastAPI(
     title="BloomCast API",
     version=__version__,
@@ -65,6 +101,7 @@ app = FastAPI(
     openapi_url="/v1/openapi.json",
     docs_url="/v1/docs",
     redoc_url="/v1/redoc",
+    lifespan=_lifespan,
 )
 
 # Serve the Next.js static export from the same process. The export is flat
@@ -147,15 +184,22 @@ async def serve_favicon():
 
 
 @app.get("/v1/health")
-async def health():
+@app.head("/v1/health")
+async def health(request: Request):
     """Liveness + honest model status (v2 M-K1).
 
     ``model.status`` is ``loaded`` only when the exported artifacts passed the
     feature-compatibility check; otherwise ``fallback`` with the reason. A
     green health check that hides a missing model is worse than a red one.
+
+    HEAD is answered explicitly (headers only): container platforms probe
+    with HEAD during port detection, and a 405 there stalls the deploy
+    before health checks ever run.
     """
     from ml.training.artifacts import serving_model_status
 
+    if request.method == "HEAD":
+        return Response(status_code=200)
     model_status = serving_model_status()
     pipeline_run = None
     try:
@@ -694,12 +738,24 @@ async def report(request: Request):
 
 # Catch-all for frontend pages and static assets. Registered LAST so /v1/*
 # routes win. The _HtmlRedirectMiddleware rewrites clean URLs to .html before
-# this route sees the request.
-@app.get("/{full_path:path}")
+# this route sees the request. HEAD is served alongside GET (headers only)
+# for the same deploy-probe reason as /v1/health above.
+@app.api_route("/{full_path:path}", methods=["GET", "HEAD"])
 async def serve_frontend(request: Request, full_path: str):
     if full_path.startswith("v1/") or full_path.startswith("_next/") or full_path.startswith("docs/"):
         raise HTTPException(status_code=404, detail="Not found")
     file_path = _FRONTEND_DIR / full_path
     if full_path and file_path.is_file():
-        return FileResponse(file_path)
-    return FileResponse(_FRONTEND_DIR / "index.html")
+        target = file_path
+    else:
+        target = _FRONTEND_DIR / "index.html"
+    if request.method == "HEAD":
+        mime, _ = mimetypes.guess_type(str(target))
+        return Response(
+            status_code=200,
+            headers={
+                "content-type": mime or "application/octet-stream",
+                "content-length": str(target.stat().st_size),
+            },
+        )
+    return FileResponse(target)

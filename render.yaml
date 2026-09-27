@@ -27,3 +27,5 @@ services:
         value: ../data/replay_events.json
       - key: CORS_ORIGINS
         value: "*"
+      - key: BLOOMCAST_WARMUP
+        value: "1"
