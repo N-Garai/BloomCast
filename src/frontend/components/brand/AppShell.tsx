@@ -10,6 +10,21 @@ import { useKeepAlive } from "@/hooks/useKeepAlive";
 import { useLenis } from "@/lib/useLenis";
 
 /**
+ * How this document was opened. `reload` covers both F5 and Ctrl+Shift+R;
+ * `back_forward` covers history moves and bfcache restores.
+ */
+function navigationType(): string | null {
+  try {
+    const entry = performance.getEntriesByType("navigation")[0] as
+      | PerformanceNavigationTiming
+      | undefined;
+    return entry?.type ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Should the intro curtain run? Read once, on the client only — SSR and the
  * first client render must agree, so nothing here may run during render.
  *
@@ -38,8 +53,20 @@ function shouldBootLoader() {
     }
     if (localStorage.getItem("bc-intro-off") === "1") return false;
   } catch {
-    // Private mode or blocked storage: fall through to the session check.
+    // Private mode or blocked storage: fall through to the navigation check.
   }
+
+  // A reload is a deliberate "show me the site again", so the film replays.
+  // This has to be decided from the Navigation Timing entry, not from
+  // storage: `sessionStorage` outlives a reload, so the old once-per-session
+  // flag suppressed the curtain on every F5 and Ctrl+Shift+R — the visitor
+  // landed straight on the hero at their restored scroll offset with no
+  // loading state and no "enter" affordance.
+  const type = navigationType();
+  if (type === "reload") return true;
+  // A history move re-enters a document this visitor already entered.
+  if (type === "back_forward") return false;
+
   try {
     return sessionStorage.getItem("bc-booted") !== "1";
   } catch {
@@ -64,6 +91,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     if (shouldBootLoader()) {
       setBooting(true);
       setRevealed("hidden");
+      // A reload restores the previous scroll offset, which parks the hero
+      // mid-page behind the curtain and hands the visitor a half-scrolled
+      // page the moment the gate opens. Take the document back to the top
+      // before the first paint instead.
+      if ("scrollRestoration" in window.history) {
+        window.history.scrollRestoration = "manual";
+      }
+      window.scrollTo(0, 0);
       return;
     }
     setRevealed("open");

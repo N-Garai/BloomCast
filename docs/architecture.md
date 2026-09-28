@@ -113,23 +113,32 @@ the request-time weather window or claim live satellite input.
 
 ## Intro curtain
 
-Before the hero, a full-bleed boot film plays once per browser session. It is a
-client-side sequence only — no API call, no artwork fetch beyond the favicon
-chip, and no layout shift — implemented in
-`src/frontend/components/brand/Loader.tsx` with styling in
-`src/frontend/app/globals.css` (`.bcl-*` rules) and driven by a single GSAP
+Before the hero, a full-bleed boot film plays. It is a client-side sequence
+only — no API call, no artwork fetch beyond the favicon chip, and no layout
+shift — implemented in `src/frontend/components/brand/Loader.tsx` with styling
+in `src/frontend/app/globals.css` (`.bcl-*` rules) and driven by a single GSAP
 timeline.
 
 | Act | Time | Content |
 |---|---|---|
 | 1 · Deep | 0.0–0.55s | Abyss, film grain, two drifting chlorophyll caustics, a single cyan seed, HUD frame with the real `/favicon.svg` chip |
 | 2 · Ignition | 0.55–0.95s | The mark blooms in (same geometry as `favicon.svg`), three echo rings expand, horizon hairlines grow out of the mark |
-| 3 · Analysis | 0.95–3.15s | `BLOOMCAST` cascades glyph-by-glyph from masked line boxes while tracking settles; NDCI red-edge trace draws, scan sweep crosses the frame, four pipeline log lines stagger in, `000 → 100` counter and progress bar scrub |
-| 4 · Type | 3.15–4.55s | The analysis column collapses; `SEE IT` / `COMING.` fills the frame in Bebas Neue with per-glyph rise, a travelling gradient, a chlorophyll bloom behind the type, and a warm flare for colour grading |
-| 5 · Settle | 4.55–5.6s | Type collapses, white-cyan flash launders the cut, the mark + wordmark + serif slogan lockup resolves, the gate opens |
+| 3 · Analysis | 0.95–6.15s | `BLOOMCAST` cascades glyph-by-glyph from masked line boxes while tracking settles; NDCI red-edge trace draws, scan sweep crosses the frame, four pipeline log lines stagger in, `000 → 100` counter and progress bar scrub, and the completed read holds before it clears |
+| 4 · Type | 5.65–7.65s | The analysis column collapses; `SEE IT` / `COMING.` fills the frame in Bebas Neue with per-glyph rise, a travelling gradient, and a chlorophyll bloom behind the type |
+| 5 · Settle | 7.05–8.1s | Type collapses, white-cyan flash launders the cut, the mark + wordmark + serif slogan lockup resolves, the gate opens |
+
+Act 3 is intentionally the longest act. It is the only beat carrying real
+information — the trace drawing itself, the sweep, the pipeline log and the
+counter reaching 100 — and it was previously scheduled so that `collapse` tore
+the layer down 0.15s after the counter began its 2.1s run. The graph was still
+drawing when it was cut, the counter never left the teens and the whole act read
+as a flash. Every position from `collapse` onward is therefore offset from the
+*end* of Act 3 rather than its start. The calm variant had the same defect at
+1/4 scale (`lockup` 0.25s after the calm counter started) and is fixed the same
+way.
 
 **The gate.** The film ends on `SCROLL TO ENTER` (with a looping chevron and,
-after 8.4s, an `or press enter` hint) and does *not* dismiss itself. A wheel
+after 10.9s, an `or press enter` hint) and does *not* dismiss itself. A wheel
 gesture, upward swipe, `ArrowDown` / `PageDown` / `Space` / `Enter`, or a click
 opens it. Then:
 
@@ -165,16 +174,29 @@ and still lands on designed frames rather than a cut.
   only after the gate opens.
 - `gsap.ticker.lagSmoothing(0)` is set for the duration of the film. GSAP's
   default lag smoothing freezes the timeline clock whenever a frame exceeds
-  500ms, which stretched the 5.6s film past 10s on a slow machine. Two
-  wall-clock guarantees do not depend on the timeline: an arm deadline forces
-  the gate open at 6.8s (3.55s calm), and a 22-second watchdog reveals the page
-  even if the visitor never interacts.
+  500ms, which stretched the film past 10s on a slow machine. Two wall-clock
+  guarantees do not depend on the timeline: an arm deadline forces the gate open
+  at 9.3s (5.9s calm), and a 22-second watchdog reveals the page even if the
+  visitor never interacts.
 - Anything the film reveals later starts hidden **in the markup**, not only in
   the animation code. The gate layer carries `opacity-0` because a layout effect
   can still land after the browser has painted the mount: without it, "Scroll to
   enter" flashed at full opacity over Act 1, measured at t=389ms with the counter
   still on 000 — an invitation to scroll before there was anything to scroll past.
-- `sessionStorage["bc-booted"]` means the film plays once per session.
+- The reduced-motion media query neutralises the aperture *motion* only
+  (transform, clip-path, transition). It must never set `opacity` on `.bc-page`
+  itself: doing so forced the `data-revealed="hidden"` state visible, so
+  reduce-motion visitors watched the calm film play on top of a fully lit hero -
+  the same glimpse the curtain exists to prevent.
+- The boot decision reads the Navigation Timing entry, not storage alone. The
+  film replays on a **reload** (F5 *and* Ctrl+Shift+R) and is suppressed on
+  `back_forward`. It used to be keyed solely on `sessionStorage["bc-booted"]`,
+  but `sessionStorage` outlives a reload - so every hard refresh skipped the
+  curtain and dropped the visitor straight onto the hero at their restored
+  scroll offset, with no loading state and no "enter" affordance. When the
+  curtain does boot, `history.scrollRestoration` is set to `manual` and the
+  document is scrolled to the top before the first paint, so the reveal never
+  opens on a half-scrolled page.
 - `?intro=off` sets a sticky `localStorage` opt-out; `?intro=on` clears it and
   forces the film on. Useful for QA and for visitors who want to settle the
   question once for the machine.
@@ -192,7 +214,7 @@ Enter, a click, a reload in the same session, `?intro=off` and its stickiness,
 `?intro=on` overriding both, and the whole set again under
 `prefers-reduced-motion`. `PROBE_TRACE=1` dumps the film's state every 150ms on
 the page's own clock, which is how the gate flash was pinned to a specific
-millisecond. All 21 edge assertions pass in both motion modes.
+millisecond. All 26 edge assertions pass in both motion modes, and `measure_film.mjs` checks the film's own arithmetic: that Act 3 stays on screen for seconds rather than a flash, that the counter actually reaches 100 before the layer collapses, that the hero behind the curtain reads opacity 0 on every sampled frame, and that an early gesture shortens the wait (measured as an ungestured run against a gestured one under identical renderer load, because a fixed millisecond budget only measures jitter).
 
 Two lessons the harness had to learn, both from false failures: hydration has
 measured 2.3s under a software renderer, so nothing may be asserted a fixed

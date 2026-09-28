@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { gsap } from "gsap";
 
 /**
- * BloomCast intro curtain — a five-act boot film, ~5.6s to the reveal gate.
+ * BloomCast intro curtain — a five-act boot film, ~8.1s to the reveal gate.
  *
  * Motion-design brief
  * ───────────────────
@@ -39,7 +39,17 @@ import { gsap } from "gsap";
  *   unmounts mid-iris.
  */
 
-/** Absolute timeline positions (seconds). The gate arms at `arm`. */
+/**
+ * Absolute timeline positions (seconds). The gate arms at `arm`.
+ *
+ * Act 3 is deliberately long. The live read is the one beat that carries real
+ * information — the NDCI trace drawing itself, the sweep crossing the frame,
+ * the pipeline log and the 000 → 100 counter — and it used to be scheduled so
+ * that `collapse` tore the whole layer down 0.15s after the counter started its
+ * 2.1s run. The graph was still drawing when it was cut, the counter never left
+ * the teens, and the act read as a flash. Everything from `collapse` onward is
+ * therefore offset from the end of Act 3, not from its start.
+ */
 const ACT = {
   deep: 0.0,
   seed: 0.12,
@@ -56,15 +66,17 @@ const ACT = {
   logStagger: 0.25,
   counter: 3.0,
   counterDur: 2.1,
-  collapse: 3.15,
-  sloganL1: 3.35,
-  sloganL2: 3.85,
-  typeOut: 4.55,
-  flash: 4.78,
-  lockup: 4.98,
-  gate: 5.3,
-  arm: 5.6,
-  hint: 8.4,
+  // The counter reaches 100 at 5.1s; hold it so the completed read is legible
+  // before the layer collapses.
+  collapse: 5.65,
+  sloganL1: 5.85,
+  sloganL2: 6.35,
+  typeOut: 7.05,
+  flash: 7.28,
+  lockup: 7.48,
+  gate: 7.8,
+  arm: 8.1,
+  hint: 10.9,
 } as const;
 
 const WORDMARK = "BLOOMCAST";
@@ -93,9 +105,14 @@ const CALM = {
   mark: 0.3,
   word: 0.85,
   sub: 1.35,
-  lockup: 1.6,
-  gate: 1.95,
-  arm: 2.35,
+  // Same defect as the full film, in miniature: `lockup` used to start 0.25s
+  // after `sub`, so the calm counter was torn down at 0.25s of a 1.1s run and
+  // the read this variant exists to communicate never resolved.
+  counter: 1.6,
+  counterDur: 1.9,
+  lockup: 3.7,
+  gate: 4.3,
+  arm: 4.7,
 } as const;
 
 /** Split a string into per-glyph masks so letters can rise from below. */
@@ -324,8 +341,8 @@ export function Loader({
         .to(q(".bcl-sub, .bcl-ndci"), { opacity: 1, duration: 0.4, stagger: 0.1 }, CALM.sub)
         .to(q(LOG_LINES.map((_, i) => `.bcl-log-${i}`).join(",")),
           { opacity: 1, duration: 0.35, stagger: 0.07 }, CALM.sub + 0.2)
-        .to(q(".bcl-counter"), { opacity: 1, duration: 0.4 }, CALM.sub)
-        .to(counter, { v: 100, duration: 1.1, ease: "none", onUpdate: writeCounter }, CALM.sub)
+        .to(q(".bcl-counter"), { opacity: 1, duration: 0.4 }, CALM.counter)
+        .to(counter, { v: 100, duration: CALM.counterDur, ease: "none", onUpdate: writeCounter }, CALM.counter)
         // Act 5 · SETTLE + GATE — the analysis layer clears out first
         .to(q(".bcl-analysis"), { opacity: 0, duration: 0.5 }, CALM.lockup)
         .to(q(".bcl-lockup"), { opacity: 1, duration: 0.5 }, CALM.lockup + 0.35)

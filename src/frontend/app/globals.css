@@ -497,14 +497,21 @@ input[type="number"] {
   .bcl-caret::after {
     animation: none;
   }
-  .bc-page,
-  .bc-page[data-revealed="opening"],
-  .bc-page[data-revealed="open"] {
-    opacity: 1;
+  /* Honouring the preference means dropping the aperture *motion*, not the
+     hidden state. This block used to set `opacity: 1` on `.bc-page` itself,
+     which forced the `data-revealed="hidden"` state visible — so reduce-motion
+     visitors watched the calm film play on top of a fully lit hero, the exact
+     glimpse the curtain exists to prevent. Opacity stays owned by the reveal
+     states above; only the transform, the clip and the transition go. */
+  .bc-page {
+    transform: none;
+    transition: opacity 0.35s linear;
+  }
+  .bc-page[data-revealed="opening"] {
     transform: none;
     clip-path: none;
     -webkit-clip-path: none;
-    transition: none;
+    transition: opacity 0.35s linear;
   }
 }
 
