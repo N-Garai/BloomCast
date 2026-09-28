@@ -59,7 +59,6 @@ const ACT = {
   collapse: 3.15,
   sloganL1: 3.35,
   sloganL2: 3.85,
-  flare: 4.15,
   typeOut: 4.55,
   flash: 4.78,
   lockup: 4.98,
@@ -458,9 +457,11 @@ export function Loader({
         { yPercent: 0, opacity: 1, rotateX: 0, duration: 1, stagger: 0.055, ease: "expo.out" }, ACT.sloganL2)
       .fromTo(q(".bcl-slogan-l2"), { backgroundPosition: "180% 50%" },
         { backgroundPosition: "0% 50%", duration: 1.1, ease: "power2.inOut" }, ACT.sloganL2 + 0.15)
-      .fromTo(q(".bcl-flare"), { opacity: 0, x: "-12%" },
-        { opacity: 0.45, duration: 0.45, ease: "power2.out" }, ACT.flare)
-      .to(q(".bcl-flare"), { opacity: 0, x: "62%", duration: 0.75, ease: "power2.in" }, ACT.flare + 0.42)
+      // A light sweep across the slogan used to live here, tweening `.bcl-flare`
+      // at ACT.flare. That element is not in the markup, so the beat animated
+      // nothing and logged four "GSAP target not found" warnings per run.
+      // Removed rather than re-invented: a dead tween is worse than no tween,
+      // and this is a visual decision, not a bug fix.
       .to(q(".bcl-type"), {
         opacity: 0, scale: 1.07, filter: "blur(5px)", duration: 0.6, ease: "power2.in",
       }, ACT.typeOut)
@@ -697,8 +698,16 @@ export function Loader({
           </div>
         </div>
 
-        {/* Act 5b · GATE — the scroll invitation */}
-        <div className="bcl-layer bcl-layer-gate bcl-gate">
+        {/* Act 5b · GATE — the scroll invitation.
+            `opacity-0` is load-bearing, not styling: the film hides this layer
+            with a gsap.set in a layout effect, and a layout effect can still
+            land after the browser has painted the mount. Without it the gate
+            and its "scroll to enter" line flash at full opacity over Act 1,
+            measured at t=389ms with the counter still on 000 — an invitation
+            to scroll before there is anything to scroll past. GSAP writes
+            inline opacity, which wins over the class, so the film's own
+            tweens are unaffected. */}
+        <div className="bcl-layer bcl-layer-gate bcl-gate opacity-0">
           <div className="flex flex-col items-center gap-3">
             <div className="bcl-gate-line" aria-hidden />
             <p
@@ -720,7 +729,7 @@ export function Loader({
               <path d="M8 2 V 18" stroke="currentColor" strokeWidth="1" opacity="0.55" />
               <path d="M3 13 L8 19 L13 13" stroke="currentColor" strokeWidth="1.2" fill="none" />
             </svg>
-            <p className="bcl-hint font-mono text-[9px] uppercase tracking-[0.3em] text-fg-faint">
+            <p className="bcl-hint font-mono text-[9px] uppercase tracking-[0.3em] text-fg-faint opacity-0">
               or press enter
             </p>
           </div>

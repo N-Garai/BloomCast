@@ -169,16 +169,36 @@ and still lands on designed frames rather than a cut.
   wall-clock guarantees do not depend on the timeline: an arm deadline forces
   the gate open at 6.8s (3.55s calm), and a 22-second watchdog reveals the page
   even if the visitor never interacts.
+- Anything the film reveals later starts hidden **in the markup**, not only in
+  the animation code. The gate layer carries `opacity-0` because a layout effect
+  can still land after the browser has painted the mount: without it, "Scroll to
+  enter" flashed at full opacity over Act 1, measured at t=389ms with the counter
+  still on 000 — an invitation to scroll before there was anything to scroll past.
 - `sessionStorage["bc-booted"]` means the film plays once per session.
 - `?intro=off` sets a sticky `localStorage` opt-out; `?intro=on` clears it and
   forces the film on. Useful for QA and for visitors who want to settle the
   question once for the machine.
 
 The film is verified in real headless Chrome over CDP (`.agent/v2/probe.mjs`),
-not just by inspecting build output: it screenshots each act, measures the
-real time from curtain mount to gate arm, dispatches a genuine wheel or touch
-gesture to open the gate, and asserts the settled page state. Measured film
-length is ~5.2s at 1440×900 and ~4.5s at 390×844.
+not just by inspecting build output. The default run screenshots each act,
+measures the real time from curtain mount to gate arm, dispatches a genuine wheel
+or touch gesture, and asserts the settled page state; it also reports any
+selector the film animates that the markup never renders, which is how a dead
+tween tweening a non-existent `.bcl-flare` was found and removed.
+
+`PROBE_EDGE=1` adds the cases that only appear in the wild, each as a
+PASS/FAIL line rather than a screenshot to squint at: a gesture during the film,
+Enter, a click, a reload in the same session, `?intro=off` and its stickiness,
+`?intro=on` overriding both, and the whole set again under
+`prefers-reduced-motion`. `PROBE_TRACE=1` dumps the film's state every 150ms on
+the page's own clock, which is how the gate flash was pinned to a specific
+millisecond. All 21 edge assertions pass in both motion modes.
+
+Two lessons the harness had to learn, both from false failures: hydration has
+measured 2.3s under a software renderer, so nothing may be asserted a fixed
+second after navigation; and a gesture sent in the same tick as the mount is
+dropped, because the listeners are a passive effect. Waits are on the page's
+state, and gestures are sent after the mount is observed.
 
 Copy in the film is restricted to real pipeline stages ("aligning orbital
 sensors", "fusing 14-day weather ensemble", "scoring stream wash-off risk",
