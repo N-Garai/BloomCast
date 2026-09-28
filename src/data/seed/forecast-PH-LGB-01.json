@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-26T06:45:59.513718+00:00",
+  "generated_at": "2026-09-28T07:55:10.378212+00:00",
   "model_version": "v2.2.0-kaggle-labels",
   "training_source": "tick-tick-bloom",
   "training_note": "Colab-trained on 23570 Tick Tick Bloom samples; Optuna-tuned LightGBM + GPU CNN + quantiles.",
