@@ -53,6 +53,80 @@ there is no training on the request path. If artifacts are absent, incomplete,
 or feature-incompatible, the response contains only the heuristic and an
 explicit caveat.
 
+### Which model serves a request (v3 M-V11)
+
+The full 32-feature model trained on real Tick Tick Bloom labels
+(`v2.1.0-real-labels` after the V3-2 CAML re-export,
+`training_source: tick-tick-bloom`) was committed and
+then never served: every request was scored with the weather-only variant, so
+the real-label model reached zero users. Routing is now decided per request from
+what the feature row actually contains.
+
+| Tier | Chosen when | What the model sees |
+|---|---|---|
+| `full-32` | spectral prior present **and** artifacts are real-label | all 32 features, spectral block from climatology/STAC PCs |
+| `weather-only` | spectral block empty | weather + static + citizen, spectral columns masked out |
+
+A feature-block audit is what drove the design. Of 32 features, realtime-serving
+today are: weather 15/32 (live Open-Meteo), static lat/lon 2/32 (request
+passthrough), static area 1/32 (now a real per-pilot lookup, V3-11), and citizen
+5/32 (computed from steward-approved reports, V3-11). The spectral 8/32 are
+**not** realtime — they need satellite pixels, a ~5-day revisit, and a per-request
+STAC download that is minutes of latency and unreliable on the free tier. They are
+filled offline per pilot (`spectral_pc.py`, climatology) and never fetched during
+a request. That is precisely why the weather-only variant exists: routing to it
+when spectral input is missing is correct, and routing *past* it when the input
+exists is what left the real model unused.
+
+The response states the tier and the availability of each block under
+`input_availability`, so a caller can tell a low-confidence weather-only number
+from a full-model one rather than guessing.
+
+### Where predictions run: local vs Render
+
+The full model runs in both places — what differs is input freshness and
+store durability, and every response says which tier produced it:
+
+| Capability | Local | Render free tier |
+|---|---|---|
+| Full-model inference (compute) | ✅ | ✅ same code, milliseconds |
+| Live weather (Open-Meteo) | ✅ | ✅ per request, both places |
+| Citizen features (live from store) | ✅ persistent SQLite file | ⚠️ works, but SQLite is ephemeral — wiped on restart/redeploy unless `DATABASE_URL` points at Postgres (V3-12) |
+| Fresh satellite fetch (STAC) | ✅ seed job or per-request (your GDAL, your timeouts) | ❌ never in the request path; serve the committed `climatology.json` only |
+| Spectral at serve time | Measured scene (`scene <date>`) after a local refresh | Seasonal prior / last-known forward-filled block from the committed table |
+
+Provenance strings (served on every estimate, never implied):
+
+- `"pilot-full (measured scene <date>)"` — local after a fresh refresh
+- `"pilot-full (seasonal-prior spectral, scene <date>)"` — Render / stale table
+- `"experimental weather-only"` — arbitrary water, either place
+
+### Database (v3 M-V12)
+
+`api/db.py` is pure SQLAlchemy ORM (no raw SQL) and already branches on
+`DATABASE_URL`: SQLite stays the local default (`sqlite:///./bloomcast.db`),
+any `postgresql+psycopg://` URL goes straight to `create_engine` +
+`create_all` — no migrations, three tables. The `psycopg[binary]` driver
+ships in serving deps; locally nothing changes.
+
+Render deploy steps (2 minutes, all free, no credit card):
+
+1. Sign up at neon.com (Free plan: $0 permanent, no card) and create a
+   project + database.
+2. Copy the connection string (it looks like
+   `postgresql+psycopg://USER:PASSWORD@HOST/DBNAME?sslmode=require` —
+   if Neon gives `postgresql://…`, just insert `+psycopg` after
+   `postgresql`).
+3. In the Render dashboard → service → Environment, add
+   `DATABASE_URL` = that string. Redeploy.
+4. Verify: submit one citizen observation + one alert subscription on the
+   deployed site, restart the service from the Render dashboard, confirm
+   both still listed. Local dev is untouched.
+
+Without this step the deployed database is the container's SQLite file and
+dies with every restart — observations, subscriptions, and the influence log
+included.
+
 ## Data flow
 
 ```text

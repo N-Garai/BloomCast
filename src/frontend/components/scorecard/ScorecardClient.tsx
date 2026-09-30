@@ -24,6 +24,15 @@ interface Scorecard {
   holdout_region?: { status: string; protocol?: string; mean_auc?: number | null; worst_region?: { name: string; auc: number | null; n: number } | null; regions?: Record<string, { auc: number | null; brier: number | null; n: number; note?: string }> ; reason?: string };
   eu_holdout?: { status: string; reason: string };
   variants?: Record<string, { auc: number; brier: number; n: number; features?: number; provenance: string; note?: string }>;
+  /** v3 M-V4: steward-approved citizen reports as training sample weights. */
+  citizen_weights?: {
+    final_citizen_share?: number;
+    matched_observations?: number;
+    matched_rows?: number;
+    bounded_by?: string | null;
+    contributing_observation_ids?: string[];
+    reason?: string;
+  };
 }
 
 function Metric({ label, value, hint, delay = 0 }: { label: string; value: string; hint?: string; delay?: number }) {
@@ -211,6 +220,23 @@ export function ScorecardClient() {
           <p className="mt-3 text-xs text-fg-muted leading-relaxed">
             <span className="font-mono uppercase tracking-widest text-glow-yellow">EU hold-out: {sc.eu_holdout.status}</span>
             {" — "}{sc.eu_holdout.reason}
+          </p>
+        )}
+        {/* Citizen weight share is published, never implied: the Ground Truth
+            Loop is only real if you can see how much it actually moved. */}
+        {sc.citizen_weights && (
+          <p className="mt-3 text-xs text-fg-muted leading-relaxed">
+            <span className="font-mono uppercase tracking-widest text-glow-cyan">
+              Citizen weight share:{" "}
+              {sc.citizen_weights.final_citizen_share != null
+                ? `${(sc.citizen_weights.final_citizen_share * 100).toFixed(2)}%`
+                : "0%"}
+            </span>
+            {" — "}
+            {sc.citizen_weights.matched_observations
+              ? `${sc.citizen_weights.matched_observations} steward-approved report(s) raised the weight on ${sc.citizen_weights.matched_rows} training row(s), capped at 15% of total weight${sc.citizen_weights.bounded_by ? ` (bounded by ${sc.citizen_weights.bounded_by})` : ""}.`
+              : sc.citizen_weights.reason ||
+                "No validated citizen reports matched the training frame this run."}
           </p>
         )}
         <div className="mt-6 text-xs text-fg-muted">

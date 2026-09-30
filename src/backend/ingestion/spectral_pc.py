@@ -101,14 +101,25 @@ def ndci_from_arrays(b04, b05, scl=None, scl_keep=SCL_KEEP) -> tuple[float | Non
 def _read_window(href: str, bbox: list, size: int = 64):
     """Windowed read of a remote COG around ``bbox`` (lon/lat, WGS84)."""
     import rasterio
+    from rasterio.warp import transform_bounds
     from rasterio.windows import from_bounds
 
     with rasterio.open(href) as src:
+        # The scene lives in its own CRS (usually UTM metres) while the bbox
+        # is lon/lat: computing a pixel window from unprojected degrees
+        # against a metre transform yields an empty/out-of-range window whose
+        # boundless fill is all zeros — and the all-zero window then dies in
+        # the water-pixel mask as "cloud-covered". Reproject first.
+        try:
+            west, south, east, north = transform_bounds(
+                "EPSG:4326", src.crs, *bbox, densify_pts=21)
+        except Exception:  # noqa: BLE001 - caller reports read-failed
+            return None
         bounds = src.bounds
-        west = max(bounds.left, bbox[0])
-        south = max(bounds.bottom, bbox[1])
-        east = min(bounds.right, bbox[2])
-        north = min(bounds.top, bbox[3])
+        west = max(bounds.left, west)
+        south = max(bounds.bottom, south)
+        east = min(bounds.right, east)
+        north = min(bounds.top, north)
         if west >= east or south >= north:
             return None
         window = from_bounds(west, south, east, north, transform=src.transform)
@@ -153,6 +164,18 @@ def fetch_ndci(lat: float, lon: float, *, days: int = LOOKBACK_DAYS) -> dict:
         return _status("no-scene", reason="no candidate scene carried B04 + B05")
 
     try:
+        # Planetary Computer serves COGs from Azure Blob, which answers
+        # unsigned range reads with HTTP 409. Sign the item's asset hrefs
+        # when the (pure-python, seed-job only) signer is installed; without
+        # it the reads below are attempted unsigned and fail closed, which
+        # the fail-safe contract already handles as read-failed.
+        from planetary_computer import sign_inplace  # type: ignore
+
+        sign_inplace(item)
+    except Exception:  # noqa: BLE001 - signing is best-effort, reads decide
+        pass
+
+    try:
         b04 = _read_window(item.assets["B04"].href, bbox)
         b05 = _read_window(item.assets["B05"].href, bbox)
         scl = None
@@ -172,6 +195,48 @@ def fetch_ndci(lat: float, lon: float, *, days: int = LOOKBACK_DAYS) -> dict:
                        scene_id=getattr(item, "id", None),
                        cloud_cover=(item.properties or {}).get("eo:cloud_cover"))
 
+    # Bonus indices on the same water mask (B08 10m, B11 20m — both resampled
+    # to the window, so shapes always match). Best-effort: a missing asset
+    # leaves a documented 0.0 rather than failing the whole read.
+    ndvi_mean, fai_mean = 0.0, 0.0
+    b08_arr = None
+    try:
+        import numpy as _np
+
+        assets = item.assets
+        if "B08" in assets:
+            b08 = _read_window(assets["B08"].href, bbox)
+            if b08 is not None:
+                b08_arr = _np.asarray(b08, dtype="float32")
+                denom = b08_arr + b04
+                with _np.errstate(divide="ignore", invalid="ignore"):
+                    ndvi = _np.where(denom != 0, (b08_arr - b04) / denom, _np.nan)
+                wmask = _np.isfinite(ndvi) & (b08_arr > 0) & (b04 > 0)
+                if scl is not None:
+                    scla = _np.asarray(scl)
+                    if scla.shape == b04.shape:
+                        wmask &= _np.isin(scla, list(SCL_KEEP))
+                if int(wmask.sum()):
+                    ndvi_mean = round(float(_np.nanmean(ndvi[wmask])), 4)
+        if "B11" in assets:
+            b11 = _read_window(assets["B11"].href, bbox)
+            if b11 is not None:
+                b11 = _np.asarray(b11, dtype="float32")
+                # Simplified FAI on DN: B08 - (B04 + (B11 - B04) * k) with
+                # k from centre wavelengths (833-665)/(1610-665). Same mask.
+                nir = b08_arr if b08_arr is not None else _np.asarray(b04)
+                with _np.errstate(divide="ignore", invalid="ignore"):
+                    fai = nir - (b04 + (b11 - b04) * (168.0 / 945.0))
+                wmask = _np.isfinite(fai) & (nir > 0) & (b04 > 0) & (b11 > 0)
+                if scl is not None:
+                    scla = _np.asarray(scl)
+                    if scla.shape == b04.shape:
+                        wmask &= _np.isin(scla, list(SCL_KEEP))
+                if int(wmask.sum()):
+                    fai_mean = round(float(_np.nanmean(fai[wmask]) / 10000.0), 4)
+    except Exception:  # noqa: BLE001 - bonus indices never fail the read
+        pass
+
     props = item.properties or {}
     cloud_cover = props.get("eo:cloud_cover")
     return {
@@ -189,8 +254,8 @@ def fetch_ndci(lat: float, lon: float, *, days: int = LOOKBACK_DAYS) -> dict:
             10.0 * math.exp(2.5 * max(-0.2, min(0.3, ndci_mean))), 3
         ),
         "chlorophyll_a_trend_5d": 0.0,
-        "ndvi_mean": 0.0,
-        "fai_mean": 0.0,
+        "ndvi_mean": ndvi_mean,
+        "fai_mean": fai_mean,
         "forward_filled": False,
         "lookback_days": days,
         "window_deg": WINDOW_DEG,

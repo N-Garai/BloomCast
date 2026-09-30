@@ -8,6 +8,8 @@ export interface WaterbodyOption {
   region: string;
   country: string;
   centroid: [number, number] | null;
+  /** lake | river | reservoir | estuary | stream — drives alert presets (v3 M-V9). */
+  type?: string;
 }
 
 let cached: WaterbodyOption[] | null = null;
@@ -28,6 +30,7 @@ function toOption(feature: any): WaterbodyOption | null {
     region: String(properties.region ?? ""),
     country: String(properties.country ?? ""),
     centroid: valid ? [Number(centroid[0]), Number(centroid[1])] : null,
+    type: properties.type ? String(properties.type) : undefined,
   };
 }
 

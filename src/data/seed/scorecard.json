@@ -93,6 +93,11 @@
     "status": "data-blocked",
     "reason": "Tick Tick Bloom labels cover four U.S. regions only, so no EU-lake hold-out can be computed. Unlocked by citizen Ground Truth Loop labels in the identical row format \u2014 region IDs already flow end-to-end, so no code change is needed, only data."
   },
+  "citizen_weights": {
+    "status": "not-recorded",
+    "final_citizen_share": 0.0,
+    "reason": "These artifacts were exported before citizen observations were wired into training, so they carry no citizen weight. Re-export from the training notebook to publish the live share."
+  },
   "holdout_region": {
     "status": "not-recorded",
     "reason": "The committed artifacts predate region hold-out rotation; re-export from the training notebook to publish it."

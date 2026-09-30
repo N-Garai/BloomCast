@@ -1,0 +1,146 @@
+{
+  "generated_at": "2026-09-29T03:08:03.196463+00:00",
+  "model_version": "v2.2.0-kaggle-labels",
+  "training_source": "tick-tick-bloom",
+  "training_note": "Colab-trained on 23570 Tick Tick Bloom samples; Optuna-tuned LightGBM + GPU CNN + quantiles.",
+  "p_bloom": 0.2133,
+  "ci_lo": 0.0081,
+  "ci_hi": 1.0,
+  "baseline_climatology": 0.0,
+  "shap_top_features": [
+    {
+      "feature": "longitude",
+      "human": "Longitude",
+      "shap_value": 0.735,
+      "method": "gain"
+    },
+    {
+      "feature": "latitude",
+      "human": "Latitude",
+      "shap_value": 0.1526,
+      "method": "gain"
+    },
+    {
+      "feature": "temp_mean_7d",
+      "human": "Sustained warm week",
+      "shap_value": 0.0211,
+      "method": "gain"
+    },
+    {
+      "feature": "temp_anomaly_7d",
+      "human": "Surface temperature anomaly",
+      "shap_value": 0.0174,
+      "method": "gain"
+    },
+    {
+      "feature": "dewpoint_mean_3d",
+      "human": "High humidity",
+      "shap_value": 0.0158,
+      "method": "gain"
+    }
+  ],
+  "horizons": {
+    "3d": {
+      "p_bloom": 0.1677,
+      "ci_lo": 0.1677,
+      "ci_hi": 1.0,
+      "shap_top_features": [
+        {
+          "feature": "longitude",
+          "human": "Longitude",
+          "shap_value": -1.0668,
+          "method": "shap"
+        },
+        {
+          "feature": "temp_mean_7d",
+          "human": "Sustained warm week",
+          "shap_value": -0.3331,
+          "method": "shap"
+        },
+        {
+          "feature": "temp_mean_3d",
+          "human": "Recent warm temperatures",
+          "shap_value": -0.2168,
+          "method": "shap"
+        }
+      ]
+    },
+    "5d": {
+      "p_bloom": 0.2177,
+      "ci_lo": 0.2177,
+      "ci_hi": 1.0,
+      "shap_top_features": [
+        {
+          "feature": "longitude",
+          "human": "Longitude",
+          "shap_value": -1.0668,
+          "method": "shap"
+        },
+        {
+          "feature": "temp_mean_7d",
+          "human": "Sustained warm week",
+          "shap_value": -0.3331,
+          "method": "shap"
+        },
+        {
+          "feature": "temp_mean_3d",
+          "human": "Recent warm temperatures",
+          "shap_value": -0.2168,
+          "method": "shap"
+        },
+        {
+          "feature": "latitude",
+          "human": "Latitude",
+          "shap_value": 0.1392,
+          "method": "shap"
+        },
+        {
+          "feature": "solar_mean_3d",
+          "human": "Solar radiation",
+          "shap_value": 0.0797,
+          "method": "shap"
+        }
+      ]
+    },
+    "7d": {
+      "p_bloom": 0.2977,
+      "ci_lo": 0.1877,
+      "ci_hi": 1.0,
+      "shap_top_features": [
+        {
+          "feature": "longitude",
+          "human": "Longitude",
+          "shap_value": -1.0668,
+          "method": "shap"
+        },
+        {
+          "feature": "temp_mean_7d",
+          "human": "Sustained warm week",
+          "shap_value": -0.3331,
+          "method": "shap"
+        },
+        {
+          "feature": "temp_mean_3d",
+          "human": "Recent warm temperatures",
+          "shap_value": -0.2168,
+          "method": "shap"
+        },
+        {
+          "feature": "latitude",
+          "human": "Latitude",
+          "shap_value": 0.1392,
+          "method": "shap"
+        }
+      ]
+    }
+  },
+  "waterbody_id": "BE-GHE-01",
+  "name": "Leie at Ghent",
+  "region": "EU-BE",
+  "country": "BE",
+  "centroid": [
+    3.7174,
+    51.0543
+  ],
+  "type": "river"
+}

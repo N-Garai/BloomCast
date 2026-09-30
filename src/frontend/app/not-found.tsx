@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 export default function NotFound() {
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-6 text-center">
       <p className="font-mono text-xs uppercase tracking-[0.35em] text-glow-cyan">Off the chart</p>

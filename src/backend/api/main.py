@@ -39,6 +39,7 @@ from api.infer import (
     batch_throttle,
 )
 from api.fhir import build_alert_bundle
+from api.fhir_validate import validate_bundle
 from api.report import NoKeyError as ReportNoKeyError, providers_configured
 import api.report as report_api
 
@@ -491,7 +492,10 @@ async def fhir_bundle(alert_id: str):
     # "sample" returns the committed example bundle; any other id resolves to
     # that waterbody's latest forecast, rendered as a FHIR R4 Communication.
     if alert_id == "sample":
-        return seed.get_fhir_sample()
+        sample = seed.get_fhir_sample()
+        # Self-reporting validity (v3 M-V5): the bundle carries its own
+        # conformance result so a consumer never takes conformance on trust.
+        return {**sample, "validation": validate_bundle(sample)}
     forecast = seed.get_forecast(alert_id)
     if not forecast:
         raise HTTPException(status_code=404, detail=f"No forecast for {alert_id}")
@@ -504,7 +508,7 @@ async def fhir_bundle(alert_id: str):
     ci_hi = float(horizon.get("ci_hi", forecast.get("ci_hi", p_bloom)))
     centroid = forecast.get("centroid") or [0.0, 0.0, 0.0]
 
-    return build_alert_bundle(
+    bundle = build_alert_bundle(
         alert_id=f"alert-{alert_id}",
         waterbody_id=alert_id,
         waterbody_name=forecast.get("name", alert_id),
@@ -523,6 +527,7 @@ async def fhir_bundle(alert_id: str):
         recipient="bloomcast-alerts@example.org",
         shap_top_features=shap,
     )
+    return {**bundle, "validation": validate_bundle(bundle)}
 
 
 @app.get("/v1/citizen/recent")
@@ -682,7 +687,15 @@ async def create_fhir_bundle(request: Request):
         recipient=body["recipient"],
         shap_top_features=body.get("shap_top_features", []),
     )
-    return bundle
+    # Invalid input fails with named issues rather than being served as a
+    # bundle a downstream FHIR server will reject later (v3 M-V5).
+    report = validate_bundle(bundle)
+    if not report["ok"]:
+        return JSONResponse(
+            {"error": "Bundle failed profile validation", "validation": report},
+            status_code=422,
+        )
+    return {**bundle, "validation": report}
 
 
 @app.post("/v1/report")

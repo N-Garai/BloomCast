@@ -169,6 +169,114 @@ def build_daily_outlook(
     return days
 
 
+def _static_site_features(lat: float, lon: float) -> tuple[dict, str]:
+    """Area and imperviousness for a point, from the committed pilot directory.
+
+    V3-11: these two were hardcoded to 5.0 / 0.3 for every coordinate, so a dense
+    urban stream and an alpine lake got identical static inputs. Real values
+    already exist per pilot in ``waterbodies.geojson``; the fallback is unchanged
+    so behaviour for arbitrary points stays exactly as before.
+    """
+    from shared.config import WATERBODY_FILE
+
+    try:
+        import json
+
+        with open(WATERBODY_FILE, encoding="utf-8") as f:
+            features = json.load(f).get("features", [])
+    except Exception:  # noqa: BLE001 - a missing directory is not a 500
+        return {"area_km2": 5.0, "latitude": lat, "longitude": lon,
+                "impervious_proxy": 0.3}, "assumed"
+
+    best, best_km = None, None
+    for feature in features:
+        props = feature.get("properties") or {}
+        centroid = props.get("centroid")
+        if not (isinstance(centroid, list) and len(centroid) == 2):
+            continue
+        km = _haversine_km(lat, lon, float(centroid[1]), float(centroid[0]))
+        if best_km is None or km < best_km:
+            best, best_km = props, km
+
+    # Within ~25 km the pilot's own static attributes are a fair description of
+    # the waterbody; beyond that the assumed values are the honest answer.
+    if best is not None and best_km is not None and best_km <= 25.0:
+        # Only area_km2 is actually committed per pilot. impervious_proxy is
+        # not in waterbodies.geojson, so it stays at the documented assumed value
+        # rather than being invented here — the PRD assumed both existed, and
+        # guessing an urban-fraction would be a fabricated input the model would
+        # then treat as measured.
+        return {
+            "area_km2": float(best.get("area_km2") or 5.0),
+            "latitude": lat,
+            "longitude": lon,
+            "impervious_proxy": 0.3,
+        }, f"pilot:{best.get('id')}"
+    return {"area_km2": 5.0, "latitude": lat, "longitude": lon,
+            "impervious_proxy": 0.3}, "assumed"
+
+
+def _citizen_features(lat: float, lon: float, radius_km: float = 25.0) -> tuple[dict, str]:
+    """Validated citizen signals for a point, or zeros flagged ``absent``.
+
+    V3-11 / V3-4: these five features were permanently zero, so the citizen block
+    of the trained model was dead weight at serving time. Only steward-approved
+    reports count — the same gate the training weights use, so a pending report
+    cannot reach a served forecast either. Zeros plus an ``absent`` flag is the
+    honest encoding: the model still gets a well-formed row, and the response
+    says the input was missing rather than implying no reports exist.
+    """
+    empty = {
+        "citizen_reports_7d": 0.0,
+        "citizen_color_green_ratio": 0.0,
+        "citizen_scum_reports_7d": 0.0,
+        "citizen_consensus_severity": 0.0,
+        "citizen_report_density": 0.0,
+    }
+    try:
+        from api.db import list_observations
+        from datetime import datetime, timedelta, timezone
+
+        approved = [
+            o for o in (list_observations(limit=5000) or [])
+            if str(o.get("validation_status") or "").lower() == "approved"
+            and o.get("latitude") is not None and o.get("longitude") is not None
+        ]
+        if not approved:
+            return empty, "absent"
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+        recent = []
+        for obs in approved:
+            if _haversine_km(lat, lon, float(obs["latitude"]), float(obs["longitude"])) > radius_km:
+                continue
+            try:
+                seen = datetime.fromisoformat(str(obs.get("observed_at")).replace("Z", "+00:00"))
+            except (TypeError, ValueError):
+                continue
+            if seen.tzinfo is None:
+                seen = seen.replace(tzinfo=timezone.utc)
+            if seen >= cutoff:
+                recent.append(obs)
+        if not recent:
+            return empty, "absent"
+
+        green = sum(1 for o in recent
+                    if "green" in str(o.get("water_color") or "").lower())
+        scum = sum(1 for o in recent if o.get("scum_visible"))
+        severity_scores = [1.0 if (o.get("scum_visible") or "green" in str(o.get("water_color") or "").lower()) else 0.0
+                           for o in recent]
+        return {
+            "citizen_reports_7d": float(len(recent)),
+            "citizen_color_green_ratio": green / len(recent),
+            "citizen_scum_reports_7d": float(scum),
+            "citizen_consensus_severity": sum(severity_scores) / len(recent),
+            "citizen_report_density": float(len(recent)) / max(1.0, radius_km),
+        }, "live"
+    except Exception:  # noqa: BLE001 - a missing DB must not break inference
+        return empty, "absent"
+
+
 def _live_feature_row(lat: float, lon: float, fc: dict, arch: dict,
                       dry_days_7d: float, spectral: dict | None = None):
     """32-dim model input built from the live fetch (pure function).
@@ -215,43 +323,87 @@ def _live_feature_row(lat: float, lon: float, fc: dict, arch: dict,
         "growing_degree_days": sum(max(0.0, t - 10.0) for t in last7),
         "heat_wave_flag": 1.0 if mean(last7) > HEAT_WAVE_C else 0.0,
     }
-    static = {"area_km2": 5.0, "latitude": lat, "longitude": lon,
-              "impervious_proxy": 0.3}
-    return build_tabular_features(weather, spectral or {}, {}, static)
+    static, static_source = _static_site_features(lat, lon)
+    citizen, citizen_source = _citizen_features(lat, lon)
+    row = build_tabular_features(weather, spectral or {}, citizen, static)
+    # The two sources travel with the row so the response can say which inputs
+    # were real, which were assumed, and which were absent.
+    return row, static_source, citizen_source
 
 
-def _model_estimate(row, art, spectral_label: str | None = None) -> dict | None:
-    """Run the exported model on a live feature row (pure function).
+def _model_estimate(row, art, spectral_label: str | None = None,
+                    static_source: str = "assumed",
+                    citizen_source: str = "absent") -> dict | None:
+    """Run the best available exported model on a live feature row.
 
-    Experimental by design: weather-only input, outside pilot calibration.
-    Always labeled as such — never presented as a calibrated forecast.
+    V3-11 — routing by data availability. The full 32-feature model trained on
+    real Tick Tick Bloom labels was committed and then never served: every
+    request went to the synthetic weather-only variant, so the real-label model
+    reached zero users. The choice is now made per request from what the row
+    actually contains:
+
+    * **full** — used when the spectral block is a real measured prior or
+      climatology fill *and* the artifacts carry a real-label training source.
+      This is the genuine model the project claims to have built.
+    * **weather_only** — used when the spectral block is missing/empty and the
+      full model would be reading eight fabricated zero columns. Defined exactly
+      where spectral input does not exist, which is the point of the variant.
+
+    The response states which tier produced the number and what was missing, so
+    a caller is never left guessing why two coordinates disagree.
     """
     if row is None or art is None:
         return None
     try:
         from ml.inference.predict import _band, _shap_top
 
-        variant = art.get("weather_only")
-        if variant is None:
-            return None
+        full_real = (
+            art.get("weather_only") is None
+            or str((art.get("meta") or {}).get("training_source", "")) == "tick-tick-bloom"
+        )
+        spectral_present = bool(spectral_label) and not str(spectral_label).startswith("empty")
+        use_full = bool(art.get("lgbm")) and full_real and spectral_present
+        tier = "full-32" if use_full else "weather-only"
+
+        if use_full:
+            booster = art["lgbm"]
+            calibrator = art["calibrator"]
+            meta = art.get("meta") or {}
+        else:
+            variant = art.get("weather_only")
+            if variant is None:
+                # No weather-only fallback and the full model is not usable for
+                # this row: say so rather than serving zeros through it.
+                return None
+            booster = variant["lgbm"]
+            calibrator = variant["calibrator"]
+            meta = variant.get("meta") or {}
+
         r = row.reshape(1, -1)
-        raw = float(variant["lgbm"].predict_proba(r)[0][1])
-        p_iso = float(variant["calibrator"].transform([raw])[0])
+        raw = float(booster.predict_proba(r)[0][1])
+        p_iso = float(calibrator.transform([raw])[0])
         p = 0.5 * p_iso + 0.5 * raw
-        ci_half = float(variant["meta"].get("ci_half", 0.3))
+        ci_half = float(meta.get("ci_half", 0.3))
         lo, hi = _band(p, row, None, ci_half)
-        drivers = _shap_top(variant["lgbm"], row)[:3]
+        drivers = _shap_top(booster, row)[:3]
         return {
             "experimental": True,
             "p_bloom": round(p, 4),
             "ci_lo": round(lo, 4),
             "ci_hi": round(hi, 4),
             "drivers": drivers,
-            "model_version": variant["meta"].get("model_version"),
-            "training_source": variant["meta"].get("training_source"),
+            "model_version": meta.get("model_version"),
+            "training_source": meta.get("training_source"),
             "provenance": PROVENANCE_MODEL,
             "spectral_input": spectral_label or "empty",
             "caveats": MODEL_CAVEAT,
+            "tier": tier,
+            "input_availability": {
+                "spectral": "climatology-or-prior" if spectral_present else "absent",
+                "static": static_source,
+                "citizen": citizen_source,
+                "weather": "live",
+            },
         }
     except Exception:
         return None
@@ -592,10 +744,15 @@ async def assess_location(lat: float, lon: float, *, use_cache: bool = True,
     prior = prior_for(lat, lon, waterbody_id=near_id)
 
     artifacts = _load_serving_artifacts()
-    feature_row = _live_feature_row(lat, lon, {"hourly": fc_hourly}, archive, dry_days,
-                                    prior.get("values"))
+    built = _live_feature_row(lat, lon, {"hourly": fc_hourly}, archive, dry_days,
+                              prior.get("values"))
+    feature_row, static_source, citizen_source = (
+        built if built is not None else (None, "absent", "absent")
+    )
     estimate = _model_estimate(feature_row, artifacts,
-                               spectral_label=f"{prior.get('source')} ({prior.get('method')})")
+                               spectral_label=f"{prior.get('source')} ({prior.get('method')})",
+                               static_source=static_source,
+                               citizen_source=citizen_source)
     feature_row_values = [float(value) for value in feature_row] if feature_row is not None else []
     # Self-diagnosis for the UI: when estimate is None the client can show
     # the backend's own reason instead of guessing (missing files, feature

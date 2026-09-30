@@ -1,10 +1,525 @@
 {
-  "generated_at": "2026-09-23T14:45:52+00:00",
-  "method": "latitude-season-fallback",
-  "method_note": "Modelled seasonal prior (mid-latitude summer maximum \u00d7 coarse latitude belt) \u2014 not a satellite measurement. It is replaced automatically once three or more waterbodies have real spectral records in src/data/spectral_history.json.",
-  "measured_waterbodies": [],
-  "history_records": 0,
-  "waterbodies": {},
+  "generated_at": "2026-09-29T05:50:41+00:00",
+  "method": "seasonal-mean-of-ingested-observations",
+  "method_note": "Seasonal means of ingested Sentinel-2 L2A spectral observations. Sample counts are carried per month; thin months stay flagged in the API response.",
+  "measured_waterbodies": [
+    "BE-GHE-01",
+    "CH-GVA-01",
+    "CH-ZUR-01",
+    "CN-TAI-01",
+    "DE-CON-01",
+    "ES-SNB-01",
+    "ET-TAN-01",
+    "IN-VEM-01",
+    "IT-COM-01",
+    "IT-GAR-01",
+    "IT-MAG-01",
+    "KE-NIV-01",
+    "PH-LGB-01",
+    "PT-ALQ-01",
+    "PT-COI-01",
+    "PT-TAG-01",
+    "UG-VIC-01",
+    "US-GBY-01",
+    "US-LCH-01"
+  ],
+  "history_records": 19,
+  "waterbodies": {
+    "CH-ZUR-01": {
+      "name": "CH-ZUR-01",
+      "monthly": {
+        "ndci_mean": 0.0004,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0004,
+        "chlorophyll_a_mean": 10.009,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": 0.0004,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0004,
+        "chlorophyll_a_mean": 10.009,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "CH-GVA-01": {
+      "name": "CH-GVA-01",
+      "monthly": {
+        "ndci_mean": 0.048,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.048,
+        "chlorophyll_a_mean": 11.276,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": 0.048,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.048,
+        "chlorophyll_a_mean": 11.276,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "IT-MAG-01": {
+      "name": "IT-MAG-01",
+      "monthly": {
+        "ndci_mean": -0.0058,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": -0.0058,
+        "chlorophyll_a_mean": 9.856,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": -0.0058,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": -0.0058,
+        "chlorophyll_a_mean": 9.856,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "DE-CON-01": {
+      "name": "DE-CON-01",
+      "monthly": {
+        "ndci_mean": 0.034,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.034,
+        "chlorophyll_a_mean": 10.887,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": 0.034,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.034,
+        "chlorophyll_a_mean": 10.887,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "IT-GAR-01": {
+      "name": "IT-GAR-01",
+      "monthly": {
+        "ndci_mean": 0.0418,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0418,
+        "chlorophyll_a_mean": 11.103,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": 0.0418,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0418,
+        "chlorophyll_a_mean": 11.103,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "IT-COM-01": {
+      "name": "IT-COM-01",
+      "monthly": {
+        "ndci_mean": -0.0065,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": -0.0065,
+        "chlorophyll_a_mean": 9.839,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": -0.0065,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": -0.0065,
+        "chlorophyll_a_mean": 9.839,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "PT-ALQ-01": {
+      "name": "PT-ALQ-01",
+      "monthly": {
+        "ndci_mean": 0.0022,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0022,
+        "chlorophyll_a_mean": 10.054,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": 0.0022,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0022,
+        "chlorophyll_a_mean": 10.054,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "ES-SNB-01": {
+      "name": "ES-SNB-01",
+      "monthly": {
+        "ndci_mean": 0.0392,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0392,
+        "chlorophyll_a_mean": 11.029,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": 0.0392,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0392,
+        "chlorophyll_a_mean": 11.029,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "PT-TAG-01": {
+      "name": "PT-TAG-01",
+      "monthly": {
+        "ndci_mean": -0.0128,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": -0.0128,
+        "chlorophyll_a_mean": 9.686,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": -0.0128,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": -0.0128,
+        "chlorophyll_a_mean": 9.686,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "US-GBY-01": {
+      "name": "US-GBY-01",
+      "monthly": {
+        "ndci_mean": 0.0558,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0558,
+        "chlorophyll_a_mean": 11.498,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": 0.0558,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0558,
+        "chlorophyll_a_mean": 11.498,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "US-LCH-01": {
+      "name": "US-LCH-01",
+      "monthly": {
+        "ndci_mean": 0.0007,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0007,
+        "chlorophyll_a_mean": 10.018,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": 0.0007,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0007,
+        "chlorophyll_a_mean": 10.018,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "IN-VEM-01": {
+      "name": "IN-VEM-01",
+      "monthly": {
+        "ndci_mean": 0.0333,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0333,
+        "chlorophyll_a_mean": 10.867,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": 0.0333,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0333,
+        "chlorophyll_a_mean": 10.867,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "UG-VIC-01": {
+      "name": "UG-VIC-01",
+      "monthly": {
+        "ndci_mean": 0.0742,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0742,
+        "chlorophyll_a_mean": 12.037,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": 0.0742,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0742,
+        "chlorophyll_a_mean": 12.037,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "KE-NIV-01": {
+      "name": "KE-NIV-01",
+      "monthly": {
+        "ndci_mean": 0.0099,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0099,
+        "chlorophyll_a_mean": 10.252,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": 0.0099,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0099,
+        "chlorophyll_a_mean": 10.252,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "ET-TAN-01": {
+      "name": "ET-TAN-01",
+      "monthly": {
+        "ndci_mean": -0.0523,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": -0.0523,
+        "chlorophyll_a_mean": 8.774,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": -0.0523,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": -0.0523,
+        "chlorophyll_a_mean": 8.774,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "PH-LGB-01": {
+      "name": "PH-LGB-01",
+      "monthly": {
+        "ndci_mean": 0.0665,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0665,
+        "chlorophyll_a_mean": 11.807,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": 0.0665,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0665,
+        "chlorophyll_a_mean": 11.807,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "CN-TAI-01": {
+      "name": "CN-TAI-01",
+      "monthly": {
+        "ndci_mean": 0.0052,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0052,
+        "chlorophyll_a_mean": 10.131,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": 0.0052,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0052,
+        "chlorophyll_a_mean": 10.131,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "PT-COI-01": {
+      "name": "PT-COI-01",
+      "monthly": {
+        "ndci_mean": 0.0159,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0159,
+        "chlorophyll_a_mean": 10.406,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": 0.0159,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0159,
+        "chlorophyll_a_mean": 10.406,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    },
+    "BE-GHE-01": {
+      "name": "BE-GHE-01",
+      "monthly": {
+        "ndci_mean": 0.0511,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0511,
+        "chlorophyll_a_mean": 11.363,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "annual": {
+        "ndci_mean": 0.0511,
+        "ndci_trend_5d": 0.0,
+        "ndci_max": 0.0511,
+        "chlorophyll_a_mean": 11.363,
+        "chlorophyll_a_trend_5d": 0.0,
+        "ndvi_mean": 0.0,
+        "fai_mean": 0.0,
+        "ndci_std_7d": 0.0
+      },
+      "sample_counts": {
+        "9": 1
+      }
+    }
+  },
   "fallback_rule": {
     "method": "latitude-season-fallback",
     "ndci_base": 0.02,

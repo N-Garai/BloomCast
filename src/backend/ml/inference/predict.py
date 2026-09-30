@@ -25,6 +25,7 @@ from ml.training.cnn_branch import BloomCNN  # noqa: E402
 from ml.training.ensemble import Ensemble  # noqa: E402
 from ml.training.counterfactual import precompute_sandbox_sweeps  # noqa: E402
 from ml.training.scorecard import generate_scorecard, sanitize_loaded_scorecard  # noqa: E402
+from ml.training.citizen_weights import citizen_weights  # noqa: E402
 from ml.training.artifacts import WEATHER_ONLY_FEATURE_NAMES  # noqa: E402
 
 # Semantic feature indices — must stay in sync with features/feature_store.py
@@ -134,6 +135,23 @@ def _shap_top(lgbm, row: np.ndarray, k: int = 5) -> list:
     ]
 
 
+def _load_citizen_observations() -> list:
+    """Steward-approved citizen observations, or [] when the DB is unreachable.
+
+    Isolated here so the training path degrades instead of failing: the nightly
+    job must not abort because the demo database was wiped by a redeploy. The
+    empty list is the honest "no citizen signal this run" answer, and the
+    scorecard publishes a zero share for it.
+    """
+    try:
+        from api.db import list_observations
+
+        return [o for o in list_observations(limit=5000) or []]
+    except Exception as exc:  # noqa: BLE001 - training proceeds without citizens
+        print(f"[train] citizen observations unavailable ({exc})")
+        return []
+
+
 def _load_training_frame():
     """Real Tick Tick Bloom labels when the CSVs are present, else synthetic.
 
@@ -158,6 +176,11 @@ def _load_training_frame():
                     "severity": frame["severity"],
                     "doy": frame["doy"], "wb_ids": frame["wb_ids"],
                     "regions": frame["regions"],
+                    # Citizen attribution keys + the reports themselves, for
+                    # the v3 M-V4 sample weights. `dates` is the frame's own
+                    # row dates; citizen observations join on waterbody + date.
+                    "dates": frame.get("dates") or [],
+                    "observations": _load_citizen_observations(),
                     "source": "tick-tick-bloom",
                     "n": len(frame["y"]),
                     "note": (
@@ -173,6 +196,10 @@ def _load_training_frame():
     return {
         "X": X, "S": _rows_to_sequences(X), "y": y, "severity": None,
         "doy": doy, "wb_ids": wb_ids, "regions": None,
+        # Same keys as the real path, so citizen_weights() needs no branch.
+        # The synthetic frame has no real dates to attribute against, so the
+        # weight share publishes as zero rather than being faked.
+        "dates": [], "observations": _load_citizen_observations(),
         "source": "synthetic-seed",
         "n": len(y),
         "note": (
@@ -454,6 +481,18 @@ def _fit_all():
     if sev is not None and len(sev) == len(y):
         weights = 0.5 + np.asarray(sev, dtype=float) / 5.0
 
+    # Citizen observations as sample weights (v3 M-V4). Multiplied onto whatever
+    # severity weights exist rather than replacing them, so citizen influence is
+    # an emphasis on top of label confidence, never a substitute for it. The
+    # share is capped in citizen_weights() and published on the scorecard.
+    citizen_info = None
+    citizen_w, citizen_info = citizen_weights(
+        frame.get("dates") or [], frame.get("citizen_wb_ids") or wb_ids,
+        frame.get("observations") or [],
+    )
+    if citizen_w is not None and len(citizen_w) == len(y):
+        weights = citizen_w if weights is None else weights * citizen_w
+
     lgbm, oof = _fit_with_oof(X, y, sample_weight=weights)
     calibrator = calibrate(oof, y)
     ci_half = empirical_ci_half(y, oof)
@@ -520,6 +559,19 @@ def _fit_all():
     scorecard["cv_folds"] = 5
     scorecard["oof_auc"] = oof_auc
     scorecard["oof_brier"] = oof_brier
+    # Publish the citizen weight share rather than letting the UI imply
+    # influence it cannot prove. A zero share is still worth stating: "the
+    # Ground Truth Loop is wired in and currently contributes nothing" is a
+    # truthful status, where silence would read as an unbuilt feature.
+    scorecard["citizen_weights"] = citizen_info or {
+        "status": "no-observations",
+        "final_citizen_share": 0.0,
+        "reason": (
+            "No steward-approved positive citizen observations matched the "
+            "training frame. The Ground Truth Loop is connected; it simply has "
+            "no validated reports within the attribution window."
+        ),
+    }
     if source == "synthetic-seed":
         scorecard["limitations"] = (
             "Trained and evaluated on SYNTHETIC labels (physically-motivated "

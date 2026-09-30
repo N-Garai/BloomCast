@@ -57,6 +57,50 @@ export function FhirClient() {
           Load bundle
         </button>
       </form>
+      {/* Conformance badge (v3 M-V5). The bundle self-reports its validation
+          result; this renders it verbatim rather than inventing a green tick,
+          and lists the named issues when the report is not clean. */}
+      {bundle.validation && (
+        <div className={`rounded-xl border p-4 text-xs ${
+          bundle.validation.ok
+            ? "border-glow-green/30 bg-glow-green/5"
+            : "border-glow-red/40 bg-glow-red/5"
+        }`}>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`font-mono uppercase tracking-widest ${
+              bundle.validation.ok ? "text-glow-green" : "text-glow-red"
+            }`}>
+              {bundle.validation.ok ? "Profile validation: pass" : "Profile validation: fail"}
+            </span>
+            <span className="text-fg-muted">
+              {bundle.validation.ok
+                ? "— conforms to fhir/StructureDefinition-bloomcast-alert.json"
+                : `— ${bundle.validation.issues.length} issue(s)`}
+            </span>
+          </div>
+          {bundle.validation.issues?.length > 0 && (
+            <ul className="mt-3 space-y-1 font-mono text-[11px] text-fg-secondary">
+              {bundle.validation.issues.map((issue: any, i: number) => (
+                <li key={i}>
+                  <span className="text-glow-red">{issue.path}</span> — {issue.message}
+                </li>
+              ))}
+            </ul>
+          )}
+          {bundle.validation.checked?.length > 0 && (
+            <details className="mt-3 text-fg-muted">
+              <summary className="cursor-pointer hover:text-fg-secondary">
+                What was checked ({bundle.validation.checked.length} checks)
+              </summary>
+              <ul className="mt-2 space-y-1">
+                {bundle.validation.checked.map((c: string, i: number) => (
+                  <li key={i}>· {c}</li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
+      )}
       <div className="grid md:grid-cols-3 gap-4">
         {(bundle.entry ?? []).map((e: any, i: number) => {
           const r = e.resource;

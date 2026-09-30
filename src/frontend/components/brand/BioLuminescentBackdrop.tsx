@@ -27,9 +27,13 @@ export function BioLuminescentBackdrop() {
       canvas.height = window.innerHeight;
     };
     resize();
-    window.addEventListener("resize", resize);
 
-    const tick = (t: number) => {
+    // v3 M-V8: stop the loop while the tab is hidden. A backgrounded tab still
+    // gets throttled rAF, but not enough to stop a 120-particle fullscreen
+    // canvas from waking a laptop on battery. Pausing is free: the particles
+    // keep their state and resume exactly where they stopped.
+    let hidden = document.hidden;
+    const drawFrame = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       for (const p of particles) {
         p.a += p.s * 18;
@@ -40,7 +44,7 @@ export function BioLuminescentBackdrop() {
         if (p.x > 1.05) p.x = -0.05;
         const x = p.x * canvas.width;
         const y = p.y * canvas.height;
-        const pulse = reduce ? 0.45 : 0.35 + Math.sin(t * 0.0015 + p.a) * 0.25;
+        const pulse = reduce ? 0.45 : 0.35 + Math.sin(performance.now() * 0.0015 + p.a) * 0.25;
         ctx.beginPath();
         ctx.fillStyle =
           p.hue > 300
@@ -49,11 +53,20 @@ export function BioLuminescentBackdrop() {
         ctx.arc(x, y, p.r, 0, Math.PI * 2);
         ctx.fill();
       }
+    };
+    const tick = () => {
+      if (!hidden) drawFrame();
       raf = requestAnimationFrame(tick);
     };
+    const onVisibility = () => {
+      hidden = document.hidden;
+    };
     raf = requestAnimationFrame(tick);
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("resize", resize);
     return () => {
       cancelAnimationFrame(raf);
+      document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("resize", resize);
     };
   }, []);

@@ -40,6 +40,62 @@ bloomcast/                        <- git root
 Render uses one Docker service: it builds the Next.js static export and runs
 FastAPI in the same container. The backend serves the built frontend at runtime.
 
+## Track alignment
+
+**Primary: Track 6 — Resilience Informatics.** BloomCast is an early-warning
+and resilience-planning system for a public-health hazard, which is what that
+track asks for. Requirements it answers, one line each:
+
+- **Predictive dashboard** — probabilistic 3–7 day bloom forecasts per pilot
+  waterbody (`/dashboard`), with SHAP driver bars, confidence intervals, and a
+  published scorecard comparing the model against climatology, persistence and
+  weather-only baselines.
+- **Alerts** — threshold subscriptions (`/alerts`) with FHIR R4 `Communication`
+  bundles carrying model version, lead time and confidence interval, so an alert
+  is actionable *and* auditable.
+- **Resilience tools** — a counterfactual Resilience Sandbox (`/sandbox`) that
+  projects high-risk days under temperature/nutrient scenarios, a Replay Theatre
+  (`/replay`) for past confirmed blooms, and an urban-stream StreamFlush nowcast
+  (`/streamflush`). These are planning tools, not predictions, and the UI says so.
+
+**Secondary fit:**
+
+- **Track 7 — Health/FHIR interoperability.** `/fhir` emits and displays FHIR R4
+  bundles against a committed `StructureDefinition` profile
+  (`fhir/StructureDefinition-bloomcast-alert.json`), and every exported bundle
+  self-validates its conformance.
+- **Track 2 — Dashboards, maps, One Health summary.** The dashboard, vector map
+  and globe render all pilot sites; the One Health summary links water-quality,
+  wildlife and public-health signals per waterbody.
+- **Track 3 — Grounded AI + steward loop.** Reports are generated only from a
+  server-side assessment, every claim is checked against an area-validation
+  step, and a steward queue approves or rejects each citizen observation. The
+  steward decision is not cosmetic: validated reports become training sample
+  weights, capped at 15% of total weight, and the realised share is published on
+  the scorecard.
+
+Copy this section verbatim into the Devpost description so both declare the same
+thing.
+
+## QA and demo notes
+
+If you want to skip the intro film, append `?intro=off` to any URL:
+
+```
+http://localhost:8000/?intro=off          # sticky; stored on this device
+http://localhost:8000/scorecard?intro=on  # force the film back, clearing the opt-out
+```
+
+The intro is session-gated on its own, so a normal reload in the same tab skips
+it while a hard refresh (F5 / Ctrl+Shift+R) replays it. An early scroll or click
+never cuts the film short — it compresses the remaining beats so you still see
+every designed frame, and the skip affordance is advertised from the first act
+so you know it is available.
+
+`prefers-reduced-motion` is honoured by removing motion, not information: the
+intro plays a shorter, opacity-only version of the same beats rather than
+disappearing.
+
 ## Quick start (local, no services)
 
 ```bash

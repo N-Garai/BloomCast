@@ -20,7 +20,7 @@ profiles = per_waterbody_forecasts()
 out_dir = os.path.join(_SRC, "data", "seed")
 os.makedirs(out_dir, exist_ok=True)
 
-with open(os.path.join(_SRC, "data", "waterbodies.geojson")) as f:
+with open(os.path.join(_SRC, "data", "waterbodies.geojson"), encoding="utf-8") as f:
     wbs = json.load(f)["features"]
 
 for n, wb in enumerate(wbs):
@@ -34,10 +34,10 @@ for n, wb in enumerate(wbs):
     fcopy["country"] = wb["properties"]["country"]
     fcopy["centroid"] = wb["properties"]["centroid"]
     fcopy["type"] = wb["properties"]["type"]
-    with open(os.path.join(out_dir, f"forecast-{fid}.json"), "w") as f:
+    with open(os.path.join(out_dir, f"forecast-{fid}.json"), "w", encoding="utf-8") as f:
         json.dump(fcopy, f, indent=2, default=str)
 
-with open(os.path.join(_SRC, "data", "replay_events.json")) as f:
+with open(os.path.join(_SRC, "data", "replay_events.json"), encoding="utf-8") as f:
     events = json.load(f)["events"]
 
 for ev in events:
@@ -77,7 +77,7 @@ for ev in events:
         })
         d += dt.timedelta(days=1)
         idx += 1
-    with open(os.path.join(out_dir, f"replay-{eid}.json"), "w") as f:
+    with open(os.path.join(out_dir, f"replay-{eid}.json"), "w", encoding="utf-8") as f:
         json.dump({
             "event_id": eid,
             "waterbody_id": ev["waterbody_id"],
@@ -91,12 +91,12 @@ for ev in events:
             "days": days,
         }, f, indent=2)
 
-with open(os.path.join(out_dir, "scorecard.json"), "w") as f:
+with open(os.path.join(out_dir, "scorecard.json"), "w", encoding="utf-8") as f:
     json.dump(scorecard, f, indent=2, default=str)
 
 for wb in wbs:
     fid = wb["properties"]["id"]
-    with open(os.path.join(out_dir, f"sandbox-{fid}.json"), "w") as f:
+    with open(os.path.join(out_dir, f"sandbox-{fid}.json"), "w", encoding="utf-8") as f:
         # Baseline high-risk days come from the neutral scenario of the same
         # sweep (temp+0 / nut-0), not a hardcoded constant, so the baseline
         # moves with the model instead of disagreeing with it.
@@ -109,7 +109,7 @@ for wb in wbs:
             "scenarios": sandbox,
         }, f, indent=2, default=str)
 
-with open(os.path.join(_SRC, "data", "stream_segments.geojson")) as f:
+with open(os.path.join(_SRC, "data", "stream_segments.geojson"), encoding="utf-8") as f:
     segs = json.load(f)["features"]
 
 for seg in segs:
@@ -119,7 +119,7 @@ for seg in segs:
     # placeholders are replaced by nightly ingestion where available.
     digest = int(hashlib.sha256(sid.encode("utf-8")).hexdigest(), 16)
     stamp = dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat()
-    with open(os.path.join(out_dir, f"streamflush-{sid}.json"), "w") as f:
+    with open(os.path.join(out_dir, f"streamflush-{sid}.json"), "w", encoding="utf-8") as f:
         json.dump({
             "segment_id": sid,
             "name": seg["properties"]["name"],
@@ -137,7 +137,7 @@ for seg in segs:
 # disagrees with the served numbers; still clearly marked as a sample.
 from ml.training.fhir_bundle import build_alert_bundle
 _h = forecast["horizons"]["5d"]
-with open(os.path.join(out_dir, "fhir-alert-sample.json"), "w") as f:
+with open(os.path.join(out_dir, "fhir-alert-sample.json"), "w", encoding="utf-8") as f:
     json.dump(build_alert_bundle(
         alert_id="sample", waterbody_id="CH-ZUR-01", waterbody_name="Lake Zurich",
         city="Zurich", country="CH", longitude=8.541, latitude=47.327, altitude=406,

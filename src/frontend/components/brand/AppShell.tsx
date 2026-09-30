@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { Loader } from "@/components/brand/Loader";
 import { BioLuminescentBackdrop } from "@/components/brand/BioLuminescentBackdrop";
 import { StarfieldBackground } from "@/components/three/StarfieldBackground";
@@ -87,6 +88,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   // hide behind, so the first paint must be the abyss, not a flash of the hero.
   const [revealed, setRevealed] = useState<"hidden" | "opening" | "open">("hidden");
 
+  // v3 M-V8: the 5000-point WebGL starfield is the most expensive always-on
+  // layer, and the dashboard already stacks a globe canvas plus page video on
+  // top of it. It is a hero decoration, so it only mounts on the routes whose
+  // hero is a full-bleed starfield; the cheap CSS backdrop stays everywhere, so
+  // no route loses its background.
+  const pathname = usePathname();
+  const showStarfield = pathname === "/" || pathname === "/about";
+
   useIsoLayoutEffect(() => {
     if (shouldBootLoader()) {
       setBooting(true);
@@ -149,7 +158,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {booting && <Loader onEnter={handleEnter} onDone={handleDone} />}
       <ScrollProgress />
       <MagneticCursor />
-      <StarfieldBackground />
+      {showStarfield && <StarfieldBackground />}
       <BioLuminescentBackdrop />
       <main
         id="main"

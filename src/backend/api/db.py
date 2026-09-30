@@ -113,6 +113,8 @@ def list_observations(wb_id: str | None = None, limit: int = 20) -> list:
                 "observation_id": r.observation_id,
                 "waterbody_id": r.waterbody_id,
                 "observed_at": r.observed_at,
+                "latitude": r.latitude,
+                "longitude": r.longitude,
                 "water_color": r.water_color,
                 "scum_visible": r.scum_visible,
                 "odor": r.odor,

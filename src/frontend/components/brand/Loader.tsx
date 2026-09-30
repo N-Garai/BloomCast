@@ -77,6 +77,8 @@ const ACT = {
   gate: 7.8,
   arm: 8.1,
   hint: 10.9,
+  /** v3 M-V10: the skip affordance is advertised from Act 1, not the gate. */
+  skipHint: 0.85,
 } as const;
 
 const WORDMARK = "BLOOMCAST";
@@ -113,6 +115,8 @@ const CALM = {
   lockup: 3.7,
   gate: 4.3,
   arm: 4.7,
+  /** Same early skip advertisement as the full film, proportionally placed. */
+  skipHint: 0.5,
 } as const;
 
 /** Split a string into per-glyph masks so letters can rise from below. */
@@ -351,6 +355,11 @@ export function Loader({
           { opacity: 1, duration: 0.4, stagger: 0.05 }, CALM.lockup + 0.55)
         .to(q(".bcl-gate, .bcl-hint"),
           { opacity: 1, duration: 0.45, stagger: 0.08 }, CALM.gate)
+        // v3 M-V10: the calm variant advertises the skip the same way, so the
+        // reduced-motion path is not the one that hides the affordance.
+        .fromTo(q(".bcl-skip-hint"), { opacity: 0 },
+          { opacity: 1, duration: 0.4, ease: "power2.out" }, CALM.skipHint)
+        .to(q(".bcl-skip-hint"), { opacity: 0, duration: 0.4 }, CALM.gate)
         .call(() => {
           armedRef.current = true;
           setArmed(true);
@@ -496,6 +505,16 @@ export function Loader({
         { yPercent: 0, opacity: 1, duration: 0.9, stagger: 0.035, ease: "expo.out" }, ACT.lockup + 0.34)
       .fromTo(q(".bcl-gate"), { opacity: 0, y: 18 }, { opacity: 1, y: 0, duration: 0.75 }, ACT.gate)
       .fromTo(q(".bcl-gate-line"), { scaleX: 0 }, { scaleX: 1, duration: 0.8, ease: "power3.inOut" }, ACT.gate - 0.1)
+      // v3 M-V10: advertise the skip from the first act. The gesture already
+      // fast-forwards the remaining film rather than cutting it, so this line
+      // only tells the truth about behaviour that has always existed — it does
+      // not add a new shortcut, and the film still plays in full for anyone who
+      // does not touch the page. This is option 1 of the three the PRD offers;
+      // the gate timing and the reduced-motion path are deliberately untouched.
+      .fromTo(q(".bcl-skip-hint"),
+        { opacity: 0 },
+        { opacity: 1, duration: 0.6, ease: "power2.out" }, ACT.skipHint)
+      .to(q(".bcl-skip-hint"), { opacity: 0, duration: 0.5, ease: "power2.in" }, ACT.gate)
       .to(q(".bcl-hint"), { opacity: 1, duration: 0.7, ease: "power2.out" }, ACT.hint);
 
     // Arm the gate. If a gesture already arrived, honour it right here — the
@@ -615,6 +634,16 @@ export function Loader({
 
       <div className="bcl-stage">
         <div className="bcl-bloom" aria-hidden />
+
+        {/* v3 M-V10: the skip affordance, visible from Act 1. It fades out at the
+            gate, where the "scroll to enter" prompt takes over. Purely
+            informational — the gesture it advertises already exists and already
+            fast-forwards the film rather than cutting it. */}
+        <div className="bcl-skip-hint pointer-events-none absolute inset-x-0 bottom-[9vh] z-20 flex justify-center opacity-0" aria-hidden>
+          <p className="font-mono text-[9px] uppercase tracking-[0.3em] text-fg-faint">
+            scroll or click to skip ahead
+          </p>
+        </div>
 
         {/* Act 4 · TYPE — the slogan fills the frame */}
         <div className="bcl-layer bcl-type" aria-hidden>

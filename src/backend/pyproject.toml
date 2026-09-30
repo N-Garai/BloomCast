@@ -14,6 +14,10 @@ dependencies = [
     "pydantic>=2.9",
     "sqlalchemy>=2.0",
     "aiosqlite>=0.20",
+    # Postgres driver (binary wheels, no libpq build): used only when
+    # DATABASE_URL is postgresql+psycopg:// (V3-12, Render + Neon free tier).
+    # Local default stays SQLite, so this adds zero local friction.
+    "psycopg[binary]>=3.1",
     "httpx>=0.27",
     "numpy>=1.26",
     "scikit-learn>=1.5",

@@ -111,6 +111,15 @@ and staleness of every number are visible.
 9. **Artifact fallback.** A deployment without compatible artifacts serves the
    heuristic. A deployment with artifacts can show an experimental model
    estimate, but model absence must not be hidden by a green health check.
+10. **Citizen observation weighting.** Steward-approved positive citizen
+    reports raise the sample weight of matching training rows. The share is
+    capped at **15% of total training weight** (`MAX_CITIZEN_SHARE`), and
+    attribution is limited to reports within **3 days** of a row's own date
+    (`DEFAULT_DATE_WINDOW_DAYS`). Pending and rejected reports carry no
+    weight, and clean-water reports never lower a row's weight — absence of a
+    report is not evidence of absence. The realised share is published on the
+    scorecard as `citizen_weights`; artifacts exported before this feature
+    report an explicit zero rather than omitting the field.
 
 ## Update cadence
 

@@ -8,6 +8,52 @@ import { waterbodyName, type WaterbodyOption } from "@/lib/waterbodies";
 const POLL_MS = 60_000;
 const TOPIC_KEY = "bc-ntfy-topic";
 const WATCH_KEY = "bc-alert-watch";
+const CROSSED_KEY = "bc-alert-crossed";
+const LOG_KEY = "bc-alert-log";
+const ESCALATED_KEY = "bc-alert-escalated";
+const CROSSED_CAP = 50;
+const LOG_CAP = 20;
+const REQUEST_TIMEOUT_MS = 15_000;
+const ESCALATION_COOLDOWN_MS = 6 * 60 * 60 * 1000;
+
+/** Starting thresholds by waterbody type — a blank form helps nobody. */
+const THRESHOLD_PRESETS: Record<string, { threshold: number; horizon: number; label: string }> = {
+  lake: { threshold: 0.6, horizon: 5, label: "Lake — large, slow-mixing water" },
+  reservoir: { threshold: 0.6, horizon: 5, label: "Reservoir — slow turnover" },
+  estuary: { threshold: 0.55, horizon: 5, label: "Estuary — tidal, variable salinity" },
+  river: { threshold: 0.5, horizon: 3, label: "River/stream — fast response, shorter lead" },
+  stream: { threshold: 0.5, horizon: 3, label: "Stream — very fast response" },
+};
+const DEFAULT_PRESET = { threshold: 0.55, horizon: 5, label: "Default — no type known" };
+
+export function presetFor(type?: string) {
+  if (!type) return DEFAULT_PRESET;
+  return THRESHOLD_PRESETS[type] ?? DEFAULT_PRESET;
+}
+
+/**
+ * Read a capped string list from localStorage. A quota error or private-mode
+ * throw must not take the alert watch down, so every failure degrades to [].
+ */
+function readList(key: string): string[] {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((x) => typeof x === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeList(key: string, values: string[], cap: number) {
+  try {
+    localStorage.setItem(key, JSON.stringify(values.slice(0, cap)));
+  } catch {
+    // Quota or private mode — dedup degrades to in-memory only, never throws.
+  }
+}
+
 
 /**
  * Device alert delivery — free on every tier, no email, no push server.
@@ -39,8 +85,19 @@ export function NotifyCenter({ subscriberKey, waterbodies }: {
   const [lastCheck, setLastCheck] = useState<string | null>(null);
   const [log, setLog] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const knownCrossed = useRef<Set<string>>(new Set());
+  // Dedup state is state, not a ref: it has to survive a reload, and a ref
+  // silently resets on every remount. Persistence happens on write.
+  const [knownCrossed, setKnownCrossed] = useState<Set<string>>(new Set());
+  const [escalated, setEscalated] = useState<Set<string>>(new Set());
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // The 60s interval captures the FIRST checkOnce closure for the whole watch
+  // session, so reading state directly inside the poll goes stale after the
+  // first poll: every crossed alert re-fires each minute and the escalation
+  // branch below becomes unreachable. The mirror is reassigned on every
+  // render and read inside the poll, so the interval always sees current
+  // values; state still drives rendering and persistence-on-write.
+  const liveRef = useRef({ knownCrossed, escalated, topic, permission, subscriberKey, waterbodies });
+  liveRef.current = { knownCrossed, escalated, topic, permission, subscriberKey, waterbodies };
 
   useEffect(() => {
     try {
@@ -49,6 +106,11 @@ export function NotifyCenter({ subscriberKey, waterbodies }: {
     } catch {
       // Private mode — notifications still work, topics just don't persist.
     }
+    // v3 M-V6: rehydrate dedup state and the delivery log so a reload mid-watch
+    // neither re-fires an already-crossed alert nor loses the audit trail.
+    setKnownCrossed(new Set(readList(CROSSED_KEY)));
+    setLog(readList(LOG_KEY).reverse());
+    setEscalated(new Set(readList(ESCALATED_KEY)));
   }, []);
 
   const saveTopic = (value: string) => {
@@ -75,12 +137,21 @@ export function NotifyCenter({ subscriberKey, waterbodies }: {
   };
 
   const pushLog = (line: string) => {
-    setLog((current) => [`${new Date().toLocaleTimeString()} — ${line}`, ...current].slice(0, 5));
+    const stamped = `${new Date().toLocaleTimeString()} — ${line}`;
+    setLog((current) => {
+      const next = [stamped, ...current].slice(0, LOG_CAP);
+      // Persist the log so a reload keeps the audit trail (v3 M-V6). The list
+      // is stored newest-first, so the UI reverses it on rehydrate.
+      writeList(LOG_KEY, next, LOG_CAP);
+      return next;
+    });
   };
 
   const notifyDevice = (title: string, body: string) => {
     try {
-      if (permission === "granted") {
+      // Read via the mirror: notifyDevice is called from the interval-held
+      // checkOnce, whose own closure is stale (see liveRef above).
+      if (liveRef.current.permission === "granted") {
         new Notification(title, { body, tag: `bloomcast-${Date.now()}` });
       }
     } catch {
@@ -89,6 +160,9 @@ export function NotifyCenter({ subscriberKey, waterbodies }: {
   };
 
   const publishNtfy = async (title: string, body: string) => {
+    // Same staleness reason as notifyDevice: the topic may have been set
+    // after the watch started.
+    const topic = liveRef.current.topic;
     if (!topic) return false;
     try {
       const response = await fetch(`https://ntfy.sh/${encodeURIComponent(topic)}`, {
@@ -103,28 +177,87 @@ export function NotifyCenter({ subscriberKey, waterbodies }: {
   };
 
   const checkOnce = async () => {
-    if (!subscriberKey) return;
+    // Snapshot the mirror: this closure is held by the interval for the whole
+    // session (see liveRef), so every value it reads must come from here,
+    // never from render-scope state.
+    const snap = liveRef.current;
+    if (!snap.subscriberKey) return;
     setError(null);
+    // v3 M-V6: a hung upstream must not stall the watch forever. The poll has a
+    // hard timeout and reports it as an error line rather than going silent,
+    // because silence is indistinguishable from "no alerts" to a steward.
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
-      const response = await fetch(`${API}/v1/alerts/check?subscriber_key=${encodeURIComponent(subscriberKey)}`);
+      const response = await fetch(
+        `${API}/v1/alerts/check?subscriber_key=${encodeURIComponent(snap.subscriberKey)}`,
+        { signal: controller.signal },
+      );
       const data = await response.json();
       if (!response.ok) throw new Error(data?.detail ?? `HTTP ${response.status}`);
       const crossed = (data.alerts ?? []).filter((a: any) => a.crossed);
       setLastCheck(new Date().toLocaleTimeString());
       for (const alert of crossed) {
         const key = `${alert.waterbody_id}-${alert.horizon_days}`;
-        if (knownCrossed.current.has(key)) continue;
-        knownCrossed.current.add(key);
-        const name = waterbodyName(waterbodies, alert.waterbody_id);
+        const name = waterbodyName(snap.waterbodies, alert.waterbody_id);
         const pct = Math.round((alert.current_probability ?? 0) * 100);
+        const thresholdPct = Math.round((alert.threshold ?? 0) * 100);
+        const risePoints = Math.round(((alert.current_probability ?? 0) - (alert.threshold ?? 0)) * 100);
+
+        if (snap.knownCrossed.has(key)) {
+          // v3 M-V9 escalation: already crossed, but the risk has climbed
+          // >= 10 points above the threshold since. Re-notify once per level,
+          // honouring a 6h cooldown so a rising trend cannot spam a steward
+          // into ignoring the channel.
+          const level = Math.floor(risePoints / 10);
+          if (level < 1) continue;
+          const escKey = `${key}-L${level}`;
+          const last = Number(localStorage.getItem(escKey) || 0);
+          if (snap.escalated.has(escKey)) continue;
+          if (last && Date.now() - last < ESCALATION_COOLDOWN_MS) {
+            pushLog(`${name} still rising to ${pct}% — escalation held by cooldown.`);
+            continue;
+          }
+          try {
+            localStorage.setItem(escKey, String(Date.now()));
+          } catch {
+            // ignore — escalation still fires, it just may repeat after reload
+          }
+          setEscalated((current) => {
+            const next = new Set(current).add(escKey);
+            writeList(ESCALATED_KEY, [...next], CROSSED_CAP);
+            return next;
+          });
+          const title = `Bloom risk rising: ${name}`;
+          const text = `${pct}% is now ${risePoints} points above your ${thresholdPct}% threshold.`;
+          notifyDevice(title, text);
+          const sent = await publishNtfy(title, text);
+          pushLog(`${name} escalating to ${pct}% (${risePoints} pts over threshold) — device ${snap.permission === "granted" ? "notified" : "notification off"}${snap.topic ? (sent ? ", phone notified" : ", phone failed") : ""}`);
+          continue;
+        }
+
+        // First crossing for this key. Persist before notifying so a reload
+        // mid-notification cannot re-fire the same alert.
+        setKnownCrossed((current) => {
+          const next = new Set(current).add(key);
+          writeList(CROSSED_KEY, [...next], CROSSED_CAP);
+          return next;
+        });
         const title = `Bloom risk crossed: ${name}`;
-        const body = `${alert.horizon_days}-day probability ${pct}% is over your threshold.`;
-        notifyDevice(title, body);
-        const sent = await publishNtfy(title, body);
-        pushLog(`${name} ${pct}% — device ${permission === "granted" ? "notified" : "notification off"}${topic ? (sent ? ", phone notified" : ", phone failed") : ""}`);
+        const text = `${alert.horizon_days}-day probability ${pct}% is over your ${thresholdPct}% threshold.`;
+        notifyDevice(title, text);
+        const sent = await publishNtfy(title, text);
+        pushLog(`${name} ${pct}% — device ${snap.permission === "granted" ? "notified" : "notification off"}${snap.topic ? (sent ? ", phone notified" : ", phone failed") : ""}`);
       }
     } catch (e: any) {
-      setError(String(e?.message ?? e));
+      const aborted = e?.name === "AbortError";
+      const message = aborted
+        ? `Alert check timed out after ${Math.round(REQUEST_TIMEOUT_MS / 1000)}s — the watch is still running and will retry next poll.`
+        : String(e?.message ?? e);
+      setError(message);
+      pushLog(`Check failed: ${message}`);
+    } finally {
+      clearTimeout(timeout);
     }
   };
 

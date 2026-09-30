@@ -35,6 +35,10 @@ src/backend/bloomcast.db
 
 # real ingestion output (regenerated nightly)
 src/data/ingested/
+# local training dataset (competition CSVs / CAML .sb + weather join cache —
+# docs/training-data.md points here; never commit: labels are redistributed
+# by drivendata, and the cache is tens of MB)
+src/data/ticktickbloom/
 
 # other
 roadmap/

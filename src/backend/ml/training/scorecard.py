@@ -101,6 +101,29 @@ def generate_scorecard(
     return out
 
 
+def citizen_weights_block(scorecard: dict | None) -> dict:
+    """The citizen-influence record, re-derived rather than trusted.
+
+    Artifacts exported before v3 M-V4 predate the field entirely. Backfilling a
+    zero share with a reason is the honest reading: the Ground Truth Loop was
+    not connected to training at export time, so its contribution *was* zero.
+    Claiming it was connected would be a false provenance claim, and omitting
+    the key would leave the UI implying the feature does not exist.
+    """
+    block = (scorecard or {}).get("citizen_weights")
+    if isinstance(block, dict) and block.get("final_citizen_share") is not None:
+        return dict(block)
+    return {
+        "status": "not-recorded",
+        "final_citizen_share": 0.0,
+        "reason": (
+            "These artifacts were exported before citizen observations were wired "
+            "into training, so they carry no citizen weight. Re-export from the "
+            "training notebook to publish the live share."
+        ),
+    }
+
+
 def sanitize_loaded_scorecard(scorecard: dict, training_source: str | None = None) -> dict:
     """Repair a scorecard baked into a committed artifact at training time.
 
@@ -114,6 +137,7 @@ def sanitize_loaded_scorecard(scorecard: dict, training_source: str | None = Non
     if training_source and not sc.get("training_source"):
         sc["training_source"] = training_source
     sc.setdefault("eu_holdout", eu_holdout_block())
+    sc["citizen_weights"] = citizen_weights_block(sc)
     if "holdout_region" not in sc:
         sc["holdout_region"] = {
             "status": "not-recorded",

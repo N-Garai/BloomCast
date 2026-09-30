@@ -8,6 +8,7 @@ import { ForecastCard } from "@/components/dashboard/ForecastCard";
 import { ForecastPipeline } from "@/components/dashboard/ForecastPipeline";
 import { LocationExplorer } from "@/components/dashboard/LocationExplorer";
 import { NdciExplainer } from "@/components/dashboard/NdciExplainer";
+import { OneHealthSummary } from "@/components/onehealth/OneHealthSummary";
 import { RiskLegend } from "@/components/dashboard/RiskLegend";
 import { DotMatrixGlobe } from "@/components/three/DotMatrixGlobe";
 import { VectorMap } from "@/components/maps/VectorMap";
@@ -313,6 +314,14 @@ export default function DashboardPage() {
         </main>
       </div>
       <div className="relative overflow-hidden border-t border-border-subtle"><VideoBackdrop src="/bg/bg-explorer.mp4" brightness={1.1} overlay="linear-gradient(180deg, rgba(2,6,15,0.8) 0%, rgba(2,6,15,0.62) 50%, rgba(2,6,15,0.88) 100%)" /><div className="relative max-w-6xl mx-auto w-full px-4 md:px-6 py-8"><ScrollReveal><LocationExplorer onSelectWaterbody={setSelected} /></ScrollReveal></div></div>
+      {/* One Health summary: human / ecological / system signals side by side.
+          It lives here rather than on its own route because it reads the same
+          forecasts the dashboard already shows. */}
+      <div className="relative border-t border-border-subtle bg-bg-deep/40">
+        <div className="max-w-6xl mx-auto w-full px-4 md:px-6 py-10">
+          <ScrollReveal><OneHealthSummary /></ScrollReveal>
+        </div>
+      </div>
       <Footer />
     </div>
   );

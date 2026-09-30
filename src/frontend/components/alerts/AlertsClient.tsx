@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 
 import { API } from "@/lib/api";
 import { Spinner } from "@/components/ui/Spinner";
-import { NotifyCenter } from "@/components/alerts/NotifyCenter";
+import { NotifyCenter, presetFor } from "@/components/alerts/NotifyCenter";
 import { getWaterbodies, waterbodyName, type WaterbodyOption } from "@/lib/waterbodies";
 
 interface CheckedAlert {
@@ -100,6 +100,11 @@ export function AlertsClient() {
     horizon_days: 5,
     fhir_export_consent: false,
   });
+  // v3 M-V9: the preset for the currently selected waterbody, shown as a
+  // starting point the steward can override. Deliberately not advice — the
+  // copy says so, because a river and a lake do not share a bloom threshold.
+  const selectedType = waterbodies.find((w) => w.id === form.waterbody_id)?.type;
+  const preset = presetFor(selectedType);
   const [status, setStatus] = useState<"idle" | "submitting" | "ok" | "error">("idle");
   const [token, setToken] = useState("");
 
@@ -176,7 +181,13 @@ export function AlertsClient() {
           <select
             id="awb"
             value={form.waterbody_id}
-            onChange={(e) => setForm({ ...form, waterbody_id: e.target.value })}
+            onChange={(e) => {
+              // Selecting a waterbody re-applies its type preset (v3 M-V9), so a
+              // steward never starts from a blank form. Overridable below.
+              const next = e.target.value;
+              const p = presetFor(waterbodies.find((w) => w.id === next)?.type);
+              setForm({ ...form, waterbody_id: next, threshold: p.threshold, horizon_days: p.horizon });
+            }}
             className="w-full bg-bg-deep border border-border-subtle rounded-lg px-3 py-2.5 text-fg-primary focus:border-glow-cyan outline-none"
           >
             {waterbodies.length ? (
@@ -215,6 +226,21 @@ export function AlertsClient() {
           onChange={(e) => setForm({ ...form, threshold: Number(e.target.value) })}
           className="w-full accent-glow-orange"
         />
+        {/* Preset is a starting point, not guidance — the copy says so, and the
+            button is there so an override is one click from being undone. */}
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-fg-muted">
+          <span className="font-mono uppercase tracking-widest">Starting point</span>
+          <span>{preset.label} — {Math.round(preset.threshold * 100)}% at {preset.horizon}-day.</span>
+          {form.threshold !== preset.threshold || form.horizon_days !== preset.horizon ? (
+            <button
+              type="button"
+              onClick={() => setForm({ ...form, threshold: preset.threshold, horizon_days: preset.horizon })}
+              className="px-2 py-0.5 rounded border border-border-subtle hover:border-glow-cyan hover:text-glow-cyan transition-colors"
+            >
+              Reset to preset
+            </button>
+          ) : null}
+        </div>
       </div>
       <label className="flex items-center gap-2.5 text-sm text-fg-secondary cursor-pointer">
         <input

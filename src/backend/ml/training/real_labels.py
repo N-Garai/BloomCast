@@ -208,8 +208,9 @@ def build_weather_frame(rows: list, cache_path: str | Path | None = None,
     # Chunked fetch-assemble-flush: a crash or timeout keeps everything
     # flushed so far, and a rerun resumes from the on-disk cache instead of
     # starting over. Final output order always follows the input rows,
-    # regardless of fetch completion order.
-    FLUSH_EVERY = 500
+    # regardless of fetch completion order. Flush cadence is deliberately
+    # small: a killed run loses at most one batch, not the whole session.
+    FLUSH_EVERY = 100
 
     def assemble_parts(r, w, seq):
         static = {"area_km2": 5.0, "latitude": r["lat"], "longitude": r["lon"],
