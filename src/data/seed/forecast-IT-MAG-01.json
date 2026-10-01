@@ -1,134 +1,134 @@
 {
-  "generated_at": "2026-09-29T07:43:52.392812+00:00",
-  "model_version": "v2.2.0-kaggle-labels",
+  "generated_at": "2026-10-01T08:03:28.203934+00:00",
+  "model_version": "v2.1.0-real-labels",
   "training_source": "tick-tick-bloom",
-  "training_note": "Colab-trained on 23570 Tick Tick Bloom samples; Optuna-tuned LightGBM + GPU CNN + quantiles.",
-  "p_bloom": 0.2049,
-  "ci_lo": 0.0081,
-  "ci_hi": 1.0,
+  "training_note": "Trained on 23570 Tick Tick Bloom in-situ samples (23570 dates, 4 regions); 0 samples skipped (no weather). Spectral block is zeros \u2014 satellite TIFF join is future work.",
+  "p_bloom": 0.1071,
+  "ci_lo": 0.0,
+  "ci_hi": 0.6756,
   "baseline_climatology": 0.0,
   "shap_top_features": [
     {
       "feature": "longitude",
       "human": "Longitude",
-      "shap_value": 0.735,
+      "shap_value": 0.6605,
       "method": "gain"
     },
     {
       "feature": "latitude",
       "human": "Latitude",
-      "shap_value": 0.1526,
-      "method": "gain"
-    },
-    {
-      "feature": "temp_mean_7d",
-      "human": "Sustained warm week",
-      "shap_value": 0.0211,
+      "shap_value": 0.1575,
       "method": "gain"
     },
     {
       "feature": "temp_anomaly_7d",
       "human": "Surface temperature anomaly",
-      "shap_value": 0.0174,
+      "shap_value": 0.025,
+      "method": "gain"
+    },
+    {
+      "feature": "temp_mean_7d",
+      "human": "Sustained warm week",
+      "shap_value": 0.0227,
       "method": "gain"
     },
     {
       "feature": "dewpoint_mean_3d",
       "human": "High humidity",
-      "shap_value": 0.0158,
+      "shap_value": 0.0215,
       "method": "gain"
     }
   ],
   "horizons": {
     "3d": {
-      "p_bloom": 0.1677,
-      "ci_lo": 0.1677,
-      "ci_hi": 1.0,
+      "p_bloom": 0.0639,
+      "ci_lo": 0.0,
+      "ci_hi": 0.6814,
       "shap_top_features": [
         {
           "feature": "longitude",
           "human": "Longitude",
-          "shap_value": -1.0668,
+          "shap_value": -1.3831,
           "method": "shap"
         },
         {
           "feature": "temp_mean_7d",
           "human": "Sustained warm week",
-          "shap_value": -0.3331,
+          "shap_value": -0.4285,
           "method": "shap"
         },
         {
-          "feature": "temp_mean_3d",
-          "human": "Recent warm temperatures",
-          "shap_value": -0.2168,
+          "feature": "growing_degree_days",
+          "human": "Cumulative warmth",
+          "shap_value": -0.3051,
           "method": "shap"
         }
       ]
     },
     "5d": {
-      "p_bloom": 0.2177,
-      "ci_lo": 0.2177,
-      "ci_hi": 1.0,
+      "p_bloom": 0.1139,
+      "ci_lo": 0.0,
+      "ci_hi": 0.6314,
       "shap_top_features": [
         {
           "feature": "longitude",
           "human": "Longitude",
-          "shap_value": -1.0668,
+          "shap_value": -1.3831,
           "method": "shap"
         },
         {
           "feature": "temp_mean_7d",
           "human": "Sustained warm week",
-          "shap_value": -0.3331,
+          "shap_value": -0.4285,
           "method": "shap"
         },
         {
-          "feature": "temp_mean_3d",
-          "human": "Recent warm temperatures",
-          "shap_value": -0.2168,
+          "feature": "growing_degree_days",
+          "human": "Cumulative warmth",
+          "shap_value": -0.3051,
           "method": "shap"
         },
         {
-          "feature": "latitude",
-          "human": "Latitude",
-          "shap_value": 0.1392,
+          "feature": "dewpoint_mean_3d",
+          "human": "High humidity",
+          "shap_value": -0.283,
           "method": "shap"
         },
         {
           "feature": "solar_mean_3d",
           "human": "Solar radiation",
-          "shap_value": 0.0797,
+          "shap_value": 0.2301,
           "method": "shap"
         }
       ]
     },
     "7d": {
-      "p_bloom": 0.2977,
-      "ci_lo": 0.1877,
-      "ci_hi": 1.0,
+      "p_bloom": 0.1939,
+      "ci_lo": 0.0,
+      "ci_hi": 0.7314,
       "shap_top_features": [
         {
           "feature": "longitude",
           "human": "Longitude",
-          "shap_value": -1.0668,
+          "shap_value": -1.3831,
           "method": "shap"
         },
         {
           "feature": "temp_mean_7d",
           "human": "Sustained warm week",
-          "shap_value": -0.3331,
+          "shap_value": -0.4285,
           "method": "shap"
         },
         {
-          "feature": "temp_mean_3d",
-          "human": "Recent warm temperatures",
-          "shap_value": -0.2168,
+          "feature": "growing_degree_days",
+          "human": "Cumulative warmth",
+          "shap_value": -0.3051,
           "method": "shap"
         },
         {
-          "feature": "latitude",
-          "human": "Latitude",
-          "shap_value": 0.1392,
+          "feature": "dewpoint_mean_3d",
+          "human": "High humidity",
+          "shap_value": -0.283,
           "method": "shap"
         }
       ]

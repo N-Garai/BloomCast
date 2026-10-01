@@ -1,7 +1,7 @@
 {
   "resourceType": "Bundle",
   "type": "collection",
-  "timestamp": "2026-09-29T07:43:52+00:00",
+  "timestamp": "2026-10-01T08:03:28+00:00",
   "entry": [
     {
       "fullUrl": "urn:uuid:comm-sample",
@@ -12,7 +12,7 @@
         "subject": {
           "reference": "Location/wb-CH-ZUR-01"
         },
-        "sent": "2026-09-29T07:43:52+00:00",
+        "sent": "2026-10-01T08:03:28+00:00",
         "recipient": [
           {
             "reference": "mailto:elena.vasquez@lisboa.pt"
@@ -22,12 +22,12 @@
           "display": "BloomCast Early Warning System",
           "identifier": {
             "system": "https://bloomcast-api.onrender.com",
-            "value": "v2.2.0-kaggle-labels"
+            "value": "v2.1.0-real-labels"
           }
         },
         "payload": [
           {
-            "contentString": "BloomCast alert: Lake Zurich 5-day bloom probability 22% (CI 22-100%). Triggered by threshold \u226560%. Drivers: Longitude -107%; Sustained warm week -33%; Recent warm temperatures -22%."
+            "contentString": "BloomCast alert: Lake Zurich 5-day bloom probability 11% (CI 0-63%). Triggered by threshold \u226560%. Drivers: Longitude -138%; Sustained warm week -43%; Cumulative warmth -31%."
           },
           {
             "contentAttachment": {
@@ -40,7 +40,7 @@
         "extension": [
           {
             "url": "https://bloomcast-api.onrender.com/fhir/extensions/model-version",
-            "valueString": "v2.2.0-kaggle-labels"
+            "valueString": "v2.1.0-real-labels"
           },
           {
             "url": "https://bloomcast-api.onrender.com/fhir/extensions/lead-time-days",
@@ -48,11 +48,11 @@
           },
           {
             "url": "https://bloomcast-api.onrender.com/fhir/extensions/confidence-low",
-            "valueDecimal": 0.2177
+            "valueDecimal": 0.0
           },
           {
             "url": "https://bloomcast-api.onrender.com/fhir/extensions/confidence-high",
-            "valueDecimal": 1.0
+            "valueDecimal": 0.6314
           }
         ]
       }
@@ -85,9 +85,9 @@
         "subject": {
           "reference": "Location/wb-CH-ZUR-01"
         },
-        "effectiveDateTime": "2026-09-29T07:43:52+00:00",
+        "effectiveDateTime": "2026-10-01T08:03:28+00:00",
         "valueQuantity": {
-          "value": 0.2177,
+          "value": 0.1139,
           "unit": "probability",
           "system": "http://unitsofmeasure.org",
           "code": "1"
@@ -103,7 +103,7 @@
               ]
             },
             "valueQuantity": {
-              "value": 0.2177
+              "value": 0.0
             }
           },
           {
@@ -116,7 +116,7 @@
               ]
             },
             "valueQuantity": {
-              "value": 1.0
+              "value": 0.6314
             }
           }
         ]
