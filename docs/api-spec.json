@@ -6,10 +6,79 @@
     "version": "2.0.0"
   },
   "paths": {
+    "/_next/static/{path}": {
+      "get": {
+        "summary": "Serve Next Static",
+        "operationId": "serve_next_static__next_static__path__get",
+        "parameters": [
+          {
+            "name": "path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/favicon.ico": {
+      "get": {
+        "summary": "Serve Favicon",
+        "operationId": "serve_favicon_favicon_ico_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/health": {
       "get": {
         "summary": "Health",
+        "description": "Liveness + honest model status (v2 M-K1).\n\n``model.status`` is ``loaded`` only when the exported artifacts passed the\nfeature-compatibility check; otherwise ``fallback`` with the reason. A\ngreen health check that hides a missing model is worse than a red one.\n\nHEAD is answered explicitly (headers only): container platforms probe\nwith HEAD during port detection, and a 405 there stalls the deploy\nbefore health checks ever run.",
         "operationId": "health_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      },
+      "head": {
+        "summary": "Health",
+        "description": "Liveness + honest model status (v2 M-K1).\n\n``model.status`` is ``loaded`` only when the exported artifacts passed the\nfeature-compatibility check; otherwise ``fallback`` with the reason. A\ngreen health check that hides a missing model is worse than a red one.\n\nHEAD is answered explicitly (headers only): container platforms probe\nwith HEAD during port detection, and a 405 there stalls the deploy\nbefore health checks ever run.",
+        "operationId": "health_v1_health_head",
         "responses": {
           "200": {
             "description": "Successful Response",
@@ -200,6 +269,7 @@
     "/v1/forecast/{wb_id}/chip": {
       "get": {
         "summary": "Forecast Chip",
+        "description": "NDCI snapshot chip: a data-driven SVG rendered from the latest replay\nday's satellite NDCI (or the current forecast probability when no replay\nexists). A stylized visualization, not satellite imagery.",
         "operationId": "forecast_chip_v1_forecast__wb_id__chip_get",
         "parameters": [
           {
@@ -393,6 +463,181 @@
         }
       }
     },
+    "/v1/explore": {
+      "get": {
+        "summary": "Explore",
+        "description": "Live weather-only assessment for ANY coordinates.\n\nFetches realtime Open-Meteo data at request time (no nightly job\ninvolved) and scores wash-off risk with the StreamFlush heuristic.\nThis is a live nowcast, not a calibrated forecast \u2014 pilot waterbodies\n(see nearest_waterbody) carry the full 3\u20137 day model outlook.",
+        "operationId": "explore_v1_explore_get",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Lat"
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Lon"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/infer": {
+      "get": {
+        "summary": "Infer",
+        "description": "Realtime assessment for any point on Earth (v2 M1).\n\nLive weather in 2\u20134 s, scored on the spot and cached for 15 minutes per\n~110 m cell. Carries ``provenance``, ``cache`` and ``caveats`` so no number\ncan be read without its origin and its staleness.",
+        "operationId": "infer_v1_infer_get",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Lat"
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Lon"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/infer/stream": {
+      "get": {
+        "summary": "Infer Stream",
+        "description": "Server-sent progressive assessment: cached hit \u2192 immediate, else staged.\n\nFirst frame (\"status\") is written before any upstream call, so the UI can\npaint inside the 300 ms budget instead of waiting on the weather window.",
+        "operationId": "infer_stream_v1_infer_stream_get",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Lat"
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Lon"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/infer/batch": {
+      "post": {
+        "summary": "Infer Batch",
+        "description": "Assess up to 50 points in one request (v2 M4).\n\nPer-IP budget keeps one client from spending the shared upstream quota;\nper-location failures come back in ``errors`` instead of failing the batch.",
+        "operationId": "infer_batch_v1_infer_batch_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/infer/score": {
+      "post": {
+        "summary": "Infer Score",
+        "description": "Score browser-fetched Open-Meteo payloads with zero upstream calls.\n\nThe shared-IP throttle escape hatch: when ``GET /v1/infer`` answers 429,\nthe visitor's browser fetches the same two Open-Meteo payloads with its\nown IP quota and posts them here for identical scoring (same split, same\nrow, same model \u2014 ``provenance`` records the difference). Client payloads\nare validated before scoring; junk is a 400, never silent zeros. Scored\nresults populate the shared cache, so the next visitor gets a server hit.",
+        "operationId": "infer_score_v1_infer_score_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/fhir/Communication/{alert_id}": {
       "get": {
         "summary": "Fhir Bundle",
@@ -484,6 +729,117 @@
         }
       }
     },
+    "/v1/citizen/queue": {
+      "get": {
+        "summary": "Citizen Queue",
+        "description": "Steward moderation queue: reports awaiting validation.",
+        "operationId": "citizen_queue_v1_citizen_queue_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 50,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/citizen/influence": {
+      "get": {
+        "summary": "Citizen Influence",
+        "description": "Ground Truth Loop ledger: how validated reports moved forecasts.",
+        "operationId": "citizen_influence_v1_citizen_influence_get",
+        "parameters": [
+          {
+            "name": "waterbody_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Waterbody Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/citizen/validate": {
+      "post": {
+        "summary": "Citizen Validate",
+        "description": "Steward approve/reject a report. Approved bloom evidence is written to\nthe influence log with its estimated probability delta.",
+        "operationId": "citizen_validate_v1_citizen_validate_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/citizen/report": {
       "post": {
         "summary": "Citizen Report",
@@ -516,6 +872,83 @@
         }
       }
     },
+    "/v1/alerts/unsubscribe": {
+      "post": {
+        "summary": "Alert Unsubscribe",
+        "operationId": "alert_unsubscribe_v1_alerts_unsubscribe_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/alerts/check": {
+      "get": {
+        "summary": "Alert Check",
+        "description": "Evaluate a subscriber's thresholds against current forecasts.\n\nFree-tier dispatch: instead of an email service, subscribers (and the\nnightly job) read which thresholds are crossed right now. The identity\nkey is anonymous (device ID); a legacy email works the same way.",
+        "operationId": "alert_check_v1_alerts_check_get",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Email"
+            }
+          },
+          {
+            "name": "subscriber_key",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Subscriber Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/fhir/bundle": {
       "post": {
         "summary": "Create Fhir Bundle",
@@ -532,16 +965,89 @@
         }
       }
     },
-    "/": {
-      "get": {
-        "summary": "Root",
-        "operationId": "root__get",
+    "/v1/report": {
+      "post": {
+        "summary": "Report",
+        "description": "Generate a grounded report from a server-side assessment.",
+        "operationId": "report_v1_report_post",
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/{full_path}": {
+      "head": {
+        "summary": "Serve Frontend",
+        "operationId": "serve_frontend__full_path__head",
+        "parameters": [
+          {
+            "name": "full_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Full Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Serve Frontend",
+        "operationId": "serve_frontend__full_path__head",
+        "parameters": [
+          {
+            "name": "full_path",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Full Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
               }
             }
           }

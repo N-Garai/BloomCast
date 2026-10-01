@@ -24,9 +24,13 @@ Verify terms
          → fall back to public-domain labels (NOAA / EPA / EEA Waterbase)
 ```
 
-Current status: **terms not redistributed.** `src/backend/bloomcast/ingestion/drivendata_loader.py`
-is a loader only — no dataset ships with the repository. The MVP runs on the
-deterministic synthetic generator described in `model-card.md`.
+Current status: **competition CSVs not redistributed; CAML labels used
+instead.** The loader (`src/backend/ingestion/drivendata_loader.py`) reads
+either format, but the repo ships neither dataset — the committed model was
+trained from the public CAML SeaBASS file
+(doi:10.5067/SeaBASS/CAML/DATA001), which needs no login and carries the same
+underlying labels. The MVP-era synthetic generator remains in the code only
+as the no-labels fallback.
 
 ## Attribution
 

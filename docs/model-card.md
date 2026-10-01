@@ -38,10 +38,13 @@ static coordinate defaults. The StreamFlush heuristic is always available. If
 compatible artifacts are committed, the exported LightGBM/calibrator path adds
 `model_estimate`.
 
-The model estimate is labelled `weather-only-model` but remains
-experimental for an arbitrary point: the spectral block is a prior rather than
-a live observation and the point is outside the pilot calibration envelope.
-The top-level response keeps `is_calibrated: false`. If artifacts are absent,
+The model estimate carries a `tier` and an `input_availability` block, and
+the tier is chosen per request from what the row actually contains:
+`full-32` runs the real-label LightGBM/calibrator on all 32 features where a
+spectral prior exists (pilots); `weather-only` runs the real-label variant
+where it does not. Either way the point stays outside the pilot calibration
+envelope for arbitrary coordinates, so the top-level response keeps
+`is_calibrated: false` there. If artifacts are absent,
 incomplete, or feature-incompatible, only `live-heuristic-nowcast` is returned.
 
 ## Training data
@@ -51,11 +54,14 @@ Two paths are selected at training time and recorded as `training_source`:
 1. **Real labels** (`tick-tick-bloom`): DrivenData Tick Tick Bloom in-situ
    severity samples joined with trailing Open-Meteo archive weather
    (`ml/training/real_labels.py`, setup in `docs/training-data.md`).
-   Active when `train_labels.csv` and `metadata.csv` are present and usable.
-2. **Synthetic stand-in** (`synthetic-seed`, the v2 MVP default): a
+   Active when competition CSVs (`train_labels.csv` + `metadata.csv`) or the
+   CAML SeaBASS `.sb` file (same underlying labels, doi:10.5067/SeaBASS/CAML/DATA001)
+   are present and usable. This is the committed state.
+2. **Synthetic stand-in** (`synthetic-seed`): a
    deterministic generator produces physically motivated labels
    (warm + calm + rising chlorophyll → bloom) with label noise so calibrated
-   probabilities span the risk bands rather than saturating at 0/1.
+   probabilities span the risk bands rather than saturating at 0/1. Used only
+   when no labels are found — a fallback, not a default.
 
 The real-label weather join leaves spectral and citizen blocks zeroed and
 records that limitation. Scheduled Sentinel-2 ingestion is a separate path and
@@ -68,18 +74,22 @@ and refreshed by the scheduled seed workflow; see
 `src/data/seed/scorecard.json` for the current values and `training_source`.
 Do not quote fixed numbers from this card: they can go stale after a refresh.
 
-**The committed seed is synthetic and the current scorecard is not real-world
-skill.** It describes the generator, not forecasting accuracy on real lakes.
-Real-label artifacts must carry `tick-tick-bloom` provenance before they are
-treated as production model evidence.
+**The committed artifacts are real-label** (`training_source:
+tick-tick-bloom`, trained on 23,570 CAML in-situ samples): the scorecard below
+is genuine out-of-fold skill, not generator skill. Any future export that
+falls back to synthetic is refused by `export_artifacts.py` and caught by
+`test_committed_artifacts_are_real` before it can ship.
 
-Every request-time assessment carries a machine-readable provenance label:
+Every request-time assessment carries machine-readable provenance labels:
 
 - `live-heuristic-nowcast`: StreamFlush wash-off score plus bloom-favourable
   weather signals; not a calibrated probability.
-- `weather-only-model`: optional exported model estimate using live
+- `weather-only-model`: real-label variant estimate using live
   weather and a labelled spectral prior; not a pilot-calibrated arbitrary-point
   forecast.
+- `full-32` pilot tier: the real-label full model on all 32 features with a
+  committed spectral prior, served only where that prior exists; the response
+  states the prior's scene date or fallback basis.
 
 The response also carries `cache`, `spectral_prior`, and `caveats` so the origin
 and staleness of every number are visible.
@@ -100,12 +110,14 @@ and staleness of every number are visible.
    do not enter fitted models; the climatology baseline sees them by design.
    Per-region skill is published on the scorecard. Pilots outside the U.S.
    training range are extrapolation.
-6. **Spectral prior.** The current committed table is a modelled latitude ×
-   month fallback because no measured spectral history is committed. It is not
-   a satellite observation. Measured seasonal means are used only after real
-   records pass the generator's sample threshold.
-7. **Synthetic seed.** MVP pilot forecast numbers come from the deterministic
-   generator, not real satellite retrieval or real labels.
+6. **Spectral prior.** The committed table carries measured seasonal means
+   for 19 pilots (September 2026 Sentinel-2 scenes, cloud-gated, water-masked)
+   and a modelled latitude × month fallback for the rest, each labelled as
+   what it is. Scene dates go stale — re-run the seed spectral refresh before
+   relying on a prior for a new season.
+7. **Static seeds.** Pilot forecast files are nightly snapshots from the
+   committed model, not live numbers; check `pipeline_run.json` for the date
+   before quoting one.
 8. **EU hold-out.** A literal EU-lake hold-out is data-blocked by the available
    U.S.-only labels; the scorecard states this explicitly.
 9. **Artifact fallback.** A deployment without compatible artifacts serves the

@@ -40,7 +40,9 @@ them — the backend and nightly job then do pure inference.**
      the session `/content/` (Drive survives disconnects, session files don't).
    It trains, exports, and self-verifies. Expected final line: `reload OK …`
    plus OOF AUC/Brier printed by the trainer.
-3. **Download** `bloomcast_artifacts/` (7 files) from the notebook output.
+3. **Download** the full exported set from the notebook output (10 files:
+   full model + calibrator + CNN + ensemble + quantiles + the 3-file
+   weather-only trio + both metas).
 4. **Commit them** to the repo. CI enforces the honesty rule:
    `test_committed_artifacts_are_real` fails the build if committed artifacts
    claim anything but `tick-tick-bloom` provenance.
@@ -56,7 +58,7 @@ them — the backend and nightly job then do pure inference.**
 - **Colab free: no background execution.** The tab must stay open; an idle
   timeout (tens of minutes, varies) kills the kernel. Mitigations, all built
   in: progress lines print continuously (activity helps), the weather cache
-  flushes every 500 rows, Optuna resumes its study — a re-run continues where
+  flushes every 100 rows, Optuna resumes its study — a re-run continues where
   the dead one stopped as long as Drive files persist. Colab Pro ($10/mo) is
   the only way to close the tab.
 - **Never re-download work already done:** cache (`weather_cache.csv`),
@@ -77,8 +79,9 @@ p = bundle["lgbm"].predict_proba(live_row_32dim)  # + calibrator + ensemble
 
 `/v1/explore` always returns the transparent heuristic, and adds a
 `model_estimate` block whenever committed artifacts exist — the exported model
-scored on the live 32-dim row, labeled experimental (weather-only input,
-empty spectral block, outside pilot calibration).
+scored on the live 32-dim row, with a `tier` (`full-32` where a spectral prior
+exists, `weather-only` elsewhere) and per-block `input_availability`, so the
+response says what the number is made of.
 
 ## Environment knobs
 
@@ -87,6 +90,6 @@ empty spectral block, outside pilot calibration).
 | `TICKTICKBLOOM_DIR` | Competition CSVs (training time only) |
 | `CAML_DIR` | CAML `.sb` file location (alternative to the above) |
 | `CAML_MAX_DISTANCE_M` | Drop samples taken farther than this from water |
-| `N_SAMPLES` | Stratified (label × region) subsample cap — e.g. 8000 finishes the join in ~1/3 the time with the same mix. Unset trains on everything |
+| `N_SAMPLES` | Stratified (label × region) subsample cap — e.g. 8000 finishes the join in ~1/3 the time with the same mix. Unset trains on everything. **Notebook only** — `scripts/export_artifacts.py` always trains on the full frame |
 | `BLOOMCAST_WEATHER_CACHE` | Override the weather-join cache path (training time) |
 | `BLOOMCAST_ARTIFACTS` | Override the artifacts directory (serving time) |

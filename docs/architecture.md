@@ -129,6 +129,9 @@ included.
 
 ## Data flow
 
+Visual version for judges and new contributors: [`asset/architecture.mmd`](asset/architecture.mmd)
+(Mermaid flowchart — GitHub renders it inline when included in markdown).
+
 ```text
 Scheduled: GitHub Actions · 02:00 UTC · free for public repositories
     │
@@ -180,8 +183,10 @@ the request-time weather window or claim live satellite input.
 - Spectral ingestion is fail-safe. Missing scenes, clouds, or raster errors are
   labelled and may be forward-filled with an explicit flag; they are never
   presented as fresh measurements.
-- Local SQLite is process-local and rebuilt from committed seed data on deploy.
-  It is suitable for the demo, not durable multi-instance storage.
+- Local SQLite is the default store and is process-local: fine for the demo,
+  wiped on redeploys. Set `DATABASE_URL` to a Postgres URL (free Neon tier)
+  and the same code persists observations, subscriptions, and the influence
+  log across restarts — no migration step, tables are created on connect.
 - `/v1/health` reports model status as `loaded` or `fallback` with the reason,
   so a green liveness check cannot hide a missing model.
 
@@ -226,7 +231,9 @@ opens it. Then:
 **Skip behaviour.** A gesture before the gate does not cut the film. It sets
 `timeScale(2.6)` so the remaining acts resolve in about a third of the time and
 the exit fires automatically at the gate, so an impatient visitor scrolls once
-and still lands on designed frames rather than a cut.
+and still lands on designed frames rather than a cut. The affordance is
+advertised from Act 1 (`0.85s`, `0.5s` calm) rather than only at the gate, so
+visitors know the gesture exists before they need it.
 
 **Access and failure modes.**
 
@@ -311,7 +318,9 @@ tracks' evidence as first-class features:
 |---|---|
 | Track 6 (primary) | Replay Theatre, Resilience Sandbox, FHIR alerts, subscriptions, integrity scorecard |
 | Track 2 — Data-to-Insight | Forecast dashboard, trend timelines, citizen overlays, One Health summary card |
-| Track 3 — AI-Supported Assessment | Driver evidence, Ground Truth Loop, public model card, provenance-labelled assessments |
+| Track 3 — AI-Supported Assessment | Driver evidence, steward-validated Ground Truth Loop, public model card, provenance-labelled assessments |
+| Track 7 — Digital Health Standards | FHIR R4 alert bundles against a committed profile, self-validating on export |
+| Track 5 — Community & Gamification (partial) | Citizen reporting + steward feedback + threshold watch as a participation loop; no points, badges, or challenges, and none are claimed |
 
 ## Responsible AI
 

@@ -44,10 +44,14 @@ their stored ntfy topic — the topic plumbing already exists client-side.
 
 ## Subscriptions and storage
 
-Subscriptions live in the deployment's SQLite file plus an anonymous browser
-key (`bc-subscriber`). Ephemeral hosts (Render free spin-downs, container
-recreates without a volume) wipe them without warning — treat subscriptions
-as session Portable, not permanent, until a durable store lands.
+Subscriptions live in the deployment's database plus an anonymous browser
+key (`bc-subscriber`). Which database depends on one env var: if
+`DATABASE_URL` points at Postgres (the free Neon setup in
+`architecture.md`), subscriptions survive restarts and redeploys; otherwise
+the container's local SQLite file is wiped without warning on ephemeral
+hosts (Render free spin-downs, recreates without a volume). Until you confirm
+which one the deployment uses, treat subscriptions as session-portable, not
+permanent.
 
 ## Threshold presets and escalation (v3 M-V9)
 

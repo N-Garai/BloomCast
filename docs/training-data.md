@@ -1,6 +1,8 @@
 # Training on real labels (Tick Tick Bloom / CAML)
 
-By default BloomCast trains on a synthetic stand-in (see `model-card.md`).
+By default BloomCast trains on whatever labels it finds: real in-situ
+labels when the files below are present (the committed state), a synthetic
+stand-in (see `model-card.md`) only when they are absent.
 To train on real in-situ cyanobacteria labels, provide **either** input —
 they carry the same underlying labels:
 
@@ -58,6 +60,11 @@ BloomCast binarizes at severity ≥ 3 (`ingestion/drivendata_loader.py`).
 
 ## 4. Nightly use
 
-Set `TICKTICKBLOOM_DIR` as a GitHub Actions secret-variable (the CSVs stay out
-of git) and the nightly pipeline trains on real labels every refresh. Without
-it, the pipeline keeps the synthetic fallback and says so in the scorecard.
+The nightly pipeline does **not** train — CI has no labels, and that is
+deliberate (label CSVs stay out of git). It runs inference only against the
+committed artifacts. Retraining is a manual, local event: point
+`TICKTICKBLOOM_DIR` (or `CAML_DIR`) at the labels, run
+`scripts/export_artifacts.py`, review the printed OOF metrics, and commit the
+regenerated files. The honesty gate (`test_committed_artifacts_are_real`)
+fails the build on any synthetic export, so a bad retrain cannot ship
+quietly.
