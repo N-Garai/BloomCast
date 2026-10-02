@@ -75,7 +75,7 @@ def test_eu_pilot_cities_are_present():
     )
 
     for p in eu:
-        assert p["country"] in {"PT", "BE"}, f"{p['id']} has unexpected country"
+        assert p["country"] in {"PT", "BE", "IT", "NO", "FR"}, f"{p['id']} has unexpected country"
         lon, lat = p["centroid"]
         # Guards a sign-flipped or null-island centroid reaching the map.
         assert -180 <= lon <= 180 and -90 <= lat <= 90, f"{p['id']} centroid out of range"
@@ -520,6 +520,39 @@ def test_alert_routes_reject_bad_input():
     assert client.post("/v1/alerts/subscribe", json={"waterbody_id": "CH-ZUR-01"}).status_code == 400
     d = client.get("/v1/alerts/check?email=nobody@example.org").json()
     assert d["alerts"] == []
+
+
+def test_citizen_report_is_throttled_per_client(monkeypatch):
+    """A flood of well-formed reports from one IP gets 429, not a full queue.
+
+    Malformed bodies are rejected before the throttle so they never consume
+    budget; the 429 carries kind + Retry-After like the batch endpoint.
+    """
+    from fastapi.testclient import TestClient
+    from shared.cache import SlidingWindowThrottle
+    import api.main as mainmod
+
+    monkeypatch.setattr(mainmod, "_CITIZEN_THROTTLE",
+                        SlidingWindowThrottle(limit=2, window_s=600.0))
+    client = TestClient(mainmod.app, raise_server_exceptions=False)
+
+    assert client.post("/v1/citizen/report", json={}).status_code == 400
+    good = {
+        "observation_id": "throttle-probe",
+        "waterbody_id": "CH-ZUR-01",
+        "observed_at": "2026-09-29T10:00:00Z",
+        "latitude": 47.3,
+        "longitude": 8.5,
+        "water_color": "green",
+    }
+    for i in range(2):
+        body = dict(good, observation_id=f"throttle-probe-{i}")
+        assert client.post("/v1/citizen/report", json=body).status_code == 202
+    body = dict(good, observation_id="throttle-probe-over")
+    r = client.post("/v1/citizen/report", json=body)
+    assert r.status_code == 429
+    assert r.json().get("kind") == "throttled"
+    assert "retry-after" in {k.lower() for k in r.headers}
 
 
 # --- artifact round-trip (Kaggle flow) --------------------------------------

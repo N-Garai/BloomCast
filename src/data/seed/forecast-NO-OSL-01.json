@@ -1,0 +1,146 @@
+{
+  "generated_at": "2026-10-02T13:49:26.979805+00:00",
+  "model_version": "v2.1.0-real-labels",
+  "training_source": "tick-tick-bloom",
+  "training_note": "Trained on 23570 Tick Tick Bloom in-situ samples (23570 dates, 4 regions); 0 samples skipped (no weather). Spectral block is zeros \u2014 satellite TIFF join is future work.",
+  "p_bloom": 0.1071,
+  "ci_lo": 0.0,
+  "ci_hi": 0.6756,
+  "baseline_climatology": 0.0,
+  "shap_top_features": [
+    {
+      "feature": "longitude",
+      "human": "Longitude",
+      "shap_value": 0.6605,
+      "method": "gain"
+    },
+    {
+      "feature": "latitude",
+      "human": "Latitude",
+      "shap_value": 0.1575,
+      "method": "gain"
+    },
+    {
+      "feature": "temp_anomaly_7d",
+      "human": "Surface temperature anomaly",
+      "shap_value": 0.025,
+      "method": "gain"
+    },
+    {
+      "feature": "temp_mean_7d",
+      "human": "Sustained warm week",
+      "shap_value": 0.0227,
+      "method": "gain"
+    },
+    {
+      "feature": "dewpoint_mean_3d",
+      "human": "High humidity",
+      "shap_value": 0.0215,
+      "method": "gain"
+    }
+  ],
+  "horizons": {
+    "3d": {
+      "p_bloom": 0.0639,
+      "ci_lo": 0.0,
+      "ci_hi": 0.6814,
+      "shap_top_features": [
+        {
+          "feature": "longitude",
+          "human": "Longitude",
+          "shap_value": -1.3831,
+          "method": "shap"
+        },
+        {
+          "feature": "temp_mean_7d",
+          "human": "Sustained warm week",
+          "shap_value": -0.4285,
+          "method": "shap"
+        },
+        {
+          "feature": "growing_degree_days",
+          "human": "Cumulative warmth",
+          "shap_value": -0.3051,
+          "method": "shap"
+        }
+      ]
+    },
+    "5d": {
+      "p_bloom": 0.1139,
+      "ci_lo": 0.0,
+      "ci_hi": 0.6314,
+      "shap_top_features": [
+        {
+          "feature": "longitude",
+          "human": "Longitude",
+          "shap_value": -1.3831,
+          "method": "shap"
+        },
+        {
+          "feature": "temp_mean_7d",
+          "human": "Sustained warm week",
+          "shap_value": -0.4285,
+          "method": "shap"
+        },
+        {
+          "feature": "growing_degree_days",
+          "human": "Cumulative warmth",
+          "shap_value": -0.3051,
+          "method": "shap"
+        },
+        {
+          "feature": "dewpoint_mean_3d",
+          "human": "High humidity",
+          "shap_value": -0.283,
+          "method": "shap"
+        },
+        {
+          "feature": "solar_mean_3d",
+          "human": "Solar radiation",
+          "shap_value": 0.2301,
+          "method": "shap"
+        }
+      ]
+    },
+    "7d": {
+      "p_bloom": 0.1939,
+      "ci_lo": 0.0,
+      "ci_hi": 0.7314,
+      "shap_top_features": [
+        {
+          "feature": "longitude",
+          "human": "Longitude",
+          "shap_value": -1.3831,
+          "method": "shap"
+        },
+        {
+          "feature": "temp_mean_7d",
+          "human": "Sustained warm week",
+          "shap_value": -0.4285,
+          "method": "shap"
+        },
+        {
+          "feature": "growing_degree_days",
+          "human": "Cumulative warmth",
+          "shap_value": -0.3051,
+          "method": "shap"
+        },
+        {
+          "feature": "dewpoint_mean_3d",
+          "human": "High humidity",
+          "shap_value": -0.283,
+          "method": "shap"
+        }
+      ]
+    }
+  },
+  "waterbody_id": "NO-OSL-01",
+  "name": "Akerselva at Oslo",
+  "region": "EU-NO",
+  "country": "NO",
+  "centroid": [
+    10.752,
+    59.92
+  ],
+  "type": "river"
+}

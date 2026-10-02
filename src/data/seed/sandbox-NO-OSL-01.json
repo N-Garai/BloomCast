@@ -1,0 +1,91 @@
+{
+  "waterbody_id": "NO-OSL-01",
+  "name": "Akerselva at Oslo",
+  "baseline_annual_high_risk_days": 26,
+  "scenarios": {
+    "temp+0_nut-0": {
+      "temp_delta_c": 0,
+      "nutrient_reduction_pct": 0,
+      "projected_p_bloom": 0.1589,
+      "projected_annual_high_risk_days": 26,
+      "label": "planning scenario, not prediction"
+    },
+    "temp+0_nut-30": {
+      "temp_delta_c": 0,
+      "nutrient_reduction_pct": 30,
+      "projected_p_bloom": 0.1589,
+      "projected_annual_high_risk_days": 26,
+      "label": "planning scenario, not prediction"
+    },
+    "temp+0_nut-50": {
+      "temp_delta_c": 0,
+      "nutrient_reduction_pct": 50,
+      "projected_p_bloom": 0.1589,
+      "projected_annual_high_risk_days": 26,
+      "label": "planning scenario, not prediction"
+    },
+    "temp+1_nut-0": {
+      "temp_delta_c": 1,
+      "nutrient_reduction_pct": 0,
+      "projected_p_bloom": 0.1589,
+      "projected_annual_high_risk_days": 26,
+      "label": "planning scenario, not prediction"
+    },
+    "temp+1_nut-30": {
+      "temp_delta_c": 1,
+      "nutrient_reduction_pct": 30,
+      "projected_p_bloom": 0.1589,
+      "projected_annual_high_risk_days": 26,
+      "label": "planning scenario, not prediction"
+    },
+    "temp+1_nut-50": {
+      "temp_delta_c": 1,
+      "nutrient_reduction_pct": 50,
+      "projected_p_bloom": 0.1589,
+      "projected_annual_high_risk_days": 26,
+      "label": "planning scenario, not prediction"
+    },
+    "temp+2_nut-0": {
+      "temp_delta_c": 2,
+      "nutrient_reduction_pct": 0,
+      "projected_p_bloom": 0.1589,
+      "projected_annual_high_risk_days": 26,
+      "label": "planning scenario, not prediction"
+    },
+    "temp+2_nut-30": {
+      "temp_delta_c": 2,
+      "nutrient_reduction_pct": 30,
+      "projected_p_bloom": 0.1589,
+      "projected_annual_high_risk_days": 26,
+      "label": "planning scenario, not prediction"
+    },
+    "temp+2_nut-50": {
+      "temp_delta_c": 2,
+      "nutrient_reduction_pct": 50,
+      "projected_p_bloom": 0.1589,
+      "projected_annual_high_risk_days": 26,
+      "label": "planning scenario, not prediction"
+    },
+    "temp+3_nut-0": {
+      "temp_delta_c": 3,
+      "nutrient_reduction_pct": 0,
+      "projected_p_bloom": 0.1589,
+      "projected_annual_high_risk_days": 26,
+      "label": "planning scenario, not prediction"
+    },
+    "temp+3_nut-30": {
+      "temp_delta_c": 3,
+      "nutrient_reduction_pct": 30,
+      "projected_p_bloom": 0.1589,
+      "projected_annual_high_risk_days": 26,
+      "label": "planning scenario, not prediction"
+    },
+    "temp+3_nut-50": {
+      "temp_delta_c": 3,
+      "nutrient_reduction_pct": 50,
+      "projected_p_bloom": 0.1589,
+      "projected_annual_high_risk_days": 26,
+      "label": "planning scenario, not prediction"
+    }
+  }
+}

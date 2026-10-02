@@ -581,11 +581,11 @@
     43.9
    ],
    "type": "Feature",
-   "ndci": 0.0294,
-   "chlorophyll_a": 13.2,
+   "ndci": -0.0133,
+   "chlorophyll_a": 9.672,
    "ndvi": 0.1,
    "fai": 0.05,
-   "ndci_trend_5d": 0.0385,
+   "ndci_trend_5d": 0.0,
    "forecast": {
     "temp_mean_3d": 15.0,
     "temp_mean_7d": 15.0,
@@ -609,6 +609,25 @@
     "citizen_scum_reports_7d": 0,
     "citizen_consensus_severity": 0.0,
     "citizen_report_density": 0.0
+   },
+   "spectral": {
+    "source": "planetary-computer-s2l2a",
+    "scene_id": "S2C_MSIL2A_20260928T163051_R083_T16TGP_20260928T200725",
+    "scene_date": "2026-09-28",
+    "cloud_cover": 0.126433,
+    "valid_pixel_fraction": 1.0,
+    "scl_masked": true,
+    "ndci_mean": -0.0133,
+    "ndci_max": -0.0133,
+    "ndci_std_7d": 0.0,
+    "ndci_trend_5d": 0.0,
+    "chlorophyll_a_mean": 9.672,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": -0.0392,
+    "fai_mean": -0.0067,
+    "forward_filled": false,
+    "lookback_days": 20,
+    "window_deg": 0.02
    }
   },
   {
@@ -1134,6 +1153,58 @@
    "ndci": 0.0511,
    "chlorophyll_a": 11.363,
    "ndci_trend_5d": 0.0
+  },
+  {
+   "waterbody_id": "IT-BEN-01",
+   "name": "Calore Irpino at Benevento",
+   "spectral": {
+    "source": "planetary-computer-s2l2a",
+    "scene_id": "S2C_MSIL2A_20260928T095031_R079_T33TVF_20260928T130916",
+    "scene_date": "2026-09-28",
+    "cloud_cover": 0.019449,
+    "valid_pixel_fraction": 0.0369,
+    "scl_masked": true,
+    "ndci_mean": 0.0455,
+    "ndci_max": 0.0455,
+    "ndci_std_7d": 0.0,
+    "ndci_trend_5d": 0.0,
+    "chlorophyll_a_mean": 11.204,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": 0.1356,
+    "fai_mean": 0.0573,
+    "forward_filled": false,
+    "lookback_days": 20,
+    "window_deg": 0.02
+   },
+   "ndci": 0.0455,
+   "chlorophyll_a": 11.204,
+   "ndci_trend_5d": 0.0
+  },
+  {
+   "waterbody_id": "NO-OSL-01",
+   "name": "Akerselva at Oslo",
+   "spectral": {
+    "source": "planetary-computer-s2l2a",
+    "scene_id": "S2B_MSIL2A_20260921T105029_R051_T32VNM_20260921T132650",
+    "scene_date": "2026-09-21",
+    "cloud_cover": 14.352851,
+    "valid_pixel_fraction": 0.1343,
+    "scl_masked": true,
+    "ndci_mean": 0.0087,
+    "ndci_max": 0.0087,
+    "ndci_std_7d": 0.0,
+    "ndci_trend_5d": 0.0,
+    "chlorophyll_a_mean": 10.22,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": 0.0213,
+    "fai_mean": 0.0059,
+    "forward_filled": false,
+    "lookback_days": 20,
+    "window_deg": 0.02
+   },
+   "ndci": 0.0087,
+   "chlorophyll_a": 10.22,
+   "ndci_trend_5d": 0.0
   }
  ],
  "streamflush": [
@@ -1193,5 +1264,5 @@
    "impervious_proxy": 0.62
   }
  ],
- "generated_at": "2026-09-29T05:50:31.954287+00:00"
+ "generated_at": "2026-10-02T13:50:11.434353+00:00"
 }

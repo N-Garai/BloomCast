@@ -15,6 +15,7 @@ from shared.config import (
     ALLOWED_ORIGIN,
     BATCH_MAX_LOCATIONS,
     BATCH_THROTTLE_PER_10MIN,
+    CITIZEN_REPORT_PER_10MIN,
     INFER_CACHE_TTL_S,
     SEED_DIR,
     UPSTREAM_TIMEOUT_S,
@@ -592,6 +593,22 @@ async def citizen_validate(request: Request):
     return {"status": decision, "observation": updated, "influence": influence}
 
 
+# Separate bucket from the batch throttle: report floods and batch fan-outs
+# must not spend each other's budget.
+_CITIZEN_THROTTLE = None
+
+
+def _citizen_throttle():
+    """Lazily build the process-wide citizen-report throttle."""
+    global _CITIZEN_THROTTLE
+    if _CITIZEN_THROTTLE is None:
+        from shared.cache import SlidingWindowThrottle
+
+        _CITIZEN_THROTTLE = SlidingWindowThrottle(
+            limit=CITIZEN_REPORT_PER_10MIN, window_s=600.0)
+    return _CITIZEN_THROTTLE
+
+
 @app.post("/v1/citizen/report")
 async def citizen_report(request: Request):
     try:
@@ -603,6 +620,19 @@ async def citizen_report(request: Request):
         return JSONResponse({"error": "Missing required fields"}, status_code=400)
     if obs.get("photo_url") and len(str(obs["photo_url"])) > 700 * 1024:
         return JSONResponse({"error": "photo must be under 500 KB"}, status_code=400)
+    # Throttled AFTER validation (same order as the batch endpoint): malformed
+    # bodies never consume budget, but a flood of well-formed reports from one
+    # IP gets a 429 instead of filling the steward queue and the database.
+    identity = request.client.host if request.client else "unknown"
+    allowed, retry_after = _citizen_throttle().check(identity)
+    if not allowed:
+        return JSONResponse(
+            {"error": "Too many reports from this client. "
+                      f"Please wait {int(retry_after)}s and try again.",
+             "kind": "throttled", "retry_after_s": retry_after},
+            status_code=429,
+            headers={"Retry-After": str(int(retry_after))},
+        )
     insert_observation(obs)
     return JSONResponse({"status": "accepted", "observation_id": obs["observation_id"]}, status_code=202)
 

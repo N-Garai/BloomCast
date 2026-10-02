@@ -1,5 +1,5 @@
 {
- "updated_at": "2026-09-29T05:50:41+00:00",
+ "updated_at": "2026-10-02T13:50:36+00:00",
  "records": [
   {
    "waterbody_id": "CH-ZUR-01",
@@ -282,6 +282,336 @@
     "chlorophyll_a_trend_5d": 0.0,
     "ndvi_mean": 0.0,
     "fai_mean": 0.0,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "CH-ZUR-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": 0.0004,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": 0.0004,
+    "chlorophyll_a_mean": 10.009,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": -0.0005,
+    "fai_mean": 0.003,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "CH-GVA-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": 0.048,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": 0.048,
+    "chlorophyll_a_mean": 11.276,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": 0.1369,
+    "fai_mean": 0.0559,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "IT-MAG-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": -0.0058,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": -0.0058,
+    "chlorophyll_a_mean": 9.856,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": -0.0056,
+    "fai_mean": -0.0006,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "DE-CON-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": 0.034,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": 0.034,
+    "chlorophyll_a_mean": 10.887,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": 0.1232,
+    "fai_mean": 0.0439,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "IT-GAR-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": 0.0418,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": 0.0418,
+    "chlorophyll_a_mean": 11.103,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": 0.1386,
+    "fai_mean": 0.0564,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "IT-COM-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": -0.0065,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": -0.0065,
+    "chlorophyll_a_mean": 9.839,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": -0.003,
+    "fai_mean": 0.0003,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "PT-ALQ-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": 0.0022,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": 0.0022,
+    "chlorophyll_a_mean": 10.054,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": -0.0223,
+    "fai_mean": -0.0001,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "ES-SNB-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": 0.0392,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": 0.0392,
+    "chlorophyll_a_mean": 11.029,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": 0.0871,
+    "fai_mean": 0.0221,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "PT-TAG-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": -0.0128,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": -0.0128,
+    "chlorophyll_a_mean": 9.686,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": -0.0501,
+    "fai_mean": -0.009,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "US-SBW-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": -0.0133,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": -0.0133,
+    "chlorophyll_a_mean": 9.672,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": -0.0392,
+    "fai_mean": -0.0067,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "US-GBY-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": 0.0558,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": 0.0558,
+    "chlorophyll_a_mean": 11.498,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": 0.1505,
+    "fai_mean": 0.0838,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "US-LCH-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": 0.0007,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": 0.0007,
+    "chlorophyll_a_mean": 10.018,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": -0.0028,
+    "fai_mean": -0.0,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "IN-VEM-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": 0.0333,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": 0.0333,
+    "chlorophyll_a_mean": 10.867,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": -0.0104,
+    "fai_mean": -0.0092,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "UG-VIC-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": 0.0742,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": 0.0742,
+    "chlorophyll_a_mean": 12.037,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": 0.1686,
+    "fai_mean": 0.0574,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "KE-NIV-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": 0.0099,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": 0.0099,
+    "chlorophyll_a_mean": 10.252,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": -0.071,
+    "fai_mean": -0.0126,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "ET-TAN-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": -0.0523,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": -0.0523,
+    "chlorophyll_a_mean": 8.774,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": -0.1923,
+    "fai_mean": -0.0578,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "PH-LGB-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": 0.0665,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": 0.0665,
+    "chlorophyll_a_mean": 11.807,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": -0.099,
+    "fai_mean": -0.0218,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "CN-TAI-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": 0.0052,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": 0.0052,
+    "chlorophyll_a_mean": 10.131,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": -0.1786,
+    "fai_mean": -0.0515,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "PT-COI-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": 0.0159,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": 0.0159,
+    "chlorophyll_a_mean": 10.406,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": 0.0069,
+    "fai_mean": 0.0111,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "BE-GHE-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": 0.0511,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": 0.0511,
+    "chlorophyll_a_mean": 11.363,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": 0.1288,
+    "fai_mean": 0.0543,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "IT-BEN-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": 0.0455,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": 0.0455,
+    "chlorophyll_a_mean": 11.204,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": 0.1356,
+    "fai_mean": 0.0573,
+    "ndci_std_7d": 0.0
+   },
+   "source": "planetary-computer-s2l2a"
+  },
+  {
+   "waterbody_id": "NO-OSL-01",
+   "date": "2026-10-02",
+   "values": {
+    "ndci_mean": 0.0087,
+    "ndci_trend_5d": 0.0,
+    "ndci_max": 0.0087,
+    "chlorophyll_a_mean": 10.22,
+    "chlorophyll_a_trend_5d": 0.0,
+    "ndvi_mean": 0.0213,
+    "fai_mean": 0.0059,
     "ndci_std_7d": 0.0
    },
    "source": "planetary-computer-s2l2a"

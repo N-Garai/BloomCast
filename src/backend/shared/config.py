@@ -40,6 +40,11 @@ UPSTREAM_RETRIES = int(os.environ.get("UPSTREAM_RETRIES", "2"))
 BATCH_MAX_LOCATIONS = int(os.environ.get("BATCH_MAX_LOCATIONS", "50"))
 BATCH_CONCURRENCY = int(os.environ.get("BATCH_CONCURRENCY", "4"))
 BATCH_THROTTLE_PER_10MIN = int(os.environ.get("BATCH_THROTTLE_PER_10MIN", "30"))
+# Citizen reports are cheap to store but expensive to moderate: an unthrottled
+# endpoint lets anyone flood the steward queue (and the Neon free-tier DB)
+# during a public demo. 20 per 10 min per IP is generous for humans submitting
+# one form at a time; floods get a 429 with Retry-After, never silent drops.
+CITIZEN_REPORT_PER_10MIN = int(os.environ.get("CITIZEN_REPORT_PER_10MIN", "20"))
 SPECTRAL_INGEST = os.environ.get("BLOOMCAST_SPECTRAL", "auto")            # auto|on|off
 
 LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
