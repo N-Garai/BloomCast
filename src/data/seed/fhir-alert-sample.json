@@ -1,7 +1,7 @@
 {
   "resourceType": "Bundle",
   "type": "collection",
-  "timestamp": "2026-10-01T08:03:28+00:00",
+  "timestamp": "2026-10-02T07:48:59+00:00",
   "entry": [
     {
       "fullUrl": "urn:uuid:comm-sample",
@@ -12,7 +12,7 @@
         "subject": {
           "reference": "Location/wb-CH-ZUR-01"
         },
-        "sent": "2026-10-01T08:03:28+00:00",
+        "sent": "2026-10-02T07:48:59+00:00",
         "recipient": [
           {
             "reference": "mailto:elena.vasquez@lisboa.pt"
@@ -85,7 +85,7 @@
         "subject": {
           "reference": "Location/wb-CH-ZUR-01"
         },
-        "effectiveDateTime": "2026-10-01T08:03:28+00:00",
+        "effectiveDateTime": "2026-10-02T07:48:59+00:00",
         "valueQuantity": {
           "value": 0.1139,
           "unit": "probability",
