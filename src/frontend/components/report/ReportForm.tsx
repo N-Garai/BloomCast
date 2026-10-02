@@ -9,6 +9,41 @@ import { getWaterbodies, type WaterbodyOption } from "@/lib/waterbodies";
 const COLORS = ["clear", "green", "brown", "blue-green", "red", "other"];
 const ODORS = ["none", "earthy", "musty", "rotten-egg", "other"];
 
+// Pseudo-option for coordinates that belong to no pilot. Submitted as-is:
+// the backend stores any string, the steward queue shows it, and training
+// joins simply match nothing (zero influence, honestly) — far better than
+// filing a Bangalore report under "Lake Zurich".
+const CUSTOM_ID = "__custom__";
+// Same radius the explorer uses to name a pin after a pilot: inside it the
+// report belongs to the pilot; outside it, the report is custom.
+const NEAREST_KM = 100;
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad;
+  const dLon = (lon2 - lon1) * rad;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * rad) * Math.cos(lat2 * rad) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(Math.max(0, 1 - a)));
+}
+
+/** Nearest pilot to a point, with distance. Centroids are [lon, lat]. */
+function nearestPilot(waterbodies: WaterbodyOption[], lat: number, lon: number) {
+  let best: WaterbodyOption | null = null;
+  let bestKm = Infinity;
+  for (const wb of waterbodies) {
+    if (!wb.centroid) continue;
+    const km = haversineKm(lat, lon, wb.centroid[1], wb.centroid[0]);
+    if (km < bestKm) {
+      bestKm = km;
+      best = wb;
+    }
+  }
+  return best ? { pilot: best, km: bestKm } : null;
+}
+
 export function ReportForm() {
   const [form, setForm] = useState({
     waterbody_id: "CH-ZUR-01",
@@ -29,6 +64,65 @@ export function ReportForm() {
   useEffect(() => {
     getWaterbodies().then(setWaterbodies);
   }, []);
+
+  // Two-way sync between the dropdown and the coordinates, so the filed
+  // waterbody_id can never silently disagree with the point:
+  //  - picking a pilot takes its centroid as the location;
+  //  - typing coordinates (or GPS) snaps the dropdown to the nearest pilot
+  //    inside NEAREST_KM, or to "Custom location" beyond it.
+  function applyCoords(nextLat: string, nextLon: string) {
+    // Empty fields are missing, not zero: Number("") is 0, and snapping the
+    // dropdown while the user is still typing would fight them.
+    const la = nextLat.trim() === "" ? NaN : Number(nextLat);
+    const lo = nextLon.trim() === "" ? NaN : Number(nextLon);
+    let waterbodyId: string | null = null;
+    if (Number.isFinite(la) && Number.isFinite(lo)) {
+      const near = nearestPilot(waterbodies, la, lo);
+      waterbodyId = near && near.km <= NEAREST_KM ? near.pilot.id : CUSTOM_ID;
+    }
+    setForm((current) => ({
+      ...current,
+      latitude: nextLat,
+      longitude: nextLon,
+      ...(waterbodyId !== null ? { waterbody_id: waterbodyId } : {}),
+    }));
+  }
+
+  function selectPilot(id: string) {
+    if (id === CUSTOM_ID) {
+      setForm((current) => ({ ...current, waterbody_id: CUSTOM_ID }));
+      return;
+    }
+    const pilot = waterbodies.find((wb) => wb.id === id);
+    if (!pilot?.centroid) {
+      setForm((current) => ({ ...current, waterbody_id: id }));
+      return;
+    }
+    // Pilot chosen: its lake location is taken automatically.
+    setForm((current) => ({
+      ...current,
+      waterbody_id: id,
+      latitude: pilot.centroid![1].toFixed(5),
+      longitude: pilot.centroid![0].toFixed(5),
+    }));
+  }
+
+  // Label shown under the dropdown: the filed name, or the nearest pilot
+  // with distance when the point is custom (no reverse-geocoder on the free
+  // tier, so "near X, N km away" is the honest area name).
+  function filingUnder() {
+    if (form.waterbody_id !== CUSTOM_ID) {
+      return waterbodies.find((wb) => wb.id === form.waterbody_id)?.name
+        ?? form.waterbody_id;
+    }
+    const la = form.latitude.trim() === "" ? NaN : Number(form.latitude);
+    const lo = form.longitude.trim() === "" ? NaN : Number(form.longitude);
+    if (Number.isFinite(la) && Number.isFinite(lo)) {
+      const near = nearestPilot(waterbodies, la, lo);
+      if (near) return `Custom location — nearest pilot ${near.pilot.name}, ~${Math.round(near.km)} km away`;
+    }
+    return "Custom location";
+  }
 
   function onPhoto(file: File | undefined) {
     if (!file) {
@@ -53,11 +147,9 @@ export function ReportForm() {
     setGpsBusy(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setForm((current) => ({
-          ...current,
-          latitude: pos.coords.latitude.toFixed(5),
-          longitude: pos.coords.longitude.toFixed(5),
-        }));
+        const nextLat = pos.coords.latitude.toFixed(5);
+        const nextLon = pos.coords.longitude.toFixed(5);
+        applyCoords(nextLat, nextLon);
         setError("");
         setGpsBusy(false);
       },
@@ -149,18 +241,22 @@ export function ReportForm() {
         <select
           id="wb"
           value={form.waterbody_id}
-          onChange={(e) => setForm({ ...form, waterbody_id: e.target.value })}
+          onChange={(e) => selectPilot(e.target.value)}
           className="w-full bg-bg-deep border border-border-subtle rounded-lg px-3 py-2.5 text-fg-primary focus:border-glow-cyan outline-none"
         >
           {waterbodies.length ? (
-            waterbodies.map((wb) => (
-              <option key={wb.id} value={wb.id}>{wb.name}</option>
-            ))
+            <>
+              {waterbodies.map((wb) => (
+                <option key={wb.id} value={wb.id}>{wb.name}</option>
+              ))}
+              <option value={CUSTOM_ID}>Custom location</option>
+            </>
           ) : (
             <option value={form.waterbody_id}>{form.waterbody_id}</option>
           )}
         </select>
         <p className="mt-1.5 text-xs text-fg-faint">Reports are anonymous — no account or email needed.</p>
+        <p className="mt-1 text-xs font-mono text-glow-cyan">Filing under: {filingUnder()}</p>
       </div>
 
       <div>
@@ -169,13 +265,13 @@ export function ReportForm() {
           <input
             type="number" step="any" placeholder="Latitude"
             value={form.latitude}
-            onChange={(e) => setForm({ ...form, latitude: e.target.value })}
+            onChange={(e) => applyCoords(e.target.value, form.longitude)}
             className="flex-1 bg-bg-deep border border-border-subtle rounded-lg px-3 py-2.5 text-fg-primary focus:border-glow-cyan outline-none font-mono"
           />
           <input
             type="number" step="any" placeholder="Longitude"
             value={form.longitude}
-            onChange={(e) => setForm({ ...form, longitude: e.target.value })}
+            onChange={(e) => applyCoords(form.latitude, e.target.value)}
             className="flex-1 bg-bg-deep border border-border-subtle rounded-lg px-3 py-2.5 text-fg-primary focus:border-glow-cyan outline-none font-mono"
           />
           <button

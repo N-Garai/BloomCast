@@ -24,8 +24,12 @@ def build_alert_bundle(
     comm_id = f"comm-{alert_id}"
     obs_id = f"obs-{alert_id}"
     loc_id = f"wb-{waterbody_id}"
+    # Driver contributions are model-internal scores, not percentages: printing
+    # "-138%" in a clinical message reads as nonsense (and over 100% is
+    # absurd), so the human sentence carries direction words only. Exact
+    # values stay in the SHAP payload / forecast endpoint for analysts.
     summary = "; ".join(
-        f"{f['human']} {f['shap_value'] > 0 and '+' or ''}{int(round(f['shap_value'] * 100))}%"
+        f"{f['human']} ({'raises' if f['shap_value'] > 0 else 'lowers'} risk)"
         for f in shap_top_features[:3]
     )
     return {
@@ -55,7 +59,7 @@ def build_alert_bundle(
                         {
                             "contentAttachment": {
                                 "contentType": "application/json",
-                                "url": f"https://bloomcast-api.onrender.com/forecast/{waterbody_id}.json",
+                                "url": f"https://bloomcast-api.onrender.com/v1/forecast/{waterbody_id}",
                                 "title": "Detailed forecast with SHAP explanations",
                             }
                         },
@@ -95,7 +99,7 @@ def build_alert_bundle(
                     "type": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v3-RoleCode", "code": "LAKE", "display": "Lake"}]}],
                     "address": {"city": city, "country": country},
                     "position": {"longitude": longitude, "latitude": latitude, "altitude": altitude},
-                    "physicalType": {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/location-physical-type", "code": "wa", "display": "Ward"}]},
+                    "physicalType": {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/location-physical-type", "code": "area", "display": "Area"}]},
                 },
             },
         ],

@@ -145,7 +145,7 @@ with open(os.path.join(out_dir, "fhir-alert-sample.json"), "w", encoding="utf-8"
         threshold=0.6,
         model_version=forecast.get("model_version", "unknown"),
         sent_at=dt.datetime.now(dt.timezone.utc).replace(microsecond=0).isoformat(),
-        recipient="elena.vasquez@lisboa.pt",
+        recipient="water-quality@example.org",
         shap_top_features=forecast["shap_top_features"],
     ), f, indent=2, default=str)
 
