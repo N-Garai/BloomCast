@@ -43,7 +43,10 @@ def build_alert_bundle(
                     "resourceType": "Communication",
                     "id": comm_id,
                     "status": "completed",
-                "subject": {"reference": f"Location/{loc_id}"},
+                # The alert is ABOUT a waterbody, not about a patient: HAPI
+                # (correctly) rejects Location targets on Communication.subject,
+                # while Communication.about accepts any resource type.
+                "about": [{"reference": f"Location/{loc_id}"}],
                 "sent": sent_at,
                 **({"recipient": [{"reference": f"mailto:{recipient}"}]}
                    if recipient else {}),
@@ -81,7 +84,6 @@ def build_alert_bundle(
                     "status": "final",
                     "category": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "laboratory"}]}],
                     "code": {"coding": [{"system": "https://bloomcast-api.onrender.com/fhir/codes/bloom-risk", "code": "cyanobacteria-bloom-probability", "display": f"Cyanobacteria bloom probability ({horizon_days}-day horizon)"}]},
-                    "subject": {"reference": f"Location/{loc_id}"},
                     "effectiveDateTime": sent_at,
                     "valueQuantity": {"value": p_bloom, "unit": "probability", "system": "http://unitsofmeasure.org", "code": "1"},
                     "component": [

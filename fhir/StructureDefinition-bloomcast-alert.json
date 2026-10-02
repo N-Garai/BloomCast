@@ -27,8 +27,9 @@
         "mustSupport": true
       },
       {
-        "id": "Communication.subject",
-        "path": "Communication.subject",
+        "id": "Communication.about",
+        "path": "Communication.about",
+        "min": 1,
         "type": [
           { "code": "Reference", "targetProfile": ["http://hl7.org/fhir/StructureDefinition/Location"] }
         ],

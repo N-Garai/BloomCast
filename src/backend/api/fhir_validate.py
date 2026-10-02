@@ -50,7 +50,7 @@ ISO_DATETIME = re.compile(
 CHECKED = [
     "Bundle.resourceType / type / timestamp",
     "resource.id matches the R4 id pattern",
-    "Communication.status / subject / sent / payload",
+    "Communication.status / about(Location) / sent / payload",
     "Observation.status / code / valueQuantity within [0,1]",
     "Location.position coordinate ranges",
     f"required extensions {sorted(REQUIRED_EXTENSIONS)}",
@@ -83,9 +83,13 @@ def _check_resource(resource, issues, where):
         elif status not in COMMUNICATION_STATUS:
             _issue(issues, f"{where}.status",
                    f"status {status!r} is not a bound Communication status code")
-        if not resource.get("subject"):
-            _issue(issues, f"{where}.subject",
-                   "Communication.subject is required and must reference the Location")
+        about = resource.get("about") or []
+        about_refs = [a.get("reference") for a in about
+                      if isinstance(a, dict) and a.get("reference")]
+        if not any(str(r).startswith("Location/") for r in about_refs):
+            _issue(issues, f"{where}.about",
+                   "Communication.about must reference the Location "
+                   "(subject cannot carry a Location target — servers reject it)")
         if not resource.get("sent"):
             _issue(issues, f"{where}.sent", "Communication.sent is required")
         if not resource.get("payload"):
@@ -203,11 +207,19 @@ def validate_bundle(bundle) -> dict:
 
     # Every intra-bundle reference must resolve. A dangling reference is the
     # classic interoperability failure: the bundle parses, the consumer 404s.
+    # Both subject (legacy bundles) and about (current) are followed.
     for where, resource in resources:
-        ref = (resource.get("subject") or {}).get("reference")
-        if ref and "/" in ref and ref not in present_ids:
-            _issue(issues, f"{where}.subject.reference",
-                   f"reference {ref!r} does not resolve to a resource in this bundle")
+        refs = []
+        subj = (resource.get("subject") or {}).get("reference")
+        if subj:
+            refs.append((f"{where}.subject.reference", subj))
+        for a in resource.get("about") or []:
+            if isinstance(a, dict) and a.get("reference"):
+                refs.append((f"{where}.about.reference", a["reference"]))
+        for path, ref in refs:
+            if "/" in ref and ref not in present_ids:
+                _issue(issues, path,
+                       f"reference {ref!r} does not resolve to a resource in this bundle")
 
     if not any(r.get("resourceType") == "Communication" for _, r in resources):
         _issue(issues, "$.entry", "bundle contains no Communication resource")

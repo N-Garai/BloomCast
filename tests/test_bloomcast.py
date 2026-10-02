@@ -168,7 +168,7 @@ def test_fhir_validation_catches_dangling_reference():
     from api.fhir_validate import validate_bundle
 
     bundle = json.loads((SEED / "fhir-alert-sample.json").read_text())
-    bundle["entry"][0]["resource"]["subject"] = {"reference": "Location/does-not-exist"}
+    bundle["entry"][0]["resource"]["about"] = [{"reference": "Location/does-not-exist"}]
     report = validate_bundle(bundle)
     assert not report["ok"]
     assert any("does not resolve" in i["message"] for i in report["issues"])
