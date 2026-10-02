@@ -488,6 +488,66 @@ async def infer_score(request: Request):
         return _assess_error_response(exc)
 
 
+@app.get("/v1/fhir/Communication/custom")
+async def fhir_bundle_custom(lat: float, lon: float, threshold: float = 0.6):
+    """Ad-hoc bundle for arbitrary coordinates — pilots not required.
+
+    Defined BEFORE the ``{alert_id}`` route so "custom" is never swallowed as
+    an id. Runs the same live assessment as the explorer, names the Location
+    after the nearest pilot inside 100 km (the shared naming rule) and falls
+    back to an honest "Custom location (lat, lon)" beyond it. No recipient is
+    set — the bundle is built to be *sent* by the caller (see the FHIR page's
+    push action), not addressed by the server. 400 when the location cannot
+    be assessed or carries no model estimate; the self-reported validation
+    always travels with the bundle.
+    """
+    try:
+        assessment = await assess_location(lat, lon)
+    except AssessError as exc:
+        return _assess_error_response(exc)
+    estimate = (assessment or {}).get("model_estimate") or {}
+    if estimate.get("p_bloom") is None:
+        return JSONResponse(
+            {"error": "No model estimate available for this location right now."},
+            status_code=400,
+        )
+    nearest = (assessment or {}).get("nearest_waterbody") or {}
+    distance = nearest.get("distance_km")
+    if nearest.get("id") and isinstance(distance, (int, float)) and distance < 100:
+        wid, name = nearest["id"], nearest.get("name") or nearest["id"]
+        country = ""
+        for f in seed.get_waterbodies():
+            props = f.get("properties", {}) if isinstance(f, dict) else {}
+            if props.get("id") == wid:
+                country = str(props.get("country") or "")
+                break
+    else:
+        wid = f"custom-{lat:.2f}-{lon:.2f}".replace(" ", "")
+        name = f"Custom location ({lat:.2f}, {lon:.2f})"
+        country = ""
+    drivers = estimate.get("drivers") or []
+    bundle = build_alert_bundle(
+        alert_id=f"adhoc-{wid}",
+        waterbody_id=wid,
+        waterbody_name=name,
+        city="",
+        country=country,
+        longitude=float(assessment.get("longitude", lon)),
+        latitude=float(assessment.get("latitude", lat)),
+        altitude=0.0,
+        horizon_days=5,
+        p_bloom=float(estimate.get("p_bloom", 0.0)),
+        ci_lo=float(estimate.get("ci_lo", 0.0)),
+        ci_hi=float(estimate.get("ci_hi", 0.0)),
+        threshold=float(threshold),
+        model_version=str(estimate.get("model_version") or __version__),
+        sent_at=datetime.now(timezone.utc).isoformat(),
+        recipient=None,
+        shap_top_features=drivers,
+    )
+    return {**bundle, "validation": validate_bundle(bundle)}
+
+
 @app.get("/v1/fhir/Communication/{alert_id}")
 async def fhir_bundle(alert_id: str):
     # "sample" returns the committed example bundle; any other id resolves to
@@ -527,6 +587,7 @@ async def fhir_bundle(alert_id: str):
         sent_at=datetime.now(timezone.utc).isoformat(),
         recipient="bloomcast-alerts@example.org",
         shap_top_features=shap,
+        forecast_url=f"https://bloomcast-api.onrender.com/v1/forecast/{alert_id}",
     )
     return {**bundle, "validation": validate_bundle(bundle)}
 

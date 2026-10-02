@@ -638,6 +638,63 @@
         }
       }
     },
+    "/v1/fhir/Communication/custom": {
+      "get": {
+        "summary": "Fhir Bundle Custom",
+        "description": "Ad-hoc bundle for arbitrary coordinates \u2014 pilots not required.\n\nDefined BEFORE the ``{alert_id}`` route so \"custom\" is never swallowed as\nan id. Runs the same live assessment as the explorer, names the Location\nafter the nearest pilot inside 100 km (the shared naming rule) and falls\nback to an honest \"Custom location (lat, lon)\" beyond it. No recipient is\nset \u2014 the bundle is built to be *sent* by the caller (see the FHIR page's\npush action), not addressed by the server. 400 when the location cannot\nbe assessed or carries no model estimate; the self-reported validation\nalways travels with the bundle.",
+        "operationId": "fhir_bundle_custom_v1_fhir_Communication_custom_get",
+        "parameters": [
+          {
+            "name": "lat",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Lat"
+            }
+          },
+          {
+            "name": "lon",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number",
+              "title": "Lon"
+            }
+          },
+          {
+            "name": "threshold",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number",
+              "default": 0.6,
+              "title": "Threshold"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/v1/fhir/Communication/{alert_id}": {
       "get": {
         "summary": "Fhir Bundle",
@@ -983,9 +1040,9 @@
       }
     },
     "/{full_path}": {
-      "head": {
+      "get": {
         "summary": "Serve Frontend",
-        "operationId": "serve_frontend__full_path__head",
+        "operationId": "serve_frontend__full_path__get",
         "parameters": [
           {
             "name": "full_path",
@@ -1018,9 +1075,9 @@
           }
         }
       },
-      "get": {
+      "head": {
         "summary": "Serve Frontend",
-        "operationId": "serve_frontend__full_path__head",
+        "operationId": "serve_frontend__full_path__get",
         "parameters": [
           {
             "name": "full_path",

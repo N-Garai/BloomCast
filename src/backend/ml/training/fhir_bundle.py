@@ -18,7 +18,7 @@ def build_alert_bundle(
     threshold: float,
     model_version: str,
     sent_at: str,
-    recipient: str,
+    recipient: str | None,
     shap_top_features: list,
 ) -> dict:
     comm_id = f"comm-{alert_id}"
@@ -43,10 +43,11 @@ def build_alert_bundle(
                     "resourceType": "Communication",
                     "id": comm_id,
                     "status": "completed",
-                    "subject": {"reference": f"Location/{loc_id}"},
-                    "sent": sent_at,
-                    "recipient": [{"reference": f"mailto:{recipient}"}],
-                    "sender": {
+                "subject": {"reference": f"Location/{loc_id}"},
+                "sent": sent_at,
+                **({"recipient": [{"reference": f"mailto:{recipient}"}]}
+                   if recipient else {}),
+                "sender": {
                         "display": "BloomCast Early Warning System",
                         "identifier": {"system": "https://bloomcast-api.onrender.com", "value": model_version},
                     },

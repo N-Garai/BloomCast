@@ -225,6 +225,36 @@ def test_fhir_endpoints_report_validation():
     body = sample.json()
     assert body["validation"]["ok"] is True, body["validation"]["issues"]
 
+
+def test_fhir_custom_location_bundle():
+    """Ad-hoc bundles work for any coordinates, not just pilot ids.
+
+    Near a pilot the Location takes the pilot name; far away it stays an
+    honest custom point. Garbage coordinates are a 400, never a bundle.
+    """
+    from fastapi.testclient import TestClient
+    from api.main import app
+
+    client = TestClient(app, raise_server_exceptions=False)
+    near = client.get("/v1/fhir/Communication/custom?lat=47.38&lon=8.54")
+    assert near.status_code == 200, near.text
+    body = near.json()
+    assert body["validation"]["ok"] is True, body["validation"]["issues"]
+    loc = [e["resource"] for e in body["entry"]
+           if e["resource"]["resourceType"] == "Location"][0]
+    assert "Zurich" in loc["name"], loc["name"]
+    assert "recipient" not in body["entry"][0]["resource"], (
+        "ad-hoc bundles must not invent an addressee")
+
+    far = client.get("/v1/fhir/Communication/custom?lat=12.97&lon=77.59")
+    assert far.status_code == 200, far.text
+    far_loc = [e["resource"] for e in far.json()["entry"]
+               if e["resource"]["resourceType"] == "Location"][0]
+    assert "Custom location" in far_loc["name"], far_loc["name"]
+
+    bad = client.get("/v1/fhir/Communication/custom?lat=999&lon=8.54")
+    assert bad.status_code == 400
+
     live = client.get("/v1/fhir/Communication/CH-ZUR-01")
     assert live.status_code == 200, live.text
     assert live.json()["validation"]["ok"] is True

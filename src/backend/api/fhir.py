@@ -18,16 +18,27 @@ def build_alert_bundle(
     threshold: float,
     model_version: str,
     sent_at: str,
-    recipient: str,
+    recipient: str | None,
     shap_top_features: list,
+    forecast_url: str | None = None,
 ) -> dict:
     comm_id = f"comm-{alert_id}"
     obs_id = f"obs-{alert_id}"
     loc_id = f"wb-{waterbody_id}"
+    # Driver contributions are model-internal scores, not percentages: printing
+    # "-138%" in a clinical message reads as nonsense (and over 100% is
+    # absurd), so the human sentence carries direction words only. Exact
+    # values stay in the SHAP payload / forecast endpoint for analysts.
     summary = "; ".join(
-        f"{f['human']} {f['shap_value'] > 0 and '+' or ''}{int(round(f['shap_value'] * 100))}%"
+        f"{f['human']} ({'raises' if f['shap_value'] > 0 else 'lowers'} risk)"
         for f in shap_top_features[:3]
     )
+    # The attachment must resolve: pilot bundles link their forecast endpoint
+    # (SHAP included); ad-hoc custom bundles have no forecast endpoint, so
+    # they link the dashboard rather than a URL that 404s.
+    attachment_url = forecast_url or "https://bloomcast-api.onrender.com/dashboard"
+    attachment_title = ("Detailed forecast with SHAP explanations"
+                        if forecast_url else "BloomCast dashboard")
     return {
         "resourceType": "Bundle",
         "type": "collection",
@@ -39,10 +50,11 @@ def build_alert_bundle(
                     "resourceType": "Communication",
                     "id": comm_id,
                     "status": "completed",
-                    "subject": {"reference": f"Location/{loc_id}"},
-                    "sent": sent_at,
-                    "recipient": [{"reference": f"mailto:{recipient}"}],
-                    "sender": {
+                "subject": {"reference": f"Location/{loc_id}"},
+                "sent": sent_at,
+                **({"recipient": [{"reference": f"mailto:{recipient}"}]}
+                   if recipient else {}),
+                "sender": {
                         "display": "BloomCast Early Warning System",
                         "identifier": {"system": "https://bloomcast-api.onrender.com", "value": model_version},
                     },
@@ -55,8 +67,8 @@ def build_alert_bundle(
                         {
                             "contentAttachment": {
                                 "contentType": "application/json",
-                                "url": f"https://bloomcast-api.onrender.com/dashboard",
-                                "title": "Detailed forecast with SHAP explanations",
+                                "url": attachment_url,
+                                "title": attachment_title,
                             }
                         },
                     ],
@@ -95,7 +107,7 @@ def build_alert_bundle(
                     "type": [{"coding": [{"system": "http://terminology.hl7.org/CodeSystem/v3-RoleCode", "code": "LAKE", "display": "Lake"}]}],
                     "address": {"city": city, "country": country},
                     "position": {"longitude": longitude, "latitude": latitude, "altitude": altitude},
-                    "physicalType": {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/location-physical-type", "code": "wa", "display": "Ward"}]},
+                    "physicalType": {"coding": [{"system": "http://terminology.hl7.org/CodeSystem/location-physical-type", "code": "area", "display": "Area"}]},
                 },
             },
         ],
