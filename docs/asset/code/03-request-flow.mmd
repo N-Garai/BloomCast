@@ -1,0 +1,37 @@
+%% BloomCast request flow: coordinates to grounded report.
+flowchart TD
+    IN(["lat, lon<br/>map click, GPS, pilot, preset"])
+    EP["GET /v1/infer or /v1/explore"]
+    W["Open-Meteo live<br/>forecast + 30-day archive"]
+    SP["climatology.json<br/>measured or fallback prior"]
+    ST["Pilot statics<br/>area lookup"]
+    CZ["Citizen DB<br/>approved reports, 25 km, 7 days"]
+    ROW["Live 32-dim row"]
+    HEUR["StreamFlush heuristic<br/>always returned"]
+    TIER{"Spectral prior present<br/>and real-label artifacts?"}
+    FULL["full-32 tier<br/>LightGBM + CNN + ensemble"]
+    WO["weather-only tier<br/>real-label variant"]
+    RESP["Response<br/>tier, provenance, CI, caveats"]
+    REP["POST /v1/report<br/>grounded AI brief + PDF"]
+    FHIR["FHIR bundle<br/>Communication + Observation + Location"]
+    ALERT["Threshold watch<br/>browser + ntfy"]
+
+    IN --> EP
+    EP --> W
+    EP --> SP
+    EP --> ST
+    EP --> CZ
+    W --> ROW
+    SP --> ROW
+    ST --> ROW
+    CZ --> ROW
+    ROW --> HEUR
+    ROW --> TIER
+    TIER --> FULL
+    TIER --> WO
+    FULL --> RESP
+    WO --> RESP
+    HEUR --> RESP
+    RESP --> REP
+    RESP --> FHIR
+    RESP --> ALERT

@@ -129,8 +129,16 @@ included.
 
 ## Data flow
 
-Visual version for judges and new contributors: [`asset/architecture.mmd`](asset/architecture.mmd)
-(Mermaid flowchart — GitHub renders it inline when included in markdown).
+Diagrams for judges and new contributors — rendered PNGs with matching
+Mermaid source beside each one:
+
+| Diagram | PNG | Source |
+|---|---|---|
+| System architecture (one container, free tier) | [`asset/diagram/01-architecture.png`](asset/diagram/01-architecture.png) | [`asset/code/01-architecture.mmd`](asset/code/01-architecture.mmd) |
+| Offline pipeline (nightly jobs + manual training) | [`asset/diagram/02-pipeline.png`](asset/diagram/02-pipeline.png) | [`asset/code/02-pipeline.mmd`](asset/code/02-pipeline.mmd) |
+| Request flow (coordinates → grounded report) | [`asset/diagram/03-request-flow.png`](asset/diagram/03-request-flow.png) | [`asset/code/03-request-flow.mmd`](asset/code/03-request-flow.mmd) |
+| Model architecture (ensemble + serving gate) | [`asset/diagram/04-model.png`](asset/diagram/04-model.png) | [`asset/code/04-model.mmd`](asset/code/04-model.mmd) |
+| Database (citizen + alert storage) | [`asset/diagram/05-database.png`](asset/diagram/05-database.png) | [`asset/code/05-database.mmd`](asset/code/05-database.mmd) |
 
 ```text
 Scheduled: GitHub Actions · 02:00 UTC · free for public repositories

@@ -1,0 +1,29 @@
+%% BloomCast model architecture. Served from committed artifacts only.
+flowchart TD
+    ROW["Live 32-dim row<br/>15 weather + 8 spectral + 5 citizen + 4 static"]
+    SEQ["30-day sequences<br/>built from weather windows"]
+    LGBM["LightGBM branch<br/>32-dim tabular"]
+    CNN["1D-CNN branch<br/>30 days x 6 channels"]
+    ENS["Ensemble meta-learner<br/>combines branch outputs"]
+    ISO["Isotonic calibrator<br/>fit on out-of-fold predictions"]
+    OUT["p_bloom + CI band<br/>+ SHAP top drivers"]
+    TRN["Training (offline)<br/>23,570 CAML rows, 5-fold time-series OOF"]
+    WGT["Citizen sample weights<br/>validated only, capped at 15%"]
+    WO["Weather-only variant<br/>19 features, rest masked"]
+    GATE{"Serving gate<br/>test_committed_artifacts_are_real"}
+    ART["Committed artifacts<br/>tick-tick-bloom only"]
+
+    ROW --> LGBM
+    ROW --> SEQ
+    SEQ --> CNN
+    LGBM --> ENS
+    CNN --> ENS
+    ENS --> ISO
+    ISO --> OUT
+    TRN --> LGBM
+    TRN --> CNN
+    WGT --> TRN
+    TRN --> WO
+    GATE --> ART
+    ART --> LGBM
+    ART --> WO

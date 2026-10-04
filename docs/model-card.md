@@ -111,7 +111,7 @@ and staleness of every number are visible.
    Per-region skill is published on the scorecard. Pilots outside the U.S.
    training range are extrapolation.
 6. **Spectral prior.** The committed table carries measured seasonal means
-   for 19 pilots (September 2026 Sentinel-2 scenes, cloud-gated, water-masked)
+   for 22 pilots (September 2026 Sentinel-2 scenes, cloud-gated, water-masked)
    and a modelled latitude × month fallback for the rest, each labelled as
    what it is. Scene dates go stale — re-run the seed spectral refresh before
    relying on a prior for a new season.

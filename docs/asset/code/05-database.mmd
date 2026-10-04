@@ -1,0 +1,27 @@
+%% BloomCast database: what is stored, how it flows, where it lives.
+flowchart TD
+    FORM["Citizen report form<br/>coords + photo + notes"]
+    SUB["Alert subscription form<br/>waterbody + threshold + horizon"]
+    OBS[("citizen_observations<br/>report + GPS + photo data-URL<br/>+ steward verdict")]
+    ALR[("alert_subscriptions<br/>waterbody + threshold + horizon")]
+    INF[("forecast_influence_log<br/>prior vs new probability<br/>+ contributing report ids")]
+    Q["Steward queue<br/>approve or reject"]
+    WATCH["Threshold watch<br/>60 s poll while page open"]
+    FEAT["Live citizen features<br/>approved, 25 km, 7 days"]
+    TRN["Retrain weights<br/>validated share, capped 15%"]
+    LITE[("Local SQLite file<br/>default, wiped on redeploy")]
+    NEON[("Neon Postgres<br/>via DATABASE_URL, survives restarts")]
+
+    FORM --> OBS
+    SUB --> ALR
+    OBS --> Q
+    Q --> FEAT
+    Q --> TRN
+    Q --> INF
+    ALR --> WATCH
+    OBS --> LITE
+    ALR --> LITE
+    INF --> LITE
+    OBS --> NEON
+    ALR --> NEON
+    INF --> NEON

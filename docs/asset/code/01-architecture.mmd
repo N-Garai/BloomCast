@@ -1,0 +1,23 @@
+%% BloomCast system architecture. One Render Docker container serves all.
+flowchart TD
+    Browser([Visitor browser])
+    Render["Render free tier<br/>1 Docker container"]
+    API["FastAPI backend<br/>api/main.py"]
+    FE["Next.js static export<br/>served by FastAPI"]
+    OM["Open-Meteo<br/>live weather, keyless"]
+    DATA["Committed data<br/>seeds, climatology, artifacts"]
+    DB[("Citizen + alert DB<br/>SQLite default<br/>Neon Postgres via DATABASE_URL")]
+    NTFY["ntfy.sh<br/>phone alerts, keyless"]
+    GH["GitHub Actions<br/>nightly 02:00 UTC"]
+    SAT["Planetary Computer<br/>Sentinel-2, anonymous"]
+
+    Browser --> Render
+    Render --> API
+    Render --> FE
+    API --> OM
+    API --> DATA
+    API --> DB
+    Browser --> NTFY
+    GH --> OM
+    GH --> SAT
+    GH --> DATA

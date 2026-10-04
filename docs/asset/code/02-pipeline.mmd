@@ -1,0 +1,26 @@
+%% BloomCast offline pipeline. Nothing here runs in the request path.
+flowchart TD
+    GH["GitHub Actions<br/>02:00 UTC nightly"]
+    OM["Open-Meteo<br/>forecast + archive"]
+    PC["Planetary Computer STAC<br/>newest usable scene, cloud-gated"]
+    ING["ingested-features.json<br/>per-pilot spectral blocks"]
+    CLG["generate_climatology.py"]
+    CLM["climatology.json<br/>measured seasonal means"]
+    SG["generate_seed.py"]
+    SEED["seed/*.json<br/>forecasts, sandbox, replay, scorecard"]
+    CAML["CAML .sb labels<br/>manual, local only"]
+    WC["weather_cache.csv<br/>beside labels, not in git"]
+    EXP["export_artifacts.py<br/>manual, local"]
+    ART["ml/artifacts (10 files)<br/>real-label LightGBM + CNN"]
+
+    GH --> OM
+    GH --> PC
+    OM --> ING
+    PC --> ING
+    ING --> CLG
+    CLG --> CLM
+    ING --> SG
+    SG --> SEED
+    CAML --> EXP
+    WC --> EXP
+    EXP --> ART
