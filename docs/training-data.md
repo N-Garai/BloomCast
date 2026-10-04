@@ -6,7 +6,7 @@ stand-in (see `model-card.md`) only when they are absent.
 To train on real in-situ cyanobacteria labels, provide **either** input —
 they carry the same underlying labels:
 
-## Option A — competition CSVs (preferred, exact schema)
+## Option A — competition CSVs (exact competition schema)
 
 1. Create a free account at https://www.drivendata.org/competitions/143/tick-tick-bloom/
 2. Download `train_labels.csv` (`uid, severity 1–5, density`) and `metadata.csv`
@@ -25,7 +25,8 @@ the `.sb` data file (or a CAML csv), drop it in the data dir instead:
 
 ```bash
 export CAML_DIR=/path/to/caml
-# optional quality filter — drop samples taken far from water (manual Table 4):
+# optional quality filter — drop samples taken far from water (CAML
+# documentation, Table 4):
 export CAML_MAX_DISTANCE_M=1000
 ```
 

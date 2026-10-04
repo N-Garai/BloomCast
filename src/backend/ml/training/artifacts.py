@@ -1,7 +1,8 @@
-"""Model artifact save/load for the Kaggle training flow.
+"""Model artifact save/load for the cloud training flow.
 
-Training is heavy (labels + weather join + CV + CNN) and belongs on Kaggle's
-free compute — see docs/kaggle-training.md. This module serializes everything
+Training is heavy (labels + weather join + CV + CNN) and belongs on free
+cloud compute (Colab was used for the committed model; Kaggle works the
+same) — see docs/kaggle-training.md. This module serializes everything
 the backend needs for inference-only serving:
 
   model.txt      LightGBM native booster (no sklearn wrapper needed to serve)

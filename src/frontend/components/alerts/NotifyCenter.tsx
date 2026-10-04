@@ -69,9 +69,8 @@ function writeList(key: string, values: string[], cap: number) {
  * Honest limits (also documented in docs/alert-delivery.md): there is no
  * background dispatcher on the free tier — Render has no cron/workers and
  * browsers cannot push to a closed page — so checks run while this page
- * stays open. KiloNOVAScout solves the same gap server-side with an
- * ALERT_WEBHOOK_URL that needs an always-on host; ntfy is our zero-host
- * equivalent of that webhook channel.
+ * stays open. The server-side alternative is a webhook URL on an always-on
+ * host; ntfy is the zero-host equivalent of that webhook channel.
  */
 export function NotifyCenter({ subscriberKey, waterbodies }: {
   subscriberKey: string;

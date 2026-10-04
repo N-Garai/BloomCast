@@ -602,7 +602,7 @@ def _fit_all():
 
 
 def _load_bundle():
-    """Artifact-first bundle: Kaggle-exported model when valid, else None.
+    """Artifact-first bundle: cloud-exported model when valid, else None.
 
     The nightly/CI job then becomes pure inference — no training, no labels,
     no weather join. Falls back to _fit_all() on any problem. The artifacts are

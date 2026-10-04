@@ -205,7 +205,7 @@ def test_fhir_builders_produce_valid_bundles():
         waterbody_id="PT-COI-01", waterbody_name="Mondego River at Coimbra",
         city="Coimbra", country="PT", longitude=-8.4297, latitude=40.2068,
         altitude=30, horizon_days=5, p_bloom=0.42, ci_lo=0.2, ci_hi=0.66,
-        threshold=0.5, model_version="v2.2.0-kaggle-labels",
+        threshold=0.5, model_version="v9.9.9-test-fixture",
         sent_at="2026-01-01T00:00:00+00:00", recipient="a@example.org",
         shap_top_features=[{"human": "Warm week", "shap_value": 0.2}],
     )
@@ -563,7 +563,7 @@ def test_citizen_report_is_throttled_per_client(monkeypatch):
     import api.main as mainmod
 
     monkeypatch.setattr(mainmod, "_CITIZEN_THROTTLE",
-                        SlidingWindowThrottle(limit=2, window_s=600.0))
+                        SlidingWindowThrottle(limit=3, window_s=600.0))
     client = TestClient(mainmod.app, raise_server_exceptions=False)
 
     assert client.post("/v1/citizen/report", json={}).status_code == 400
@@ -575,11 +575,22 @@ def test_citizen_report_is_throttled_per_client(monkeypatch):
         "longitude": 8.5,
         "water_color": "green",
     }
-    for i in range(2):
-        body = dict(good, observation_id=f"throttle-probe-{i}")
-        assert client.post("/v1/citizen/report", json=body).status_code == 202
-    body = dict(good, observation_id="throttle-probe-over")
-    r = client.post("/v1/citizen/report", json=body)
+    # Unique ids per run: leftover rows in a dev database must not turn a
+    # rerun into a false throttle trip.
+    import time as _time
+    tag = str(int(_time.time() * 1000))[-6:]
+    first = dict(good, observation_id=f"throttle-probe-{tag}-0")
+    assert client.post("/v1/citizen/report", json=first).status_code == 202
+    # Same id twice is a 409 naming the duplicate, never a 500: the first
+    # POST already accepted it. (Budget headroom matters here — the throttle
+    # runs before the insert, so this needs a spare check.)
+    r2 = client.post("/v1/citizen/report", json=first)
+    assert r2.status_code == 409
+    assert r2.json().get("kind") == "duplicate"
+    second = dict(good, observation_id=f"throttle-probe-{tag}-1")
+    assert client.post("/v1/citizen/report", json=second).status_code == 202
+    over = dict(good, observation_id=f"throttle-probe-{tag}-over")
+    r = client.post("/v1/citizen/report", json=over)
     assert r.status_code == 429
     assert r.json().get("kind") == "throttled"
     assert "retry-after" in {k.lower() for k in r.headers}
@@ -901,7 +912,8 @@ def test_model_estimate_routes_by_data_availability():
     """V3-11: the real-label full model must actually serve when input allows.
 
     Before this, `_model_estimate` always used the weather-only variant, so the
-    committed `v2.2.0-kaggle-labels` model reached zero users. The routing is
+    committed real-label full model (then file-versioned `v2.2.0-kaggle-labels`,
+    Colab-trained like every BloomCast model) reached zero users. The routing is
     asserted in both directions: full tier when spectral input exists, and the
     weather-only tier when it does not.
     """

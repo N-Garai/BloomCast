@@ -1,4 +1,4 @@
-"""Export serving artifacts after training (the Kaggle step).
+"""Export serving artifacts after training (the cloud-training step).
 
 Usage (local or Kaggle — see docs/kaggle-training.md):
     TICKTICKBLOOM_DIR=/path/to/csvs python scripts/export_artifacts.py [--allow-synthetic]

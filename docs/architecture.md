@@ -290,8 +290,8 @@ visitors know the gesture exists before they need it.
   forces the film on. Useful for QA and for visitors who want to settle the
   question once for the machine.
 
-The film is verified in real headless Chrome over CDP (`.agent/v2/probe.mjs`),
-not just by inspecting build output. The default run screenshots each act,
+The film is verified in real headless Chrome over CDP (not just by inspecting
+build output). The default run screenshots each act,
 measures the real time from curtain mount to gate arm, dispatches a genuine wheel
 or touch gesture, and asserts the settled page state; it also reports any
 selector the film animates that the markup never renders, which is how a dead

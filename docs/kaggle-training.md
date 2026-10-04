@@ -1,19 +1,27 @@
-# Training on Kaggle, serving from the repo
+# Training on Colab (or Kaggle), serving from the repo
 
 Training the full pipeline (weather join over thousands of labeled samples,
 5-fold CV, CNN) is slow on a laptop and wasteful on every nightly run. The
-intended flow: **train once on Kaggle's free compute, export artifacts, commit
-them — the backend and nightly job then do pure inference.**
+intended flow: **train once on free cloud compute, export artifacts, commit
+them — the backend and nightly job then do pure inference.** The committed
+model (`v2.1.0-real-labels`) was trained this way on Google Colab against the
+CAML labels; Kaggle works identically and remains a supported alternative.
 
 ## Why this works
 
-- Kaggle gives free CPUs/GPUs and free internet for the Open-Meteo join.
+- Colab and Kaggle both give free GPUs and free internet for the Open-Meteo join.
 - The exported artifacts are tiny and dependency-light: LightGBM native
-  `model.txt` (~600 KB), numpy CNN weights (~7 KB), isotonic knots (JSON),
+  `model.txt` (~1 MB), numpy CNN weights (~7 KB), isotonic knots (JSON),
   logistic coefficients (npz). No ONNX runtime, no torch, no extra deps.
 - Serving needs only `lightgbm` + `numpy` + `scikit-learn` (already required).
 
 ## Steps
+
+**Colab is the preferred platform** — the committed model was trained there,
+and the notebook defaults assume it. Kaggle works identically through the same
+file; nothing below is Colab-only except where marked. The notebook detects
+its environment itself (Colab vs `/kaggle/working` vs plain local checkout),
+so there is no per-platform fork to keep in sync.
 
 1. **Get the labels** (one time) — either:
    - competition CSVs (`train_labels.csv` + `metadata.csv`, free DrivenData
@@ -40,13 +48,13 @@ them — the backend and nightly job then do pure inference.**
      the session `/content/` (Drive survives disconnects, session files don't).
    It trains, exports, and self-verifies. Expected final line: `reload OK …`
    plus OOF AUC/Brier printed by the trainer.
-3. **Download** the full exported set from the notebook output (10 files:
+5. **Download** the full exported set from the notebook output (10 files:
    full model + calibrator + CNN + ensemble + quantiles + the 3-file
    weather-only trio + both metas).
-4. **Commit them** to the repo. CI enforces the honesty rule:
+6. **Commit them** to the repo. CI enforces the honesty rule:
    `test_committed_artifacts_are_real` fails the build if committed artifacts
    claim anything but `tick-tick-bloom` provenance.
-5. **Done.** The next nightly seed (and every deployment) loads the exported
+7. **Done.** The next nightly seed (and every deployment) loads the exported
    model and runs inference only — no training, no labels, no weather join.
    `train_and_predict()` falls back to in-process training automatically if
    the artifacts are ever removed or become feature-incompatible.
@@ -93,3 +101,22 @@ response says what the number is made of.
 | `N_SAMPLES` | Stratified (label × region) subsample cap — e.g. 8000 finishes the join in ~1/3 the time with the same mix. Unset trains on everything. **Notebook only** — `scripts/export_artifacts.py` always trains on the full frame |
 | `BLOOMCAST_WEATHER_CACHE` | Override the weather-join cache path (training time) |
 | `BLOOMCAST_ARTIFACTS` | Override the artifacts directory (serving time) |
+
+## Portability contract (why it runs anywhere)
+
+The notebook has no per-platform fork. Environment detection and data
+discovery are code, not instructions:
+
+- **Environment:** Colab if `google.colab` imports, Kaggle if
+  `/kaggle/working` exists, plain local checkout otherwise. Work output
+  follows the environment (Drive `bloomcast/`, `/kaggle/working/`, or `.`).
+- **Dataset discovery, in order:** `TICKTICKBLOOM_DIR` / `CAML_DIR` env vars,
+  the work-dir `data/` folder, both Drive spellings (`bloomcast/data` and
+  `BloomCast/data` — accounts differ), `/kaggle/input/` trees, then
+  `/content`. Subdirectories are scanned, so a dataset nested one level
+  deep is still found. The first directory holding usable labels wins;
+  competition CSVs outrank CAML when both are present.
+- **The one real requirement is Drive persistence on Colab:** session files
+  vanish when the runtime recycles, so the dataset (and the growing
+  `weather_cache.csv`) must live under Drive, not `/content`. Everything
+  else — GPU type, region, account — is interchangeable.

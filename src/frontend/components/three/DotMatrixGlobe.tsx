@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 // Real coastline geometry: ~5.7k land dots + simplified coast rings sampled
-// offline from Natural Earth 110m (see .agent/gen_land_dots.py) and committed
+// offline from Natural Earth 110m (public domain) and committed
 // as data — no runtime CDN fetch, no tile server, works fully offline.
 import landData from "@/components/maps/land-dots.json";
 

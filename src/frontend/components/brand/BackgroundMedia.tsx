@@ -14,7 +14,7 @@ function useReducedMotion() {
   return reduced;
 }
 
-// Edge melt (A.R.I.E.S technique): the media itself fades to transparent
+// Edge melt: the media itself fades to transparent
 // across the top/bottom 12%, so adjacent sections crossfade instead of
 // cutting with a hard strip — no matter what sits on either side.
 const EDGE_MASK =

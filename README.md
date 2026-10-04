@@ -20,7 +20,6 @@ bloomcast/                        <- git root
 ├── .github/workflows/            nightly ingestion and seed refresh
 ├── docs/                         architecture, model card, API spec
 ├── fhir/                         FHIR R4 profile + example bundle
-├── roadmap/                      PRDs and hosting specification
 ├── scripts/                      seed/climatology generators and audits
 ├── tests/                        import and data-integrity suite
 ├── src/

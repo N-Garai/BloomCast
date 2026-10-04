@@ -22,19 +22,18 @@ polls `/v1/alerts/check` every 60 seconds and fans out to every enabled
 channel on a *new* crossing (repeat polls of an already-crossed threshold
 stay silent).
 
-## Why ntfy (KiloNOVAScout alignment)
+## Why ntfy
 
-KiloNOVAScout solves the same gap server-side with `ALERT_WEBHOOK_URL` — any
-HTTPS endpoint that accepts a JSON POST (Discord/Slack webhook, PagerDuty,
-ntfy) — plus optional SMTP email, both requiring an always-on host with
-secrets. Our setup keeps the webhook half of that pattern and drops the half
-that needs a host:
+The standard pattern for this gap is a webhook channel: any HTTPS endpoint
+that accepts a JSON POST (Discord/Slack webhook, PagerDuty, ntfy) — plus
+optional SMTP email, both requiring an always-on host with secrets. Our setup
+keeps the webhook half of that pattern and drops the half that needs a host:
 
-- Their `ALERT_WEBHOOK_URL` → our ntfy topic publish (`POST
+- A webhook URL → our ntfy topic publish (`POST
   https://ntfy.sh/<topic>`, keyless, CORS-open, free). Same shape: title,
   body, priority/tags. Same fire-and-forget semantics: publish failures are
   logged in the delivery log, never thrown.
-- Their SMTP email → not available: no credentials, no background worker, no
+- SMTP email → not available: no credentials, no background worker, no
   mail queue on the free tier. The in-app threshold board plus browser
   notifications cover the same "don't miss it while watching" need.
 
@@ -115,3 +114,23 @@ An ntfy topic is a public-ish mailbox: anyone who guesses
 `bloomcast-lake-zurich` can read those alerts. The UI suggests unguessable
 topics and strips everything but `[a-z0-9_-]`. Rotate by changing the topic
 — no server state references it.
+
+## Local development
+
+The full loop works on a laptop with no tunnel, no HTTPS certificate, and no
+production deploy:
+
+- `localhost` counts as a secure context, so Chrome, Edge, and Firefox all
+  show the notification permission prompt and deliver notifications exactly
+  as in production. Deny it once and the page keeps working; the device
+  channel just reports "notification off" in the log.
+- Point the frontend at the local backend with
+  `NEXT_PUBLIC_API_BASE=http://localhost:8000`; the 60-second watch then
+  polls your own FastAPI process, and reports land in the local SQLite file.
+- The ntfy phone channel needs nothing local at all — just internet access
+  to `ntfy.sh`, same as deployed.
+
+What does *not* change locally: the page must stay open (there is still no
+background dispatcher on a laptop either), and a sleeping backend answers
+slowly on the first poll after idle. Neither is a deployment defect; both are
+stated in the UI so a steward never mistakes either for silence.

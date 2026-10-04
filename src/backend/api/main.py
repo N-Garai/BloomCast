@@ -694,7 +694,22 @@ async def citizen_report(request: Request):
             status_code=429,
             headers={"Retry-After": str(int(retry_after))},
         )
-    insert_observation(obs)
+    try:
+        insert_observation(obs)
+    except Exception as exc:
+        # Duplicate observation_id (browser double-submit on a flaky network)
+        # must be a 409 naming the conflict, never a 500: the report was
+        # already accepted, so "server error, try again" would create the
+        # very duplicates it complains about.
+        from sqlalchemy.exc import IntegrityError
+
+        if isinstance(exc, IntegrityError):
+            return JSONResponse(
+                {"error": "An observation with this id was already accepted.",
+                 "kind": "duplicate", "observation_id": obs.get("observation_id")},
+                status_code=409,
+            )
+        raise
     return JSONResponse({"status": "accepted", "observation_id": obs["observation_id"]}, status_code=202)
 
 
