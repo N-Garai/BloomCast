@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-10-03T07:22:14.884460+00:00",
+  "generated_at": "2026-10-06T08:22:19.882129+00:00",
   "model_version": "v2.1.0-real-labels",
   "training_source": "tick-tick-bloom",
   "training_note": "Trained on 23570 Tick Tick Bloom in-situ samples (23570 dates, 4 regions); 0 samples skipped (no weather). Spectral block is zeros \u2014 satellite TIFF join is future work.",
