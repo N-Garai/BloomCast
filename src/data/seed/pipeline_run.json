@@ -1,10 +1,10 @@
 {
-  "run_at": "2026-11-02T08:31:36Z",
+  "run_at": "2026-11-03T08:44:58Z",
   "steps": [
     {
       "name": "ingest",
       "status": "skipped",
-      "reason": "Open-Meteo rate limit reached"
+      "reason": ""
     },
     {
       "name": "seed",
